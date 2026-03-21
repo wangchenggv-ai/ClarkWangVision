@@ -69,7 +69,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "",
+                "query": "g",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
