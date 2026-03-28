@@ -54,19 +54,19 @@
 
 <div class="header">
   <h1>眼镜供应链智能看板</h1>
-  <div class="time">数据更新: 2026/3/29 06:30:38</div>
+  <div class="time">数据更新: 2026/3/29 07:08:21</div>
 </div>
 
 <!-- KPI -->
 <div class="kpi-row">
   <div class="kpi blue">
     <div class="label">总订单数</div>
-    <div class="num">300</div>
-    <div class="label">有货221 / 定制79</div>
+    <div class="num">310</div>
+    <div class="label">有货224 / 定制84</div>
   </div>
   <div class="kpi green">
     <div class="label">库存正常 SKU</div>
-    <div class="num">38</div>
+    <div class="num">37</div>
     <div class="label">备货品</div>
   </div>
   <div class="kpi orange">
@@ -76,7 +76,7 @@
   </div>
   <div class="kpi red">
     <div class="label">缺货 SKU</div>
-    <div class="num">11</div>
+    <div class="num">12</div>
     <div class="label">紧急</div>
   </div>
 </div>
@@ -95,8 +95,8 @@
   </div>
   <div class="kpi red">
     <div class="label">订单超期率</div>
-    <div class="num">100%</div>
-    <div class="label">300/300 笔超期</div>
+    <div class="num">97%</div>
+    <div class="label">300/310 笔超期</div>
   </div>
   <div class="kpi orange">
     <div class="label">待处理采购</div>
@@ -421,9 +421,9 @@ echarts.init(document.getElementById('chart-health')).setOption({
     type: 'pie', radius: ['45%', '70%'], center: ['50%', '55%'],
     label: { color: '#ccc', fontSize: 12 },
     data: [
-      { value: 38, name: '正常', itemStyle: { color: '#00c853' } },
+      { value: 37, name: '正常', itemStyle: { color: '#00c853' } },
       { value: 49, name: '低库存', itemStyle: { color: '#ff9800' } },
-      { value: 11, name: '缺货', itemStyle: { color: '#f44336' } },
+      { value: 12, name: '缺货', itemStyle: { color: '#f44336' } },
     ]
   }]
 });
@@ -436,7 +436,7 @@ echarts.init(document.getElementById('chart-inventory')).setOption({
   xAxis: { type: 'category', data: ["Ultra","Ultra -1.25/-0.50","AB版 -1.25","D8","Ultra双效 -0.75/-0.50","Ultra双效 -2.25/-0.50","Ultra双效 -1.50/-0.50","Ultra -1.50/-0.50","Ultra -1.00","Ultra -1.25","A版 -1.00","Ultra -0.75","Ultra双效 -1.25","AB版 -1.00","Ultra双效 -1.75","A版 -0.75","Ultra双效 -1.00","Ultra -0.75/-0.50","Ultra -2.25","Ultra双效 -2.75/-0.50","AB版 -1.50","Ultra -1.50","B版 -1.00","A版","Ultra双效 -2.75","Ultra双效 -1.25/-0.50","Ultra双效","AB版 -2.00","B版 -0.75","A版 -1.25","A版 -1.50","Ultra双效 -1.50","Ultra -1.75","Ultra双效 -0.75","Ultra -2.00","A版 -2.25","A版 -0.50","A版 -1.75","Ultra双效 -2.00/-0.50","B版 -1.25","Ultra双效 -1.00/-0.75","Ultra双效 -1.75/-0.50","B版 -1.50","Ultra双效 -2.00","Ultra -0.50","Ultra双效 -1.00/-0.50","Ultra -0.50/-0.50","B版 -2.25","Ultra -1.00/-0.50","AB版 -1.50/-0.50","Ultra -2.50","B版 -1.75","B版 -0.50","Ultra双效 -3.00/-0.50","A版 -2.00","Ultra双效 -2.50","Ultra双效 -3.00","AB版 -0.75/-0.50","B版","Ultra双效 -3.25/-0.50","Ultra双效 -2.50/-0.50","Ultra双效 -1.75/-0.75","AB版 -2.25","Ultra -3.50","Ultra -2.00/-0.50","Ultra -2.75","Ultra双效 -2.25","Ultra双效 -0.50","AB版 -1.75/-0.50","Ultra -1.75/-0.50","A版 -2.25/-0.50","AB版 -2.50","B版 -2.00","Ultra双效 -2.25/-0.75","Ultra -1.50/-0.75","Ultra双效 -2.00/-0.75","D8 -0.75","AB版 -1.25/-0.50","B版 -2.25/-0.50","Ultra -2.50/-0.50","A版 -0.75/-0.50","Ultra -0.75/-0.75","Ultra +0.00/-0.50","A版 +0.00/-0.50","Ultra双效 -1.75/-1.00","Ultra双效 -1.50/-1.00","Ultra -1.25/-0.75","B版 -1.50/-0.50","Ultra双效 -2.00/-1.00","Ultra双效 -1.25/-0.75","Ultra -2.25/-0.50","Ultra -3.25/-0.50","Ultra双效 -3.25","A版 -1.00/-0.50","AB版 -1.75","Ultra双效 -2.75/-0.75","Ultra -3.25","AB版 -0.75"], axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
   yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
   series: [
-    { name: '当前库存', type: 'bar', stack: 'total', data: [12,3,0,2,0,0,0,0,19,14,9,8,1,10,0,8,4,12,11,9,19,14,6,11,13,7,0,14,7,6,3,9,5,5,5,3,8,7,2,8,6,3,5,1,9,4,11,4,5,11,11,7,9,2,4,5,15,33,10,8,0,5,10,9,11,5,3,0,13,6,4,17,6,10,9,0,5,9,8,4,4,7,7,6,4,1,10,1,0,4,4,5,7,4,16,7,10,6], itemStyle: { color: '#1e90ff' } },
+    { name: '当前库存', type: 'bar', stack: 'total', data: [12,3,0,2,0,0,0,0,17,14,9,8,1,10,0,8,4,12,11,9,19,14,6,11,13,7,0,14,7,6,3,6,5,5,5,3,8,7,2,8,6,0,5,1,9,4,11,4,5,11,11,7,9,2,4,5,15,33,10,8,0,5,10,9,11,5,3,0,13,6,4,17,6,10,9,0,5,9,8,4,4,7,7,6,4,1,10,1,0,4,4,5,7,4,16,7,10,6], itemStyle: { color: '#1e90ff' } },
     { name: '在产量', type: 'bar', stack: 'total', data: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], itemStyle: { color: '#1e90ff44' } },
     { name: '安全库存', type: 'line', data: [78,22,16,14,9,8,7,14,18,14,8,14,6,20,13,8,6,16,1,7,20,12,8,10,4,3,14,14,8,8,6,5,10,4,10,6,8,8,4,8,3,10,6,9,12,3,12,8,10,14,10,8,8,4,1,2,1,46,10,1,5,1,12,12,10,10,5,3,12,8,6,16,6,2,14,14,6,14,8,8,6,10,8,10,4,4,10,2,10,1,8,6,1,6,14,2,10,10], itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
   ]
@@ -457,8 +457,8 @@ echarts.init(document.getElementById('chart-mold')).setOption({
 });
 
 // 订单 by SKU
-const orderSkus = ["Ultra双效 -2.75","Ultra双效 -1.75","Ultra双效 -2.25","Ultra双效 -2.25/-0.50","Ultra双效 -3.00/-0.50","Ultra双效 -1.50","Ultra双效 -1.75/-0.50","Ultra双效 -1.00/-0.75","Ultra双效 -2.00/-1.00","Ultra双效 -2.00/-0.75","Ultra双效 -1.75/-1.00","Ultra双效 -2.50/-0.50","Ultra双效 -1.25","Ultra双效 -2.75/-0.50","Ultra双效 -2.00/-0.50","Ultra双效 -1.00/-0.50","Ultra双效","Ultra双效 -0.75/-0.50","Ultra双效 -2.00","Ultra双效 -1.50/-1.00","Ultra双效 -1.00","Ultra双效 -2.25/-0.75","Ultra双效 -0.50","Ultra双效 -0.75","Ultra双效 -3.25/-0.50","Ultra双效 -1.50/-0.50","Ultra双效 -1.75/-0.75","Ultra双效 -1.25/-0.50","Ultra双效 -2.75/-0.75","Ultra双效 -1.25/-0.75","Ultra双效 -2.50","Ultra双效 -3.25","A版 -2.00","A版 -1.50/-0.50","B版 -1.50/-0.50","Ultra -2.25","Ultra双效 -3.00","AB版 -1.25"];
-const orderQtys = [7,20,5,12,8,10,11,8,10,9,7,12,9,13,8,7,40,12,12,7,11,6,6,8,1,9,4,6,3,2,3,2,1,2,2,1,2,8];
+const orderSkus = ["Ultra双效 -2.75","Ultra双效 -1.75","Ultra双效 -2.25","Ultra双效 -2.25/-0.50","Ultra双效 -3.00/-0.50","Ultra双效 -1.50","Ultra双效 -1.75/-0.50","Ultra双效 -1.00/-0.75","Ultra双效 -2.00/-1.00","Ultra双效 -2.00/-0.75","Ultra双效 -1.75/-1.00","Ultra双效 -2.50/-0.50","Ultra双效 -1.25","Ultra双效 -2.75/-0.50","Ultra双效 -2.00/-0.50","Ultra双效 -1.00/-0.50","Ultra双效","Ultra双效 -0.75/-0.50","Ultra双效 -2.00","Ultra双效 -1.50/-1.00","Ultra双效 -1.00","Ultra双效 -2.25/-0.75","Ultra双效 -0.50","Ultra双效 -0.75","Ultra双效 -3.25/-0.50","Ultra双效 -1.50/-0.50","Ultra双效 -1.75/-0.75","Ultra双效 -1.25/-0.50","Ultra双效 -2.75/-0.75","Ultra双效 -1.25/-0.75","Ultra双效 -2.50","Ultra双效 -3.25","A版 -2.00","A版 -1.50/-0.50","B版 -1.50/-0.50","Ultra -2.25","Ultra双效 -3.00","AB版 -1.25","Ultra -1.00","A版 -1.00","Ultra -2.00","Ultra +1.50","D8"];
+const orderQtys = [7,20,5,16,8,13,14,8,10,9,7,12,9,13,8,7,40,62,12,7,11,6,6,8,1,9,4,6,3,2,3,2,1,2,2,1,2,10,2,30,200,5,5];
 echarts.init(document.getElementById('chart-orders')).setOption({
   tooltip: { trigger: 'axis' },
   grid: { top: 10, bottom: 40, left: 50, right: 20 },
