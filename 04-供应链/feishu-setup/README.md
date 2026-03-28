@@ -13,12 +13,14 @@ A Node.js automation suite that creates and manages a **smart eyeglass lens supp
 ```
 .env                    # Feishu App credentials + Coze PAT + Webhook URL
 setup_tables.js         # Sprint 1: One-shot table creation + mock data seeding
-automations.js          # Sprint 2+5: 9 business rules engine
+automations.js          # Sprint 2+5: 9 business rules engine (config-driven)
+rules_config.json       # Sprint 6: Rule parameters — local defaults
+seed_config.js          # Sprint 6: Seed rule config into Feishu table
 ai_analysis.js          # Sprint 3+5: Coze AI weekly analysis (with after-sales data)
 dashboard.js / .html    # Sprint 3+5: ECharts dashboard (12 KPIs + 8 charts)
 import_history.js       # Sprint 4: Historical order analysis from Excel
 import_real_skus.js     # Sprint 4: Replace mock SKUs with real Top-100 SKUs
-migrate_tables.js       # Sprint 5: Idempotent migration framework (9 migrations)
+migrate_tables.js       # Sprint 5+6: Idempotent migration framework (10 migrations)
 classify_skus.js        # Sprint 5: ABC-XYZ SKU classification
 notify.js               # Sprint 5: Feishu webhook notification module
 seed_factories.js       # Sprint 5: Factory capacity seed data
@@ -29,7 +31,7 @@ full_test.js            # Sprint 4+5: End-to-end integration test (32 assertions
 
 ---
 
-## 11 Bitable Tables
+## 12 Bitable Tables
 
 | Table Key            | Table Name     | Table ID             | Purpose |
 |----------------------|----------------|----------------------|---------|
@@ -44,6 +46,7 @@ full_test.js            # Sprint 4+5: End-to-end integration test (32 assertions
 | `procurement`        | 采购跟踪表      | `tblZX1qW7RvcJieg`  | Auto-triggered procurement (mold + blank) |
 | `factory`            | 车房产能表      | `tblJ6RXFENJFQe9A`  | Factory capacity, specialty, queue status |
 | `after_sales`        | 售后记录表      | `tblzr1b8kH9yERZt`  | After-sales tracking (issue type, resolution) |
+| `rule_config`        | 规则配置表      | `tbl78V8wgziRs0pt`  | Rule parameters (business users edit here) |
 
 ---
 
@@ -172,11 +175,73 @@ Idempotent migration script — safe to re-run:
 | 7 | Add 已计模芯 field | production |
 | 8 | Create 售后记录 table | (new table) |
 | 9 | Add 备注 field | order |
+| 10 | Create 规则配置 table | (new table) |
 
 ```bash
 node migrate_tables.js    # Run all migrations (idempotent)
 node seed_factories.js    # Seed 3 factory records (欧陆/九次方/圣谱)
+node seed_config.js       # Seed 25 rule config rows with defaults
 ```
+
+---
+
+## Rule Configuration (规则配置)
+
+All rule parameters are externalized into a **three-layer config system**:
+
+```
+Feishu "规则配置" table  >  rules_config.json  >  code fallback
+      (business users)       (developers)         (hardcoded)
+```
+
+**How it works:** On startup, `automations.js` loads `rules_config.json` as defaults, then queries the Feishu config table for overrides. Business users change values in Feishu; developers change `rules_config.json`; code fallbacks are never touched.
+
+### How to modify a rule parameter
+
+1. Open Feishu Bitable → find the **规则配置** table
+2. Locate the row (e.g. `rule1` / `instock_delivery_days`)
+3. Change the **参数值** column (e.g. `3` → `2`)
+4. Next run of `node automations.js` picks it up automatically
+
+### 25 Configurable Parameters
+
+| Rule | Parameter | Default | Description |
+|------|-----------|---------|-------------|
+| rule1 | `instock_delivery_days` | 3 | In-stock order delivery (days) |
+| rule1 | `custom_delivery_days` | 5 | Custom order delivery (days) |
+| rule1 | `max_order_qty` | 100 | Max qty per order, exceeding requires manual review |
+| rule1 | `custom_product_type` | 定制品 | Custom product type name |
+| rule2 | `high_alert_threshold` | 3 | Alert count threshold for red notification |
+| rule3 | `critical_remaining` | 50 | Mold remaining count for "needs replacement" |
+| rule3 | `default_warning_threshold` | 500 | Mold default warning threshold |
+| rule4 | `seasonal_summer` | 1.3 | Summer coefficient (+30%) |
+| rule4 | `seasonal_summer_months` | [6,7,8] | Summer months |
+| rule4 | `seasonal_school` | 1.2 | Back-to-school coefficient (+20%) |
+| rule4 | `seasonal_school_months` | [9] | Back-to-school months |
+| rule4 | `seasonal_cny` | 0.8 | Chinese New Year coefficient (-20%) |
+| rule4 | `seasonal_cny_months` | [1,2] | CNY months |
+| rule4 | `seasonal_default` | 1.0 | Default seasonal coefficient |
+| rule5 | `blank_safety_multiplier` | 1.5 | Blank safety = SKU safety x multiplier |
+| rule5 | `blank_floor` | 2000 | Absolute blank inventory floor (pcs) |
+| rule5 | `high_alert_threshold` | 2 | Alert count threshold for red notification |
+| rule6 | `warning_hours` | 24 | Hours before deadline to trigger warning |
+| rule6 | `skip_statuses` | ["已发货","完成","已签收"] | Order statuses to skip |
+| rule7 | `mold_lead_days` | 28 | Mold procurement lead time (days) |
+| rule7 | `blank_lead_days` | 21 | Blank procurement lead time (days) |
+| rule7 | `blank_reorder_point` | 2000 | Blank reorder trigger (pcs) |
+| rule7 | `blank_replenish_target` | 5000 | Blank replenishment target (pcs) |
+| rule7 | `blank_min_order_qty` | 3000 | Minimum blank order quantity (pcs) |
+| rule8 | `specialty_bonus` | 10 | Factory specialty match bonus score |
+
+### Config table format (Feishu)
+
+| 规则编号 | 参数名 | 参数值 | 说明 |
+|---------|--------|--------|------|
+| rule1 | instock_delivery_days | 3 | 有货订单交期（天） |
+| rule4 | seasonal_summer | 1.3 | 夏季系数（6-8月） |
+| ... | ... | ... | ... |
+
+Values are auto-parsed: numbers become `Number`, `[...]` becomes arrays, everything else stays as string.
 
 ---
 
@@ -262,9 +327,10 @@ cd feishu-setup
 npm install                 # installs undici, xlsx
 node setup_tables.js        # creates Bitable + 8 tables + mock data
 node fix_permission.js      # opens document permissions
-node migrate_tables.js      # adds 3 new tables + new fields
+node migrate_tables.js      # adds 4 new tables + new fields (10 migrations)
 node seed_factories.js      # seeds 3 factory records
-node automations.js all     # runs all 9 business rules
+node seed_config.js         # seeds 25 rule config parameters
+node automations.js all     # runs all 9 business rules (reads config)
 node classify_skus.js       # ABC-XYZ classification
 node ai_analysis.js         # generates AI report
 node dashboard.js           # generates dashboard HTML
@@ -293,6 +359,16 @@ node full_test.js           # verify (expect 32/32 pass)
 | Sprint 3 | 2026-03 | AI analysis + dashboard | ✅ Done |
 | Sprint 4 | 2026-03 | Real data import + E2E test | ✅ Done |
 | Sprint 5 | 2026-03-29 | Phase 1-3 supply chain upgrade | ✅ Done |
+| Sprint 6 | 2026-03-29 | Rule config externalization | ✅ Done |
+
+### Sprint 6 Changelog (Rule Configuration)
+
+- Extracted 25 hardcoded parameters from 9 rules into config layer
+- Created `rules_config.json` (local defaults with documentation)
+- Created Feishu "规则配置" table (12th table, runtime overrides)
+- Added `seed_config.js` to populate config table with defaults + descriptions
+- Config loading: Feishu table > JSON file > code fallback
+- Business users can modify rule thresholds directly in Feishu without touching code
 
 ### Sprint 5 Changelog (Supply Chain Upgrade)
 
