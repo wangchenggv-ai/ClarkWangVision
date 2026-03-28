@@ -1,0 +1,13 @@
+{
+  "name": "feishu-supply-chain-setup",
+  "version": "1.0.0",
+  "description": "自动创建飞书多维表格 - 眼镜供应链智能系统",
+  "type": "module",
+  "scripts": {
+    "setup": "node setup_tables.js"
+  },
+  "dependencies": {
+    "undici": "^7.24.6",
+    "xlsx": "^0.18.5"
+  }
+}

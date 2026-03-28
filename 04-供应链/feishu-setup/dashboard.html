@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>眼镜供应链智能看板</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #0f1923; color: #e0e0e0; }
+  .header { background: linear-gradient(135deg, #1a2a3a, #0d1b2a); padding: 20px 40px; border-bottom: 2px solid #1e90ff; display: flex; justify-content: space-between; align-items: center; }
+  .header h1 { font-size: 24px; color: #1e90ff; letter-spacing: 2px; }
+  .header .time { color: #888; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 20px; }
+  .card { background: #1a2a3a; border-radius: 12px; padding: 20px; border: 1px solid #2a3a4a; }
+  .card h3 { color: #1e90ff; font-size: 16px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a3a4a; }
+  .card-full { grid-column: 1 / -1; }
+  .card-2col { grid-column: span 2; }
+  .chart { width: 100%; height: 280px; }
+  .chart-tall { height: 320px; }
+
+  /* KPI cards */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 20px 20px 0; }
+  .kpi { background: #1a2a3a; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #2a3a4a; }
+  .kpi .num { font-size: 36px; font-weight: bold; margin: 8px 0; }
+  .kpi .label { color: #888; font-size: 13px; }
+  .kpi.green .num { color: #00c853; }
+  .kpi.orange .num { color: #ff9800; }
+  .kpi.red .num { color: #f44336; }
+  .kpi.blue .num { color: #1e90ff; }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #0d1b2a; color: #1e90ff; text-align: left; padding: 8px 12px; }
+  td { padding: 8px 12px; border-bottom: 1px solid #2a3a4a; }
+  tr:hover { background: #223344; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+  .tag-ok { background: #00c85322; color: #00c853; }
+  .tag-warn { background: #ff980022; color: #ff9800; }
+  .tag-danger { background: #f4433622; color: #f44336; }
+  .tag-pending { background: #1e90ff22; color: #1e90ff; }
+
+  /* AI section */
+  .ai-content { font-size: 13px; line-height: 1.8; white-space: pre-wrap; max-height: 400px; overflow-y: auto; color: #ccc; }
+  .ai-content::-webkit-scrollbar { width: 6px; }
+  .ai-content::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+  /* Progress bar */
+  .progress-bar { height: 8px; background: #2a3a4a; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>眼镜供应链智能看板</h1>
+  <div class="time">数据更新: 2026/3/28 15:16:45</div>
+</div>
+
+<!-- KPI -->
+<div class="kpi-row">
+  <div class="kpi blue">
+    <div class="label">总订单数</div>
+    <div class="num">300</div>
+    <div class="label">有货221 / 定制79</div>
+  </div>
+  <div class="kpi green">
+    <div class="label">库存正常 SKU</div>
+    <div class="num">20</div>
+    <div class="label">备货品</div>
+  </div>
+  <div class="kpi orange">
+    <div class="label">低库存预警</div>
+    <div class="num">67</div>
+    <div class="label">需关注</div>
+  </div>
+  <div class="kpi red">
+    <div class="label">缺货 SKU</div>
+    <div class="num">11</div>
+    <div class="label">紧急</div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- 库存健康度 -->
+  <div class="card">
+    <h3>库存健康度</h3>
+    <div id="chart-health" class="chart"></div>
+  </div>
+
+  <!-- 库存 vs 安全线 -->
+  <div class="card card-2col">
+    <h3>各 SKU 库存 vs 安全线</h3>
+    <div id="chart-inventory" class="chart"></div>
+  </div>
+
+  <!-- 模芯寿命 -->
+  <div class="card">
+    <h3>模芯寿命状态</h3>
+    <div id="chart-mold" class="chart chart-tall"></div>
+  </div>
+
+  <!-- 订单分布 -->
+  <div class="card">
+    <h3>订单数量 by SKU</h3>
+    <div id="chart-orders" class="chart chart-tall"></div>
+  </div>
+
+  <!-- 排产待确认 -->
+  <div class="card">
+    <h3>排产计划</h3>
+    <table>
+      <tr><th>SKU</th><th>建议产量</th><th>状态</th><th>原因</th></tr>
+      <tr>
+        <td>D8</td>
+        <td><strong>3</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测5 - 库存2 - 在产0 = 缺口3</td>
+      </tr><tr>
+        <td>D8</td>
+        <td><strong>3</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测5 - 库存2 - 在产0 = 缺口3</td>
+      </tr><tr>
+        <td>Ultra双效 -0.75/-0.50</td>
+        <td><strong>11</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测15 - 库存4 - 在产0 = 缺口11</td>
+      </tr><tr>
+        <td>Ultra双效 -0.75/-0.50</td>
+        <td><strong>11</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测15 - 库存4 - 在产0 = 缺口11</td>
+      </tr><tr>
+        <td>Ultra双效 -2.25/-0.50</td>
+        <td><strong>20</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测20 - 库存0 - 在产0 = 缺口20</td>
+      </tr><tr>
+        <td>Ultra双效 -1.50/-0.50</td>
+        <td><strong>14</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测14 - 库存0 - 在产0 = 缺口14</td>
+      </tr><tr>
+        <td>Ultra双效 -2.25/-0.50</td>
+        <td><strong>20</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">测试</td>
+      </tr>
+      
+    </table>
+  </div>
+
+  <!-- 模芯详情 -->
+  <div class="card card-full">
+    <h3>模芯管理详情</h3>
+    <table>
+      <tr><th>模芯编号</th><th>对应 SKU</th><th>总寿命</th><th>已使用</th><th>剩余</th><th>使用率</th><th>状态</th></tr>
+      <tr>
+          <td>MC-001</td>
+          <td>SKU-001</td>
+          <td>5,000</td>
+          <td>2,100</td>
+          <td><strong style="color:#00c853">2,900</strong></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:42%;background:#00c853"></div></div>
+              <span>42%</span>
+            </div>
+          </td>
+          <td><span class="tag tag-ok">🟢正常</span></td>
+        </tr><tr>
+          <td>MC-002</td>
+          <td>SKU-002</td>
+          <td>5,000</td>
+          <td>3,800</td>
+          <td><strong style="color:#00c853">1,200</strong></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:76%;background:#00c853"></div></div>
+              <span>76%</span>
+            </div>
+          </td>
+          <td><span class="tag tag-ok">🟢正常</span></td>
+        </tr><tr>
+          <td>MC-003</td>
+          <td>SKU-003</td>
+          <td>5,000</td>
+          <td>4,600</td>
+          <td><strong style="color:#ff9800">400</strong></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:92%;background:#ff9800"></div></div>
+              <span>92%</span>
+            </div>
+          </td>
+          <td><span class="tag tag-warn">🟡预警</span></td>
+        </tr><tr>
+          <td>MC-004</td>
+          <td>SKU-004</td>
+          <td>4,000</td>
+          <td>3,950</td>
+          <td><strong style="color:#f44336">50</strong></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:99%;background:#f44336"></div></div>
+              <span>99%</span>
+            </div>
+          </td>
+          <td><span class="tag tag-danger">🔴需更换</span></td>
+        </tr><tr>
+          <td>MC-005</td>
+          <td>SKU-005</td>
+          <td>5,000</td>
+          <td>1,500</td>
+          <td><strong style="color:#00c853">3,500</strong></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:30%;background:#00c853"></div></div>
+              <span>30%</span>
+            </div>
+          </td>
+          <td><span class="tag tag-ok">🟢正常</span></td>
+        </tr><tr>
+          <td>MC-006</td>
+          <td>SKU-006</td>
+          <td>5,000</td>
+          <td>2,800</td>
+          <td><strong style="color:#00c853">2,200</strong></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:56%;background:#00c853"></div></div>
+              <span>56%</span>
+            </div>
+          </td>
+          <td><span class="tag tag-ok">🟢正常</span></td>
+        </tr><tr>
+          <td>MC-007</td>
+          <td>SKU-008</td>
+          <td>4,000</td>
+          <td>3,200</td>
+          <td><strong style="color:#00c853">800</strong></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px">
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:80%;background:#00c853"></div></div>
+              <span>80%</span>
+            </div>
+          </td>
+          <td><span class="tag tag-ok">🟢正常</span></td>
+        </tr>
+    </table>
+  </div>
+
+  <!-- AI 分析 -->
+  <div class="card card-full">
+    <h3>AI 智能分析（最新）</h3>
+    <div class="ai-content">【库存预警】
+- SKU-004（1.74非球面透明镜片）：当前库存4，安全库存15，缺口11，紧急
+- SKU-007（1.67防蓝光镜片）：当前库存0，安全库存12，缺口12，紧急
+- SKU-009（1.60变色镜片（茶））：当前库存3，安全库存8，缺口5，关注
+
+【模芯预警】
+- MC-004（对应SKU-004）：剩余寿命50次，需紧急更换，采购周期3-4周
+- MC-003（对应SKU-003）：剩余寿命400次，关注后续使用频次
+
+【排产建议】
+- 优先级1：SKU-007（1.67防蓝光镜片），建议排产12片，覆盖安全库存缺口+本周预测销量
+- 优先级2：SKU-004（1.74非球面透明镜片），建议排产16片，满足当前订单需求+补至安全库存
+- 优先级3：SKU-009（1.60变色镜片（茶）），建议排产5片，补全安全库存缺口
+- 常规排产：SKU-006（1.60防蓝光镜片）建议排产17片，覆盖本周预测+批量订单需求
+
+【趋势观察】
+- 高折射率镜片、高倍防蓝光镜片、变色镜片的预测销量均高于历史均值，且库存缺口大，未及时补产将面临断供风险
+- SIM系列批量订单占比高，需提前锁定毛坯库存及生产产能，避免交付延误
+- 防蓝光、变色镜片需求呈小幅上升趋势，后续每两周复盘库存阈值，适当调整备货量
+
+【关键行动项】
+1. 立即启动MC-004模芯采购更换流程，同步协调备用模芯临时保障SKU-004生产
+2. 本周落实SKU-007、SKU-004的优先排产计划，每日跟进生产进度
+3. 跟进SKU-007的30片在产毛坯加工进度，确保尽快转化为成品
+4. 梳理SIM系列批量订单交付节点，匹配对应毛坯库存与产能
+5. 启动SKU-006毛坯库存补充采购，备货量不低于30片</div>
+  </div>
+
+</div>
+
+<script>
+// 库存健康度饼图
+echarts.init(document.getElementById('chart-health')).setOption({
+  tooltip: { trigger: 'item' },
+  series: [{
+    type: 'pie', radius: ['45%', '70%'], center: ['50%', '55%'],
+    label: { color: '#ccc', fontSize: 12 },
+    data: [
+      { value: 20, name: '正常', itemStyle: { color: '#00c853' } },
+      { value: 67, name: '低库存', itemStyle: { color: '#ff9800' } },
+      { value: 11, name: '缺货', itemStyle: { color: '#f44336' } },
+    ]
+  }]
+});
+
+// 库存 vs 安全线柱状图
+echarts.init(document.getElementById('chart-inventory')).setOption({
+  tooltip: { trigger: 'axis' },
+  legend: { data: ['当前库存', '在产量', '安全库存'], textStyle: { color: '#888' }, top: 0 },
+  grid: { top: 30, bottom: 30, left: 50, right: 20 },
+  xAxis: { type: 'category', data: ["Ultra","Ultra -1.25/-0.50","AB版 -1.25","D8","Ultra双效 -0.75/-0.50","Ultra双效 -2.25/-0.50","Ultra双效 -1.50/-0.50","Ultra -1.50/-0.50","Ultra -1.00","Ultra -1.25","A版 -1.00","Ultra -0.75","Ultra双效 -1.25","AB版 -1.00","Ultra双效 -1.75","A版 -0.75","Ultra双效 -1.00","Ultra -0.75/-0.50","Ultra -2.25","Ultra双效 -2.75/-0.50","AB版 -1.50","Ultra -1.50","B版 -1.00","A版","Ultra双效 -2.75","Ultra双效 -1.25/-0.50","Ultra双效","AB版 -2.00","B版 -0.75","A版 -1.25","A版 -1.50","Ultra双效 -1.50","Ultra -1.75","Ultra双效 -0.75","Ultra -2.00","A版 -2.25","A版 -0.50","A版 -1.75","Ultra双效 -2.00/-0.50","B版 -1.25","Ultra双效 -1.00/-0.75","Ultra双效 -1.75/-0.50","B版 -1.50","Ultra双效 -2.00","Ultra -0.50","Ultra双效 -1.00/-0.50","Ultra -0.50/-0.50","B版 -2.25","Ultra -1.00/-0.50","AB版 -1.50/-0.50","Ultra -2.50","B版 -1.75","B版 -0.50","Ultra双效 -3.00/-0.50","A版 -2.00","Ultra双效 -2.50","Ultra双效 -3.00","AB版 -0.75/-0.50","B版","Ultra双效 -3.25/-0.50","Ultra双效 -2.50/-0.50","Ultra双效 -1.75/-0.75","AB版 -2.25","Ultra -3.50","Ultra -2.00/-0.50","Ultra -2.75","Ultra双效 -2.25","Ultra双效 -0.50","AB版 -1.75/-0.50","Ultra -1.75/-0.50","A版 -2.25/-0.50","AB版 -2.50","B版 -2.00","Ultra双效 -2.25/-0.75","Ultra -1.50/-0.75","Ultra双效 -2.00/-0.75","D8 -0.75","AB版 -1.25/-0.50","B版 -2.25/-0.50","Ultra -2.50/-0.50","A版 -0.75/-0.50","Ultra -0.75/-0.75","Ultra +0.00/-0.50","A版 +0.00/-0.50","Ultra双效 -1.75/-1.00","Ultra双效 -1.50/-1.00","Ultra -1.25/-0.75","B版 -1.50/-0.50","Ultra双效 -2.00/-1.00","Ultra双效 -1.25/-0.75","Ultra -2.25/-0.50","Ultra -3.25/-0.50","Ultra双效 -3.25","A版 -1.00/-0.50","AB版 -1.75","Ultra双效 -2.75/-0.75","Ultra -3.25","AB版 -0.75"], axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
+  yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+  series: [
+    { name: '当前库存', type: 'bar', stack: 'total', data: [12,3,0,2,0,0,0,0,19,14,9,8,1,10,0,8,4,12,11,9,19,14,6,11,13,7,0,14,7,6,3,9,5,5,5,3,8,7,2,8,6,3,5,1,9,4,11,4,5,11,11,7,9,2,4,5,15,33,10,8,0,5,10,9,11,5,3,0,13,6,4,17,6,10,9,0,5,9,8,4,4,7,7,6,4,1,10,1,0,4,4,5,7,4,16,7,10,6], itemStyle: { color: '#1e90ff' } },
+    { name: '在产量', type: 'bar', stack: 'total', data: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], itemStyle: { color: '#1e90ff44' } },
+    { name: '安全库存', type: 'line', data: [78,22,24,14,24,22,20,14,18,14,8,14,22,20,22,8,18,16,12,20,20,12,8,10,18,16,18,14,8,8,6,18,10,16,10,6,8,8,14,8,20,14,6,14,12,16,12,8,10,14,10,8,8,14,6,12,16,46,10,18,12,14,12,12,10,10,12,12,12,8,6,16,6,16,14,16,6,14,8,8,6,10,8,10,14,10,10,6,12,10,8,6,16,6,14,14,10,10], itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
+  ]
+});
+
+// 模芯寿命
+echarts.init(document.getElementById('chart-mold')).setOption({
+  tooltip: { trigger: 'axis' },
+  grid: { top: 10, bottom: 30, left: 70, right: 20 },
+  xAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+  yAxis: { type: 'category', data: ["MC-001","MC-002","MC-003","MC-004","MC-005","MC-006","MC-007"], axisLabel: { color: '#888' } },
+  series: [
+    { name: '已使用', type: 'bar', stack: 'life', data: [2100,3800,4600,3950,1500,2800,3200], itemStyle: { color: '#ff9800' } },
+    { name: '剩余', type: 'bar', stack: 'life', data: [2900,1200,400,50,3500,2200,800],
+      itemStyle: { color: function(p) { return [2900,1200,400,50,3500,2200,800][p.dataIndex] < 500 ? '#f44336' : '#00c853'; } }
+    },
+  ]
+});
+
+// 订单 by SKU
+const orderSkus = ["Ultra双效 -2.75","Ultra双效 -1.75","Ultra双效 -2.25","Ultra双效 -2.25/-0.50","Ultra双效 -3.00/-0.50","Ultra双效 -1.50","Ultra双效 -1.75/-0.50","Ultra双效 -1.00/-0.75","Ultra双效 -2.00/-1.00","Ultra双效 -2.00/-0.75","Ultra双效 -1.75/-1.00","Ultra双效 -2.50/-0.50","Ultra双效 -1.25","Ultra双效 -2.75/-0.50","Ultra双效 -2.00/-0.50","Ultra双效 -1.00/-0.50","Ultra双效","Ultra双效 -0.75/-0.50","Ultra双效 -2.00","Ultra双效 -1.50/-1.00","Ultra双效 -1.00","Ultra双效 -2.25/-0.75","Ultra双效 -0.50","Ultra双效 -0.75","Ultra双效 -3.25/-0.50","Ultra双效 -1.50/-0.50","Ultra双效 -1.75/-0.75","Ultra双效 -1.25/-0.50","Ultra双效 -2.75/-0.75","Ultra双效 -1.25/-0.75","Ultra双效 -2.50","Ultra双效 -3.25","A版 -2.00","A版 -1.50/-0.50","B版 -1.50/-0.50","Ultra -2.25","Ultra双效 -3.00","AB版 -1.25"];
+const orderQtys = [7,20,5,12,8,10,11,8,10,9,7,12,9,13,8,7,40,12,12,7,11,6,6,8,1,9,4,6,3,2,3,2,1,2,2,1,2,8];
+echarts.init(document.getElementById('chart-orders')).setOption({
+  tooltip: { trigger: 'axis' },
+  grid: { top: 10, bottom: 40, left: 50, right: 20 },
+  xAxis: { type: 'category', data: orderSkus, axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
+  yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+  series: [{ type: 'bar', data: orderQtys, itemStyle: { color: '#7c4dff', borderRadius: [4, 4, 0, 0] } }]
+});
+</script>
+</body>
+</html>
