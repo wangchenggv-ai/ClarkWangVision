@@ -34,6 +34,10 @@ const TABLES = {
   production: "tbltSntfaR9KCI7B",
   order: "tblk9Ch4gk2uQ1zG",
   ai_analysis: "tbl8W9F9K2RbaL0k",
+  blank_inventory: "tbladv6bQTXlNOlM",
+  factory: "tblJ6RXFENJFQe9A",      // fill after migration
+  procurement: "tblZX1qW7RvcJieg",  // fill after migration
+  after_sales: "tblzr1b8kH9yERZt",  // fill after migration
 };
 
 let TOKEN = "";
@@ -77,7 +81,14 @@ async function main() {
     listRecords(TABLES.ai_analysis),
   ]);
 
+  // Fetch new tables conditionally
+  const blanks = TABLES.blank_inventory ? await listRecords(TABLES.blank_inventory) : [];
+  const factories = TABLES.factory ? await listRecords(TABLES.factory) : [];
+  const procurements = TABLES.procurement ? await listRecords(TABLES.procurement) : [];
+  const afterSalesData = TABLES.after_sales ? await listRecords(TABLES.after_sales) : [];
+
   console.log(`  SKU: ${skus.length}, Inventory: ${inventory.length}, Molds: ${molds.length}, Production: ${production.length}, Orders: ${orders.length}, AI: ${aiRecords.length}`);
+  console.log(`  Blanks: ${blanks.length}, Factories: ${factories.length}, Procurement: ${procurements.length}, AfterSales: ${afterSalesData.length}`);
 
   // --- Process data ---
 
@@ -164,6 +175,70 @@ async function main() {
     }
   }
 
+  // --- New KPI data ---
+
+  // Blank inventory total
+  const blankInvData = blanks.map(r => {
+    const f = r.fields;
+    return {
+      sku: f["SKU"] || "",
+      name: f["SKU名称"] || f["SKU"] || "",
+      current: Number(f["当前毛坯库存"]) || 0,
+      safety: Number(f["安全毛坯库存"]) || 0,
+    };
+  });
+  const blankTotal = blankInvData.reduce((s, d) => s + d.current, 0);
+
+  // Mold utilization rate (average of used/total)
+  const moldUtilRates = moldData.filter(d => d.total > 0).map(d => d.used / d.total);
+  const avgMoldUtil = moldUtilRates.length > 0
+    ? Math.round(moldUtilRates.reduce((s, v) => s + v, 0) / moldUtilRates.length * 100)
+    : 0;
+
+  // Overdue order rate
+  const now = Date.now();
+  const completedStatuses = ["完成", "已发货", "已签收"];
+  const activeOrders = orders.filter(r => !completedStatuses.includes(r.fields["订单状态"]));
+  const overdueOrders = activeOrders.filter(r => {
+    const due = r.fields["承诺交货日"];
+    if (!due) return false;
+    const dueTs = typeof due === "number" ? due : new Date(due).getTime();
+    return dueTs < now;
+  });
+  const overdueRate = activeOrders.length > 0
+    ? Math.round(overdueOrders.length / activeOrders.length * 100)
+    : 0;
+
+  // Pending procurement count
+  const doneStatuses = ["已到货", "已取消"];
+  const pendingProcurement = procurements.filter(r => !doneStatuses.includes(r.fields["状态"])).length;
+
+  // --- New chart data ---
+
+  // Factory load data
+  const factoryData = factories.map(r => {
+    const f = r.fields;
+    return {
+      name: f["车房名称"] || f["名称"] || "未知",
+      queue: Number(f["当前排队量"]) || 0,
+      capacity: Number(f["日产能"]) || 0,
+    };
+  });
+
+  // After-sales by problem type
+  const afterSalesByType = {};
+  for (const r of afterSalesData) {
+    const t = r.fields["问题类型"] || "其他";
+    afterSalesByType[t] = (afterSalesByType[t] || 0) + 1;
+  }
+
+  // Procurement by status
+  const procByStatus = {};
+  for (const r of procurements) {
+    const s = r.fields["状态"] || "未知";
+    procByStatus[s] = (procByStatus[s] || 0) + 1;
+  }
+
   // --- Generate HTML ---
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -248,6 +323,30 @@ async function main() {
   </div>
 </div>
 
+<!-- KPI Row 2 -->
+<div class="kpi-row">
+  <div class="kpi ${blankTotal > 2000 ? 'green' : 'red'}">
+    <div class="label">毛坯库存</div>
+    <div class="num">${blankTotal.toLocaleString()}</div>
+    <div class="label">${blanks.length} 个 SKU</div>
+  </div>
+  <div class="kpi ${avgMoldUtil > 80 ? 'red' : avgMoldUtil > 60 ? 'orange' : 'green'}">
+    <div class="label">模芯使用率</div>
+    <div class="num">${avgMoldUtil}%</div>
+    <div class="label">平均寿命消耗</div>
+  </div>
+  <div class="kpi ${overdueRate > 20 ? 'red' : overdueRate > 10 ? 'orange' : 'green'}">
+    <div class="label">订单超期率</div>
+    <div class="num">${overdueRate}%</div>
+    <div class="label">${overdueOrders.length}/${activeOrders.length} 笔超期</div>
+  </div>
+  <div class="kpi ${pendingProcurement > 5 ? 'orange' : 'blue'}">
+    <div class="label">待处理采购</div>
+    <div class="num">${pendingProcurement}</div>
+    <div class="label">进行中</div>
+  </div>
+</div>
+
 <div class="grid">
 
   <!-- 库存健康度 -->
@@ -272,6 +371,30 @@ async function main() {
   <div class="card">
     <h3>订单数量 by SKU</h3>
     <div id="chart-orders" class="chart chart-tall"></div>
+  </div>
+
+  <!-- 毛坯库存 -->
+  <div class="card card-2col">
+    <h3>毛坯库存 vs 安全线</h3>
+    <div id="chart-blanks" class="chart"></div>
+  </div>
+
+  <!-- 车房负载 -->
+  <div class="card">
+    <h3>车房负载</h3>
+    <div id="chart-factory" class="chart chart-tall"></div>
+  </div>
+
+  <!-- 售后问题分布 -->
+  <div class="card">
+    <h3>售后问题分布</h3>
+    <div id="chart-aftersales" class="chart"></div>
+  </div>
+
+  <!-- 采购管线 -->
+  <div class="card">
+    <h3>采购管线</h3>
+    <div id="chart-procurement" class="chart"></div>
   </div>
 
   <!-- 排产待确认 -->
@@ -377,6 +500,95 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
   series: [{ type: 'bar', data: orderQtys, itemStyle: { color: '#7c4dff', borderRadius: [4, 4, 0, 0] } }]
 });
+
+// Chart 5: Blank inventory bar chart
+(function() {
+  const el = document.getElementById('chart-blanks');
+  if (!el) return;
+  const names = ${JSON.stringify(blankInvData.map(d => d.name || d.sku))};
+  const currents = ${JSON.stringify(blankInvData.map(d => d.current))};
+  const safeties = ${JSON.stringify(blankInvData.map(d => d.safety))};
+  if (names.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无毛坯库存数据</div>'; return; }
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['当前毛坯库存', '安全毛坯库存'], textStyle: { color: '#888' }, top: 0 },
+    grid: { top: 30, bottom: 30, left: 50, right: 20 },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    series: [
+      { name: '当前毛坯库存', type: 'bar', data: currents, itemStyle: { color: '#26a69a', borderRadius: [4,4,0,0] } },
+      { name: '安全毛坯库存', type: 'line', data: safeties, itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
+    ]
+  });
+})();
+
+// Chart 6: Factory load horizontal bar
+(function() {
+  const el = document.getElementById('chart-factory');
+  if (!el) return;
+  const names = ${JSON.stringify(factoryData.map(d => d.name))};
+  const queues = ${JSON.stringify(factoryData.map(d => d.queue))};
+  const caps = ${JSON.stringify(factoryData.map(d => d.capacity))};
+  if (names.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无车房数据</div>'; return; }
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'axis', formatter: function(params) {
+      const name = params[0].name;
+      let s = name + '<br/>';
+      params.forEach(p => { s += p.marker + p.seriesName + ': ' + p.value + '<br/>'; });
+      if (caps[params[0].dataIndex] > 0) {
+        s += '利用率: ' + Math.round(queues[params[0].dataIndex] / caps[params[0].dataIndex] * 100) + '%';
+      }
+      return s;
+    }},
+    grid: { top: 10, bottom: 30, left: 80, right: 20 },
+    xAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    yAxis: { type: 'category', data: names, axisLabel: { color: '#888' } },
+    series: [
+      { name: '当前排队量', type: 'bar', data: queues, itemStyle: { color: '#ff9800' } },
+      { name: '日产能', type: 'bar', data: caps, itemStyle: { color: '#00c85344' } },
+    ]
+  });
+})();
+
+// Chart 7: After-sales issues pie
+(function() {
+  const el = document.getElementById('chart-aftersales');
+  if (!el) return;
+  const data = ${JSON.stringify(Object.entries(afterSalesByType).map(([k, v]) => ({ name: k, value: v })))};
+  if (data.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无售后数据</div>'; return; }
+  const colors = ['#1e90ff', '#ff9800', '#f44336', '#00c853', '#7c4dff', '#e91e63', '#00bcd4', '#ffeb3b'];
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie', radius: ['40%', '65%'], center: ['50%', '55%'],
+      label: { color: '#ccc', fontSize: 11 },
+      data: data.map(function(d, i) { return { value: d.value, name: d.name, itemStyle: { color: colors[i % colors.length] } }; })
+    }]
+  });
+})();
+
+// Chart 8: Procurement pipeline bar
+(function() {
+  const el = document.getElementById('chart-procurement');
+  if (!el) return;
+  const statuses = ${JSON.stringify(Object.keys(procByStatus))};
+  const counts = ${JSON.stringify(Object.values(procByStatus))};
+  if (statuses.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无采购数据</div>'; return; }
+  const colors = statuses.map(function(s) {
+    if (s === '已到货') return '#00c853';
+    if (s === '已取消') return '#666';
+    if (s === '运输中') return '#1e90ff';
+    if (s === '待下单') return '#ff9800';
+    return '#7c4dff';
+  });
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { top: 10, bottom: 40, left: 50, right: 20 },
+    xAxis: { type: 'category', data: statuses, axisLabel: { color: '#888', fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    series: [{ type: 'bar', data: counts.map(function(v, i) { return { value: v, itemStyle: { color: colors[i], borderRadius: [4,4,0,0] } }; }) }]
+  });
+})();
 </script>
 </body>
 </html>`;

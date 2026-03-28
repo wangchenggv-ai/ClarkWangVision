@@ -38,6 +38,7 @@ const TABLES = {
   forecast: "tblFLAHOXLSgWS6Q",
   ai_analysis: "tbl8W9F9K2RbaL0k",
   order: "tblk9Ch4gk2uQ1zG",
+  after_sales: "tblzr1b8kH9yERZt", // PLACEHOLDER — fill in after running migrate_tables.js
 };
 
 let TOKEN = "";
@@ -73,7 +74,7 @@ async function listRecords(tableId) {
 async function buildSnapshot() {
   console.log("Collecting data snapshot ...");
 
-  const [skuData, inventory, blanks, molds, production, forecasts, orders] = await Promise.all([
+  const promises = [
     listRecords(TABLES.sku),
     listRecords(TABLES.finished_inventory),
     listRecords(TABLES.blank_inventory),
@@ -81,7 +82,9 @@ async function buildSnapshot() {
     listRecords(TABLES.production),
     listRecords(TABLES.forecast),
     listRecords(TABLES.order),
-  ]);
+    TABLES.after_sales ? listRecords(TABLES.after_sales) : Promise.resolve([]),
+  ];
+  const [skuData, inventory, blanks, molds, production, forecasts, orders, afterSales] = await Promise.all(promises);
 
   const pick = (items, keys) =>
     items.map((r) => {
@@ -99,9 +102,10 @@ async function buildSnapshot() {
     production_plan: pick(production, ["\u5468\u6B21", "SKU", "\u5EFA\u8BAE\u4EA7\u91CF", "\u72B6\u6001", "\u89E6\u53D1\u539F\u56E0"]),
     forecast: pick(forecasts, ["\u9884\u6D4B\u5468\u671F", "SKU", "\u9884\u6D4B\u9500\u91CF", "\u5386\u53F2\u53C2\u8003\u5747\u503C"]),
     orders: pick(orders, ["\u8BA2\u5355\u7F16\u53F7", "SKU", "\u6570\u91CF", "\u4EA4\u671F\u7C7B\u578B", "\u8BA2\u5355\u72B6\u6001"]),
+    after_sales: pick(afterSales, ["\u552E\u540E\u7F16\u53F7", "SKU", "\u95EE\u9898\u7C7B\u578B", "\u5904\u7406\u72B6\u6001"]),
   };
 
-  console.log(`  SKU: ${skuData.length}, inventory: ${inventory.length}, molds: ${molds.length}, production: ${production.length}, orders: ${orders.length}`);
+  console.log(`  SKU: ${skuData.length}, inventory: ${inventory.length}, molds: ${molds.length}, production: ${production.length}, orders: ${orders.length}, after_sales: ${afterSales.length}`);
   return snapshot;
 }
 
@@ -133,6 +137,9 @@ ${JSON.stringify(snapshot, null, 2)}
 \u3010\u8D8B\u52BF\u89C2\u5BDF\u3011
 - \u57FA\u4E8E\u9884\u6D4B\u6570\u636E\u4E0E\u5E93\u5B58\u5BF9\u6BD4\uFF0C\u6307\u51FA\u6F5C\u5728\u98CE\u9669
 - \u5982\u6709\u8BA2\u5355\u96C6\u4E2D\u8D8B\u52BF\uFF08\u5468\u672B\u9AD8\u5CF0\uFF09\uFF0C\u7ED9\u51FA\u5907\u8D27\u5EFA\u8BAE
+
+\u3010\u552E\u540E\u5206\u6790\u3011
+- \u6309\u95EE\u9898\u7C7B\u578B\u7EDF\u8BA1\u552E\u540E\u6570\u91CF\uFF0C\u8BC6\u522B\u9AD8\u9891\u95EE\u9898SKU
 
 \u3010\u5173\u952E\u884C\u52A8\u9879\u3011\uFF08\u4E0D\u8D85\u8FC75\u6761\uFF09
 - \u6700\u7D27\u6025\u7684\u884C\u52A8\u6392\u5728\u6700\u524D\u9762\uFF0C\u7528 1/2/3 \u7F16\u53F7

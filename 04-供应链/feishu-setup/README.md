@@ -1,0 +1,329 @@
+# Feishu Supply Chain System (飞书眼镜供应链智能系统)
+
+## Overview
+
+A Node.js automation suite that creates and manages a **smart eyeglass lens supply chain system** on Feishu (飞书) Bitable (多维表格). The system covers the full cycle: SKU master data, inventory tracking (finished + blank), mold lifecycle management, sales forecasting with seasonal adjustment, production scheduling with factory routing, order processing with validation, automated procurement, ABC-XYZ classification, AI-powered analysis, webhook notifications, and a visual dashboard.
+
+**Feishu Bitable App Token:** `B3xQbbqicaome1sKdZbcwdk8nWg`
+
+---
+
+## Architecture
+
+```
+.env                    # Feishu App credentials + Coze PAT + Webhook URL
+setup_tables.js         # Sprint 1: One-shot table creation + mock data seeding
+automations.js          # Sprint 2+5: 9 business rules engine
+ai_analysis.js          # Sprint 3+5: Coze AI weekly analysis (with after-sales data)
+dashboard.js / .html    # Sprint 3+5: ECharts dashboard (12 KPIs + 8 charts)
+import_history.js       # Sprint 4: Historical order analysis from Excel
+import_real_skus.js     # Sprint 4: Replace mock SKUs with real Top-100 SKUs
+migrate_tables.js       # Sprint 5: Idempotent migration framework (9 migrations)
+classify_skus.js        # Sprint 5: ABC-XYZ SKU classification
+notify.js               # Sprint 5: Feishu webhook notification module
+seed_factories.js       # Sprint 5: Factory capacity seed data
+fix_permission.js       # Utility: Open Bitable permissions to org
+test_rule1.js           # Test: Insert blank orders to verify Rule 1
+full_test.js            # Sprint 4+5: End-to-end integration test (32 assertions)
+```
+
+---
+
+## 11 Bitable Tables
+
+| Table Key            | Table Name     | Table ID             | Purpose |
+|----------------------|----------------|----------------------|---------|
+| `sku`                | SKU主数据表     | `tblwQsvGAahoeoJV`  | Master catalog (type, safety stock, ABC/XYZ class, strategy) |
+| `finished_inventory` | 成品库存表      | `tblUF49B6i53MV2O`  | Current finished lens inventory + in-production qty |
+| `blank_inventory`    | 毛坯片库存表    | `tbladv6bQTXlNOlM`  | Blank lens inventory with status alerts |
+| `mold`               | 模芯管理表      | `tblkZ4ODg3v63prW`  | Mold core lifecycle (usage count, remaining life, alerts) |
+| `production`         | 排产计划表      | `tbltSntfaR9KCI7B`  | Weekly production schedule with factory assignment |
+| `forecast`           | 销售预测表      | `tblFLAHOXLSgWS6Q`  | Weekly sales forecast vs historical average |
+| `ai_analysis`        | AI分析记录表    | `tbl8W9F9K2RbaL0k`  | AI-generated weekly analysis reports |
+| `order`              | 订单表          | `tblk9Ch4gk2uQ1zG`  | Customer orders with validation + overdue alerts |
+| `procurement`        | 采购跟踪表      | `tblZX1qW7RvcJieg`  | Auto-triggered procurement (mold + blank) |
+| `factory`            | 车房产能表      | `tblJ6RXFENJFQe9A`  | Factory capacity, specialty, queue status |
+| `after_sales`        | 售后记录表      | `tblzr1b8kH9yERZt`  | After-sales tracking (issue type, resolution) |
+
+---
+
+## 9 Business Rules (automations.js)
+
+```bash
+node automations.js rule1   # Order validation + delivery type
+node automations.js rule2   # Finished inventory alerts
+node automations.js rule3   # Mold life alerts
+node automations.js rule4   # Seasonal forecast → production suggestions
+node automations.js rule5   # Blank inventory alerts
+node automations.js rule6   # Order overdue alerts
+node automations.js rule7   # Auto-procurement trigger
+node automations.js rule8   # Factory routing for production plans
+node automations.js rule9   # Mold usage auto-increment
+node automations.js all     # Run all 9 rules sequentially
+```
+
+### Rule 1: Order Validation → Inventory Check → Delivery Type
+- Validates each new order: quantity > 0, quantity <= 100, no positive diopter anomaly
+- Invalid orders → status "待人工审核" with issues in remarks field
+- **Stock items** with sufficient inventory → "有货3天" (3-day delivery), stock decremented
+- **Custom items** or insufficient stock → "定制5天" (5-day delivery)
+- Sends batch notification card via Feishu webhook
+
+### Rule 2: Finished Inventory Alert
+- Compares current inventory against safety stock (from SKU master)
+- Updates status: ✅有货 / ⚠️低库存 / ❌缺货
+- Sends red/orange alert card to Feishu group
+
+### Rule 3: Mold Life Alert
+- Checks remaining usage count vs threshold (default 500)
+- Status: 🟢正常 / 🟡预警 / 🔴需更换
+- Sends batch alert to Feishu group
+
+### Rule 4: Seasonal Forecast → Production Plan
+- Applies seasonal coefficients: summer +30%, back-to-school +20%, CNY -20%
+- Compares adjusted forecast against (current stock + in-production)
+- If gap > 0, creates production suggestion with reason
+- Prevents duplicate plans for same week+SKU
+
+### Rule 5: Blank Inventory Alert (NEW)
+- Compares blank lens stock against safety level (SKU safety × 1.5) and 2000-piece floor
+- Status: ✅充足 / ⚠️低库存 / ❌缺货
+- Sends batch notification when alerts found
+
+### Rule 6: Order Overdue Alert (NEW)
+- Scans active orders against promised delivery date
+- Red alert: already overdue (with days count)
+- Yellow alert: within 24 hours of deadline
+- Sends urgency-grouped notification card
+
+### Rule 7: Auto-Procurement Trigger (NEW)
+- Scans molds approaching end-of-life → creates mold procurement record
+- Scans blank inventory below 2000 pieces → creates blank procurement record
+- Deduplicates against existing open purchase orders
+- Sets expected delivery: molds 4 weeks, blanks 3 weeks
+
+### Rule 8: Factory Routing (NEW)
+- Assigns unallocated production plans to optimal factory
+- Scoring: specialty match (+10 points) minus queue days
+- 3 factories: 欧陆 (3000片/日), 九次方 (200片/日), 圣谱 (90片/日)
+- Updates factory queue after assignment
+
+### Rule 9: Mold Usage Auto-Increment (NEW)
+- Scans completed production plans not yet counted for mold usage
+- Increments mold usage count by production quantity
+- Marks production record as "已计模芯" to prevent double-counting
+
+---
+
+## ABC-XYZ Classification (classify_skus.js)
+
+Classifies 100 SKUs based on historical order data:
+
+| Dimension | Criteria | Classes |
+|-----------|----------|---------|
+| **ABC** (Volume) | Cumulative volume: top 70% = A, next 20% = B, bottom 10% = C | A, B, C |
+| **XYZ** (Variability) | Coefficient of variation: < 0.5 = X, < 1.0 = Y, >= 1.0 = Z | X, Y, Z |
+
+**Strategy mapping:**
+
+| Class | Strategy | Safety Multiplier |
+|-------|----------|-------------------|
+| AX, AY | 推式备库 (Push) | 3.0, 2.5 |
+| BX, BY, BZ, AZ | 混合 (Hybrid) | 2.0, 1.5, 1.0, 2.0 |
+| CZ | 纯按单 (Pull/MTO) | 0 → min 1 |
+
+```bash
+node classify_skus.js   # Reads orders, classifies, writes back to SKU table
+```
+
+---
+
+## Webhook Notifications (notify.js)
+
+Sends interactive card messages to a Feishu group bot:
+- Supports red/orange/green card headers
+- Batch mode for multiple alert items in one card
+- Gracefully skips if `FEISHU_WEBHOOK_URL` not configured
+
+All 9 rules integrate with notifications:
+- Rule 1: Green card — order processing summary
+- Rule 2: Red/orange card — inventory alerts
+- Rule 3: Red card — mold life warnings
+- Rule 4: Orange card — new production suggestions
+- Rule 5: Red/orange card — blank inventory alerts
+- Rule 6: Red card — order overdue warnings
+- Rule 7: Red card — new procurement orders
+- Rule 8-9: Console output only
+
+---
+
+## Migration Framework (migrate_tables.js)
+
+Idempotent migration script — safe to re-run:
+
+| # | Migration | Target |
+|---|-----------|--------|
+| 1 | Add 状态 field | blank_inventory |
+| 2 | Add 安全毛坯库存 field | blank_inventory |
+| 3 | Create 采购跟踪 table | (new table) |
+| 4 | Create 车房产能 table | (new table) |
+| 5 | Add 分配车房 field | production |
+| 6 | Add ABC分类 + XYZ分类 + 备库策略 | sku |
+| 7 | Add 已计模芯 field | production |
+| 8 | Create 售后记录 table | (new table) |
+| 9 | Add 备注 field | order |
+
+```bash
+node migrate_tables.js    # Run all migrations (idempotent)
+node seed_factories.js    # Seed 3 factory records (欧陆/九次方/圣谱)
+```
+
+---
+
+## AI Analysis (ai_analysis.js)
+
+- Collects a full data snapshot from all 11 tables (including after-sales)
+- Sends to **Coze API** (Bot ID: `7622147528649392169`) via streaming SSE
+- AI generates a structured weekly report covering:
+  - Inventory alerts (urgency-ranked)
+  - Mold replacement warnings
+  - Production priority recommendations
+  - After-sales issue analysis
+  - Trend observations
+  - Top 5 action items
+- Writes the report back to the AI分析记录表
+
+---
+
+## Dashboard (dashboard.js → dashboard.html)
+
+Generates a dark-themed ECharts dashboard with:
+
+**8 KPI cards:**
+- Total orders, normal SKUs, low-stock count, out-of-stock count
+- Blank inventory total, mold avg utilization rate, order overdue rate, pending procurement count
+
+**8 charts:**
+1. Inventory health donut (normal/low/out-of-stock)
+2. SKU inventory vs safety line stacked bar + line
+3. Mold lifecycle horizontal stacked bar
+4. Orders by SKU bar chart
+5. Blank inventory levels bar chart
+6. Factory queue vs capacity horizontal bar
+7. After-sales issue type pie chart
+8. Procurement pipeline status bar
+
+Plus: production plan table, mold details with progress bars, latest AI analysis text
+
+---
+
+## Full Test Suite (full_test.js)
+
+32 assertions across 12 test groups:
+
+| Group | Tests | Coverage |
+|-------|-------|----------|
+| 1. Data integrity | 6 | All tables have expected data |
+| 2. Order delivery | 4 | Rule 1 — delivery type + date |
+| 3. Inventory status | 3 | Rule 2 — low/out-of-stock |
+| 4. Mold alerts | 3 | Rule 3 — status levels |
+| 5. Production plans | 3 | Rule 4 — SKU, qty, factory |
+| 6. Data consistency | 3 | Cross-table SKU references |
+| 7. Blank inventory | 2 | Rule 5 — status + alerts |
+| 8. Order overdue | 1 | Rule 6 — status presence |
+| 9. Procurement | 2 | Rule 7 — records + dates |
+| 10. Factory routing | 2 | Rule 8 — 3 factories + assignments |
+| 11. ABC-XYZ | 2 | Classification + strategy |
+| 12. After-sales | 1 | Table accessible |
+
+```bash
+node full_test.js   # Run all 32 assertions
+```
+
+---
+
+## Setup & Configuration
+
+### Prerequisites
+- Node.js 18+
+- Feishu self-built app with `bitable:app` permission
+
+### .env file
+```
+FEISHU_APP_ID=cli_xxx
+FEISHU_APP_SECRET=xxx
+COZE_PAT=pat_xxx
+FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/YOUR_WEBHOOK_ID
+```
+
+### First-time setup
+```bash
+cd feishu-setup
+npm install                 # installs undici, xlsx
+node setup_tables.js        # creates Bitable + 8 tables + mock data
+node fix_permission.js      # opens document permissions
+node migrate_tables.js      # adds 3 new tables + new fields
+node seed_factories.js      # seeds 3 factory records
+node automations.js all     # runs all 9 business rules
+node classify_skus.js       # ABC-XYZ classification
+node ai_analysis.js         # generates AI report
+node dashboard.js           # generates dashboard HTML
+node full_test.js           # verify everything works (32 assertions)
+```
+
+### Migrate to real data
+```bash
+node import_real_skus.js    # replaces mock with real Top-100 SKUs
+node migrate_tables.js      # ensure new fields exist
+node seed_factories.js      # seed factory data
+node automations.js all     # re-run all rules on real data
+node classify_skus.js       # classify real SKUs
+node dashboard.js           # regenerate dashboard
+node full_test.js           # verify (expect 32/32 pass)
+```
+
+---
+
+## Development History
+
+| Sprint | Dates | Deliverable | Status |
+|--------|-------|-------------|--------|
+| Sprint 1 | 2026-03 | Table creation + mock data | ✅ Done |
+| Sprint 2 | 2026-03 | 4 business rules engine | ✅ Done |
+| Sprint 3 | 2026-03 | AI analysis + dashboard | ✅ Done |
+| Sprint 4 | 2026-03 | Real data import + E2E test | ✅ Done |
+| Sprint 5 | 2026-03-29 | Phase 1-3 supply chain upgrade | ✅ Done |
+
+### Sprint 5 Changelog (Supply Chain Upgrade)
+
+**Phase 1 — Stop the Bleeding (止血)**
+- Feishu webhook notification module (`notify.js`)
+- Blank inventory automation (Rule 5)
+- Order overdue alerts (Rule 6)
+- Notifications integrated into all rules
+
+**Phase 2 — Build Systems (建体系)**
+- Procurement tracking table + auto-trigger (Rule 7)
+- Factory capacity table + production routing (Rule 8)
+- ABC-XYZ SKU classification with differentiated safety stock
+- Mold usage auto-increment on production completion (Rule 9)
+
+**Phase 3 — Stress Test (压测)**
+- After-sales tracking table
+- Dashboard upgrade: 8 KPI cards + 8 charts
+- Seasonal forecast adjustment
+- Order validation (quantity, diopter anomaly)
+- Test suite expanded: 22 → 32 assertions
+
+---
+
+## Dependencies
+
+```json
+{
+  "undici": "^7.24.6",
+  "xlsx": "^0.18.5"
+}
+```
+
+No other dependencies. Uses native `fetch` (Node 18+).

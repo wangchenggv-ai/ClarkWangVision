@@ -54,7 +54,7 @@
 
 <div class="header">
   <h1>眼镜供应链智能看板</h1>
-  <div class="time">数据更新: 2026/3/28 15:16:45</div>
+  <div class="time">数据更新: 2026/3/29 06:30:38</div>
 </div>
 
 <!-- KPI -->
@@ -66,18 +66,42 @@
   </div>
   <div class="kpi green">
     <div class="label">库存正常 SKU</div>
-    <div class="num">20</div>
+    <div class="num">38</div>
     <div class="label">备货品</div>
   </div>
   <div class="kpi orange">
     <div class="label">低库存预警</div>
-    <div class="num">67</div>
+    <div class="num">49</div>
     <div class="label">需关注</div>
   </div>
   <div class="kpi red">
     <div class="label">缺货 SKU</div>
     <div class="num">11</div>
     <div class="label">紧急</div>
+  </div>
+</div>
+
+<!-- KPI Row 2 -->
+<div class="kpi-row">
+  <div class="kpi red">
+    <div class="label">毛坯库存</div>
+    <div class="num">1,014</div>
+    <div class="label">98 个 SKU</div>
+  </div>
+  <div class="kpi orange">
+    <div class="label">模芯使用率</div>
+    <div class="num">68%</div>
+    <div class="label">平均寿命消耗</div>
+  </div>
+  <div class="kpi red">
+    <div class="label">订单超期率</div>
+    <div class="num">100%</div>
+    <div class="label">300/300 笔超期</div>
+  </div>
+  <div class="kpi orange">
+    <div class="label">待处理采购</div>
+    <div class="num">100</div>
+    <div class="label">进行中</div>
   </div>
 </div>
 
@@ -105,6 +129,30 @@
   <div class="card">
     <h3>订单数量 by SKU</h3>
     <div id="chart-orders" class="chart chart-tall"></div>
+  </div>
+
+  <!-- 毛坯库存 -->
+  <div class="card card-2col">
+    <h3>毛坯库存 vs 安全线</h3>
+    <div id="chart-blanks" class="chart"></div>
+  </div>
+
+  <!-- 车房负载 -->
+  <div class="card">
+    <h3>车房负载</h3>
+    <div id="chart-factory" class="chart chart-tall"></div>
+  </div>
+
+  <!-- 售后问题分布 -->
+  <div class="card">
+    <h3>售后问题分布</h3>
+    <div id="chart-aftersales" class="chart"></div>
+  </div>
+
+  <!-- 采购管线 -->
+  <div class="card">
+    <h3>采购管线</h3>
+    <div id="chart-procurement" class="chart"></div>
   </div>
 
   <!-- 排产待确认 -->
@@ -147,6 +195,86 @@
         <td><strong>20</strong></td>
         <td><span class="tag tag-pending">待确认</span></td>
         <td style="font-size:12px;color:#888">测试</td>
+      </tr><tr>
+        <td>Ultra双效 -2.25/-0.50</td>
+        <td><strong>20</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测20×1=20 - 库存0 - 在产0 = 缺口20</td>
+      </tr><tr>
+        <td>Ultra双效 -1.50/-0.50</td>
+        <td><strong>14</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测14×1=14 - 库存0 - 在产0 = 缺口14</td>
+      </tr><tr>
+        <td>Ultra双效 -1.25</td>
+        <td><strong>9</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测10×1=10 - 库存1 - 在产0 = 缺口9</td>
+      </tr><tr>
+        <td>Ultra双效 -1.25</td>
+        <td><strong>9</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测10×1=10 - 库存1 - 在产0 = 缺口9</td>
+      </tr><tr>
+        <td>Ultra双效 -1.75</td>
+        <td><strong>20</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测20×1=20 - 库存0 - 在产0 = 缺口20</td>
+      </tr><tr>
+        <td>Ultra双效 -1.75</td>
+        <td><strong>20</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测20×1=20 - 库存0 - 在产0 = 缺口20</td>
+      </tr><tr>
+        <td>Ultra双效 -1.00</td>
+        <td><strong>7</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测11×1=11 - 库存4 - 在产0 = 缺口7</td>
+      </tr><tr>
+        <td>Ultra双效 -1.00</td>
+        <td><strong>7</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测11×1=11 - 库存4 - 在产0 = 缺口7</td>
+      </tr><tr>
+        <td>Ultra双效 -2.75/-0.50</td>
+        <td><strong>12</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测21×1=21 - 库存9 - 在产0 = 缺口12</td>
+      </tr><tr>
+        <td>Ultra双效 -2.75/-0.50</td>
+        <td><strong>12</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测21×1=21 - 库存9 - 在产0 = 缺口12</td>
+      </tr><tr>
+        <td>Ultra双效 -2.75</td>
+        <td><strong>4</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测17×1=17 - 库存13 - 在产0 = 缺口4</td>
+      </tr><tr>
+        <td>Ultra双效 -2.75</td>
+        <td><strong>4</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测17×1=17 - 库存13 - 在产0 = 缺口4</td>
+      </tr><tr>
+        <td>Ultra双效 -1.25/-0.50</td>
+        <td><strong>3</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测10×1=10 - 库存7 - 在产0 = 缺口3</td>
+      </tr><tr>
+        <td>Ultra双效 -1.25/-0.50</td>
+        <td><strong>3</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测10×1=10 - 库存7 - 在产0 = 缺口3</td>
+      </tr><tr>
+        <td>Ultra双效</td>
+        <td><strong>13</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测13×1=13 - 库存0 - 在产0 = 缺口13</td>
+      </tr><tr>
+        <td>Ultra双效</td>
+        <td><strong>13</strong></td>
+        <td><span class="tag tag-pending">待确认</span></td>
+        <td style="font-size:12px;color:#888">预测13×1=13 - 库存0 - 在产0 = 缺口13</td>
       </tr>
       
     </table>
@@ -293,8 +421,8 @@ echarts.init(document.getElementById('chart-health')).setOption({
     type: 'pie', radius: ['45%', '70%'], center: ['50%', '55%'],
     label: { color: '#ccc', fontSize: 12 },
     data: [
-      { value: 20, name: '正常', itemStyle: { color: '#00c853' } },
-      { value: 67, name: '低库存', itemStyle: { color: '#ff9800' } },
+      { value: 38, name: '正常', itemStyle: { color: '#00c853' } },
+      { value: 49, name: '低库存', itemStyle: { color: '#ff9800' } },
       { value: 11, name: '缺货', itemStyle: { color: '#f44336' } },
     ]
   }]
@@ -310,7 +438,7 @@ echarts.init(document.getElementById('chart-inventory')).setOption({
   series: [
     { name: '当前库存', type: 'bar', stack: 'total', data: [12,3,0,2,0,0,0,0,19,14,9,8,1,10,0,8,4,12,11,9,19,14,6,11,13,7,0,14,7,6,3,9,5,5,5,3,8,7,2,8,6,3,5,1,9,4,11,4,5,11,11,7,9,2,4,5,15,33,10,8,0,5,10,9,11,5,3,0,13,6,4,17,6,10,9,0,5,9,8,4,4,7,7,6,4,1,10,1,0,4,4,5,7,4,16,7,10,6], itemStyle: { color: '#1e90ff' } },
     { name: '在产量', type: 'bar', stack: 'total', data: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], itemStyle: { color: '#1e90ff44' } },
-    { name: '安全库存', type: 'line', data: [78,22,24,14,24,22,20,14,18,14,8,14,22,20,22,8,18,16,12,20,20,12,8,10,18,16,18,14,8,8,6,18,10,16,10,6,8,8,14,8,20,14,6,14,12,16,12,8,10,14,10,8,8,14,6,12,16,46,10,18,12,14,12,12,10,10,12,12,12,8,6,16,6,16,14,16,6,14,8,8,6,10,8,10,14,10,10,6,12,10,8,6,16,6,14,14,10,10], itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
+    { name: '安全库存', type: 'line', data: [78,22,16,14,9,8,7,14,18,14,8,14,6,20,13,8,6,16,1,7,20,12,8,10,4,3,14,14,8,8,6,5,10,4,10,6,8,8,4,8,3,10,6,9,12,3,12,8,10,14,10,8,8,4,1,2,1,46,10,1,5,1,12,12,10,10,5,3,12,8,6,16,6,2,14,14,6,14,8,8,6,10,8,10,4,4,10,2,10,1,8,6,1,6,14,2,10,10], itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
   ]
 });
 
@@ -338,6 +466,95 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
   series: [{ type: 'bar', data: orderQtys, itemStyle: { color: '#7c4dff', borderRadius: [4, 4, 0, 0] } }]
 });
+
+// Chart 5: Blank inventory bar chart
+(function() {
+  const el = document.getElementById('chart-blanks');
+  if (!el) return;
+  const names = ["Ultra","Ultra -1.25/-0.50","AB版 -1.25","D8","Ultra双效 -0.75/-0.50","Ultra双效 -2.25/-0.50","Ultra双效 -1.50/-0.50","Ultra -1.50/-0.50","Ultra -1.00","Ultra -1.25","A版 -1.00","Ultra -0.75","Ultra双效 -1.25","AB版 -1.00","Ultra双效 -1.75","A版 -0.75","Ultra双效 -1.00","Ultra -0.75/-0.50","Ultra -2.25","Ultra双效 -2.75/-0.50","AB版 -1.50","Ultra -1.50","B版 -1.00","A版","Ultra双效 -2.75","Ultra双效 -1.25/-0.50","Ultra双效","AB版 -2.00","B版 -0.75","A版 -1.25","A版 -1.50","Ultra双效 -1.50","Ultra -1.75","Ultra双效 -0.75","Ultra -2.00","A版 -2.25","A版 -0.50","A版 -1.75","Ultra双效 -2.00/-0.50","B版 -1.25","Ultra双效 -1.00/-0.75","Ultra双效 -1.75/-0.50","B版 -1.50","Ultra双效 -2.00","Ultra -0.50","Ultra双效 -1.00/-0.50","Ultra -0.50/-0.50","B版 -2.25","Ultra -1.00/-0.50","AB版 -1.50/-0.50","Ultra -2.50","B版 -1.75","B版 -0.50","Ultra双效 -3.00/-0.50","A版 -2.00","Ultra双效 -2.50","Ultra双效 -3.00","AB版 -0.75/-0.50","B版","Ultra双效 -3.25/-0.50","Ultra双效 -2.50/-0.50","Ultra双效 -1.75/-0.75","AB版 -2.25","Ultra -3.50","Ultra -2.00/-0.50","Ultra -2.75","Ultra双效 -2.25","Ultra双效 -0.50","AB版 -1.75/-0.50","Ultra -1.75/-0.50","A版 -2.25/-0.50","AB版 -2.50","B版 -2.00","Ultra双效 -2.25/-0.75","Ultra -1.50/-0.75","Ultra双效 -2.00/-0.75","D8 -0.75","AB版 -1.25/-0.50","B版 -2.25/-0.50","Ultra -2.50/-0.50","A版 -0.75/-0.50","Ultra -0.75/-0.75","Ultra +0.00/-0.50","A版 +0.00/-0.50","Ultra双效 -1.75/-1.00","Ultra双效 -1.50/-1.00","Ultra -1.25/-0.75","B版 -1.50/-0.50","Ultra双效 -2.00/-1.00","Ultra双效 -1.25/-0.75","Ultra -2.25/-0.50","Ultra -3.25/-0.50","Ultra双效 -3.25","A版 -1.00/-0.50","AB版 -1.75","Ultra双效 -2.75/-0.75","Ultra -3.25","AB版 -0.75"];
+  const currents = [83,8,7,10,7,11,10,16,21,12,10,13,13,18,23,6,7,11,3,18,6,5,4,5,12,8,12,4,6,4,4,15,6,5,10,2,10,8,12,6,24,15,5,11,10,16,11,5,6,4,10,9,6,6,6,8,19,50,8,5,5,12,14,4,12,10,3,5,9,3,6,18,3,10,17,19,5,16,9,10,6,6,9,4,15,4,10,5,6,5,8,5,14,4,6,11,10,11];
+  const safeties = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+  if (names.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无毛坯库存数据</div>'; return; }
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['当前毛坯库存', '安全毛坯库存'], textStyle: { color: '#888' }, top: 0 },
+    grid: { top: 30, bottom: 30, left: 50, right: 20 },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    series: [
+      { name: '当前毛坯库存', type: 'bar', data: currents, itemStyle: { color: '#26a69a', borderRadius: [4,4,0,0] } },
+      { name: '安全毛坯库存', type: 'line', data: safeties, itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
+    ]
+  });
+})();
+
+// Chart 6: Factory load horizontal bar
+(function() {
+  const el = document.getElementById('chart-factory');
+  if (!el) return;
+  const names = ["欧陆","九次方","圣谱"];
+  const queues = [0,0,0];
+  const caps = [0,0,0];
+  if (names.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无车房数据</div>'; return; }
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'axis', formatter: function(params) {
+      const name = params[0].name;
+      let s = name + '<br/>';
+      params.forEach(p => { s += p.marker + p.seriesName + ': ' + p.value + '<br/>'; });
+      if (caps[params[0].dataIndex] > 0) {
+        s += '利用率: ' + Math.round(queues[params[0].dataIndex] / caps[params[0].dataIndex] * 100) + '%';
+      }
+      return s;
+    }},
+    grid: { top: 10, bottom: 30, left: 80, right: 20 },
+    xAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    yAxis: { type: 'category', data: names, axisLabel: { color: '#888' } },
+    series: [
+      { name: '当前排队量', type: 'bar', data: queues, itemStyle: { color: '#ff9800' } },
+      { name: '日产能', type: 'bar', data: caps, itemStyle: { color: '#00c85344' } },
+    ]
+  });
+})();
+
+// Chart 7: After-sales issues pie
+(function() {
+  const el = document.getElementById('chart-aftersales');
+  if (!el) return;
+  const data = [];
+  if (data.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无售后数据</div>'; return; }
+  const colors = ['#1e90ff', '#ff9800', '#f44336', '#00c853', '#7c4dff', '#e91e63', '#00bcd4', '#ffeb3b'];
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie', radius: ['40%', '65%'], center: ['50%', '55%'],
+      label: { color: '#ccc', fontSize: 11 },
+      data: data.map(function(d, i) { return { value: d.value, name: d.name, itemStyle: { color: colors[i % colors.length] } }; })
+    }]
+  });
+})();
+
+// Chart 8: Procurement pipeline bar
+(function() {
+  const el = document.getElementById('chart-procurement');
+  if (!el) return;
+  const statuses = ["待下单"];
+  const counts = [100];
+  if (statuses.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无采购数据</div>'; return; }
+  const colors = statuses.map(function(s) {
+    if (s === '已到货') return '#00c853';
+    if (s === '已取消') return '#666';
+    if (s === '运输中') return '#1e90ff';
+    if (s === '待下单') return '#ff9800';
+    return '#7c4dff';
+  });
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { top: 10, bottom: 40, left: 50, right: 20 },
+    xAxis: { type: 'category', data: statuses, axisLabel: { color: '#888', fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    series: [{ type: 'bar', data: counts.map(function(v, i) { return { value: v, itemStyle: { color: colors[i], borderRadius: [4,4,0,0] } }; }) }]
+  });
+})();
 </script>
 </body>
 </html>
