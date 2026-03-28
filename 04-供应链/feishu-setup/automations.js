@@ -1,17 +1,21 @@
 /**
- * 自动化规则脚本 — 通过飞书 API 实现4条业务规则
+ * automations.js — 9 business rules engine for eyeglass supply chain
  *
- * 用法:
- *   node automations.js rule1   # 处理新订单：查库存→写交期
- *   node automations.js rule2   # 库存预警检查
- *   node automations.js rule3   # 模芯寿命预警
- *   node automations.js rule4   # 销售预测→排产建议
- *   node automations.js rule5   # 毛坯库存预警
- *   node automations.js rule6   # 订单超期预警
- *   node automations.js rule7   # 采购自动触发
- *   node automations.js rule8   # 排产分配车房
- *   node automations.js rule9   # 模芯使用累加
- *   node automations.js all     # 依次执行全部规则
+ * Rule parameters are loaded from two sources (Feishu table overrides local defaults):
+ *   1. rules_config.json  — local defaults (developer edits)
+ *   2. Feishu "规则配置" table — runtime overrides (business users edit in Feishu)
+ *
+ * Usage:
+ *   node automations.js rule1   # Order validation + delivery type
+ *   node automations.js rule2   # Finished inventory alerts
+ *   node automations.js rule3   # Mold life alerts
+ *   node automations.js rule4   # Seasonal forecast → production
+ *   node automations.js rule5   # Blank inventory alerts
+ *   node automations.js rule6   # Order overdue alerts
+ *   node automations.js rule7   # Auto-procurement trigger
+ *   node automations.js rule8   # Factory routing
+ *   node automations.js rule9   # Mold usage auto-increment
+ *   node automations.js all     # Run all 9 rules sequentially
  */
 
 import { readFileSync } from "fs";
@@ -49,11 +53,63 @@ const TABLES = {
   forecast: "tblFLAHOXLSgWS6Q",
   ai_analysis: "tbl8W9F9K2RbaL0k",
   order: "tblk9Ch4gk2uQ1zG",
-  procurement: "tblZX1qW7RvcJieg", // PLACEHOLDER — run migrate_tables.js and fill in the real table ID
-  factory: "tblJ6RXFENJFQe9A", // PLACEHOLDER — run migrate_tables.js and fill in the real table ID
+  procurement: "tblZX1qW7RvcJieg",
+  factory: "tblJ6RXFENJFQe9A",
+  rule_config: "tbl78V8wgziRs0pt",
 };
 
 let TOKEN = "";
+
+// ─── Rule Config: local defaults + Feishu overrides ─────
+
+const LOCAL_CONFIG = JSON.parse(readFileSync(resolve(__dirname, "rules_config.json"), "utf-8"));
+let CFG = structuredClone(LOCAL_CONFIG); // runtime config (merged)
+
+/**
+ * Load rule parameter overrides from Feishu "规则配置" table.
+ * Table format: 规则编号 | 参数名 | 参数值 | 说明
+ * Only overrides non-empty values; missing rows keep local defaults.
+ */
+async function loadConfigOverrides() {
+  if (!TABLES.rule_config) return;
+  try {
+    const records = await listRecords(TABLES.rule_config);
+    let overrideCount = 0;
+    for (const r of records) {
+      const f = r.fields;
+      const rule = f["规则编号"];   // e.g. "rule1"
+      const param = f["参数名"];    // e.g. "max_order_qty"
+      const raw = f["参数值"];      // e.g. "200" or "1.3" or "[6,7,8]"
+      if (!rule || !param || raw === undefined || raw === null || raw === "") continue;
+      if (!CFG[rule]) continue;
+
+      // Auto-parse: number, JSON array, or string
+      let value;
+      const str = String(raw).trim();
+      if (/^\[.*\]$/.test(str)) {
+        try { value = JSON.parse(str); } catch { value = str; }
+      } else if (!isNaN(str) && str !== "") {
+        value = Number(str);
+      } else {
+        value = str;
+      }
+
+      CFG[rule][param] = value;
+      overrideCount++;
+    }
+    if (overrideCount > 0) {
+      console.log(`  📋 Loaded ${overrideCount} config overrides from Feishu`);
+    }
+  } catch (err) {
+    console.log(`  ⚠️  Config table read failed (${err.message}), using local defaults`);
+  }
+}
+
+/** Get a rule config value with type-safe fallback */
+function cfg(rule, param, fallback) {
+  const val = CFG[rule]?.[param];
+  return val !== undefined ? val : fallback;
+}
 
 // ─── HTTP 工具 ──────────────────────────────────────────
 
@@ -142,8 +198,9 @@ async function rule1() {
   function validateOrder(fields) {
     const issues = [];
     const qty = Number(fields["数量"]);
+    const maxQty = cfg("rule1", "max_order_qty", 100);
     if (!qty || qty <= 0) issues.push("数量无效");
-    if (qty > 100) issues.push("数量异常（>100），需人工确认");
+    if (qty > maxQty) issues.push(`数量异常（>${maxQty}），需人工确认`);
 
     const sku = fields["SKU"] || "";
     if (/\+\d/.test(sku)) issues.push("正度数，需人工确认");
@@ -181,12 +238,15 @@ async function rule1() {
 
     // 查 SKU 类型（定制品始终走定制5天）
     const skuInfo = skuMap[sku];
-    const isCustom = skuInfo && skuInfo.fields["类型"] === "定制品";
+    const customType = cfg("rule1", "custom_product_type", "定制品");
+    const isCustom = skuInfo && skuInfo.fields["类型"] === customType;
 
+    const instockDays = cfg("rule1", "instock_delivery_days", 3);
+    const customDays = cfg("rule1", "custom_delivery_days", 5);
     let deliveryType, daysToAdd;
     if (!isCustom && currentStock >= qty) {
-      deliveryType = "有货3天";
-      daysToAdd = 3;
+      deliveryType = `有货${instockDays}天`;
+      daysToAdd = instockDays;
       // 扣减库存
       if (inv) {
         const newStock = currentStock - qty;
@@ -195,8 +255,8 @@ async function rule1() {
         console.log(`  📉 ${sku} 库存扣减: ${currentStock} → ${newStock}`);
       }
     } else {
-      deliveryType = "定制5天";
-      daysToAdd = 5;
+      deliveryType = `定制${customDays}天`;
+      daysToAdd = customDays;
     }
 
     // 计算承诺交货日
@@ -253,8 +313,8 @@ async function rule2() {
     const info = safetyMap[sku];
     if (!info) continue;
 
-    // 定制品不检查库存
-    if (info.type === "定制品") continue;
+    // Skip custom products
+    if (info.type === cfg("rule1", "custom_product_type", "定制品")) continue;
 
     let status;
     if (current <= 0) {
@@ -277,7 +337,8 @@ async function rule2() {
   }
 
   if (alertItems.length > 0) {
-    await notifyBatch(`📊 库存预警：${alerts} 条`, alertItems, alerts > 3 ? "red" : "orange");
+    const highThreshold = cfg("rule2", "high_alert_threshold", 3);
+    await notifyBatch(`📊 库存预警：${alerts} 条`, alertItems, alerts > highThreshold ? "red" : "orange");
   }
 
   console.log(`\n  检查完成: ${alerts} 条预警`);
@@ -299,10 +360,11 @@ async function rule3() {
     const total = f["总寿命（次）"] || 0;
     const used = f["已使用次数"] || 0;
     const remaining = total - used;
-    const threshold = f["预警阈值"] || 500;
+    const threshold = f["预警阈值"] || cfg("rule3", "default_warning_threshold", 500);
+    const criticalRemaining = cfg("rule3", "critical_remaining", 50);
 
     let status;
-    if (remaining <= 50) {
+    if (remaining <= criticalRemaining) {
       status = "🔴需更换";
       logAlert("🔴", `${id}（${f["SKU"]}）仅剩 ${remaining} 次，急需更换！采购周期3-4周`);
       alertItems.push({ emoji: "🔴", text: `${id}（${f["SKU"]}）仅剩 ${remaining} 次，急需更换！` });
@@ -353,17 +415,17 @@ async function rule4() {
     planSet.add(`${r.fields["周次"]}_${r.fields["SKU"]}`);
   }
 
-  // Seasonal adjustment coefficients
+  // Seasonal adjustment coefficients (from config)
   function getSeasonalCoefficient() {
     const now = new Date();
-    const month = now.getMonth() + 1; // 1-12
-    // Summer peak (June-August): +30%
-    if (month >= 6 && month <= 8) return 1.3;
-    // Back-to-school (September): +20%
-    if (month === 9) return 1.2;
-    // Chinese New Year dip (January-February): -20%
-    if (month <= 2) return 0.8;
-    return 1.0;
+    const month = now.getMonth() + 1;
+    const summerMonths = cfg("rule4", "seasonal_summer_months", [6, 7, 8]);
+    const schoolMonths = cfg("rule4", "seasonal_school_months", [9]);
+    const cnyMonths = cfg("rule4", "seasonal_cny_months", [1, 2]);
+    if (summerMonths.includes(month)) return cfg("rule4", "seasonal_summer", 1.3);
+    if (schoolMonths.includes(month)) return cfg("rule4", "seasonal_school", 1.2);
+    if (cnyMonths.includes(month)) return cfg("rule4", "seasonal_cny", 0.8);
+    return cfg("rule4", "seasonal_default", 1.0);
   }
 
   const seasonalCoeff = getSeasonalCoefficient();
@@ -438,8 +500,8 @@ async function rule5() {
     const info = skuMap[sku];
     if (!info) continue;
 
-    // Safety stock from field, or derive from SKU safety stock * 1.5
-    const safetyBlank = f["安全毛坯库存"] || Math.ceil((info["安全库存"] || 0) * 1.5);
+    const blankMultiplier = cfg("rule5", "blank_safety_multiplier", 1.5);
+    const safetyBlank = f["安全毛坯库存"] || Math.ceil((info["安全库存"] || 0) * blankMultiplier);
 
     let status;
     if (current <= 0) {
@@ -450,9 +512,9 @@ async function rule5() {
       status = "⚠️低库存";
       alertItems.push({ emoji: "⚠️", text: `${sku} 毛坯${current}片 < 安全线${safetyBlank}片` });
       alerts++;
-    } else if (current < 2000) {
+    } else if (current < cfg("rule5", "blank_floor", 2000)) {
       status = "⚠️低库存";
-      alertItems.push({ emoji: "⚠️", text: `${sku} 毛坯${current}片 < 2000片红线` });
+      alertItems.push({ emoji: "⚠️", text: `${sku} 毛坯${current}片 < ${cfg("rule5", "blank_floor", 2000)}片红线` });
       alerts++;
     } else {
       status = "✅充足";
@@ -463,7 +525,8 @@ async function rule5() {
   }
 
   if (alertItems.length > 0) {
-    await notifyBatch(`🧱 毛坯库存预警：${alerts} 条`, alertItems, alerts > 2 ? "red" : "orange");
+    const blankHighThreshold = cfg("rule5", "high_alert_threshold", 2);
+    await notifyBatch(`🧱 毛坯库存预警：${alerts} 条`, alertItems, alerts > blankHighThreshold ? "red" : "orange");
   }
 
   console.log(`\n  检查完成: ${alerts} 条预警`);
@@ -477,7 +540,9 @@ async function rule6() {
 
   const orders = await listRecords(TABLES.order);
   const now = Date.now();
-  const HOURS_24 = 24 * 60 * 60 * 1000;
+  const warningHours = cfg("rule6", "warning_hours", 24);
+  const WARNING_MS = warningHours * 60 * 60 * 1000;
+  const skipStatuses = cfg("rule6", "skip_statuses", ["已发货", "完成", "已签收"]);
   const alertItems = [];
   let overdueCount = 0;
 
@@ -486,8 +551,8 @@ async function rule6() {
     const status = f["订单状态"];
     const promiseDate = f["承诺交货日"];
 
-    // Skip completed/shipped orders
-    if (!status || status === "已发货" || status === "完成" || status === "已签收") continue;
+    // Skip completed/shipped orders (configurable)
+    if (!status || skipStatuses.includes(status)) continue;
     if (!promiseDate) continue;
 
     const promiseTs = typeof promiseDate === "number" ? promiseDate : new Date(promiseDate).getTime();
@@ -498,7 +563,7 @@ async function rule6() {
       alertItems.push({ emoji: "🔴", text: `${f["订单编号"]} 已超期${daysOverdue}天！状态: ${status}` });
       overdueCount++;
       logAlert("🔴", `${f["订单编号"]} 已超期 ${daysOverdue} 天（状态: ${status}）`);
-    } else if (remaining < HOURS_24) {
+    } else if (remaining < WARNING_MS) {
       const hoursLeft = Math.ceil(remaining / (60 * 60 * 1000));
       alertItems.push({ emoji: "🟡", text: `${f["订单编号"]} 距交期仅剩${hoursLeft}小时，当前: ${status}` });
       overdueCount++;
@@ -546,18 +611,20 @@ async function rule7() {
   for (const r of molds) {
     const f = r.fields;
     const remaining = (f["总寿命（次）"] || 0) - (f["已使用次数"] || 0);
-    if (remaining < (f["预警阈值"] || 500)) {
+    const moldThreshold = f["预警阈值"] || cfg("rule3", "default_warning_threshold", 500);
+    if (remaining < moldThreshold) {
       const key = `模具_${f["SKU"]}`;
       if (openPO.has(key)) {
         console.log(`  ⏭️  ${f["模芯编号"]} 已有在途采购，跳过`);
         continue;
       }
+      const moldLeadDays = cfg("rule7", "mold_lead_days", 28);
       await createRecord(TABLES.procurement, {
         "采购类型": "模具",
         "关联SKU": f["SKU"],
         "数量": 1,
         "发起日期": Date.now(),
-        "预计到货": Date.now() + 28 * 24 * 60 * 60 * 1000,
+        "预计到货": Date.now() + moldLeadDays * 24 * 60 * 60 * 1000,
         "状态": "待下单",
         "触发来源": `模芯${f["模芯编号"]}剩余${remaining}次`,
       });
@@ -572,19 +639,23 @@ async function rule7() {
   for (const r of blanks) {
     const f = r.fields;
     const current = f["当前毛坯库存"] || 0;
-    if (current < 2000) {
+    const blankReorderPoint = cfg("rule7", "blank_reorder_point", 2000);
+    if (current < blankReorderPoint) {
       const key = `毛坯_${f["SKU"]}`;
       if (openPO.has(key)) {
         console.log(`  ⏭️  ${f["SKU"]} 毛坯已有在途采购，跳过`);
         continue;
       }
-      const orderQty = Math.max(5000 - current, 3000);
+      const replenishTarget = cfg("rule7", "blank_replenish_target", 5000);
+      const minOrderQty = cfg("rule7", "blank_min_order_qty", 3000);
+      const blankLeadDays = cfg("rule7", "blank_lead_days", 21);
+      const orderQty = Math.max(replenishTarget - current, minOrderQty);
       await createRecord(TABLES.procurement, {
         "采购类型": "毛坯",
         "关联SKU": f["SKU"],
         "数量": orderQty,
         "发起日期": Date.now(),
-        "预计到货": Date.now() + 21 * 24 * 60 * 60 * 1000,
+        "预计到货": Date.now() + blankLeadDays * 24 * 60 * 60 * 1000,
         "状态": "待下单",
         "触发来源": `毛坯库存${current}片 < 2000片红线`,
       });
@@ -643,7 +714,8 @@ async function rule8() {
       if (fac["状态"] === "停产") continue;
       const isSpecialty = fac.specialties.some(s => model.includes(s) || s.includes(model));
       const queueDays = (fac["当前排队量"] || 0) / (fac["日产能（片）"] || 1);
-      const score = (isSpecialty ? 10 : 0) - queueDays;
+      const specialtyBonus = cfg("rule8", "specialty_bonus", 10);
+      const score = (isSpecialty ? specialtyBonus : 0) - queueDays;
       if (score > bestScore) {
         bestScore = score;
         bestFactory = name;
@@ -733,6 +805,9 @@ async function main() {
   console.log("🚀 眼镜供应链自动化规则引擎\n");
   await getToken();
   console.log("✅ 已连接飞书");
+
+  // Load config: local defaults + Feishu overrides
+  await loadConfigOverrides();
 
   const rules = {
     rule1,

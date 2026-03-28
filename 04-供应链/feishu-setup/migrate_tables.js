@@ -204,6 +204,18 @@ async function main() {
     type: 1,
   });
 
+  // Migration 10: Create rule config table
+  console.log("\nMigration 10: 规则配置表");
+  const ruleConfigId = await ensureTable("规则配置", [
+    { field_name: "规则编号", type: 1 },
+    { field_name: "参数名", type: 1 },
+    { field_name: "参数值", type: 1 },
+    { field_name: "说明", type: 1 },
+  ]);
+  if (ruleConfigId) {
+    console.log(`  📝 Rule config table ID: ${ruleConfigId} — add to TABLES.rule_config in automations.js`);
+  }
+
   console.log("\n✅ All migrations complete");
 }
 
