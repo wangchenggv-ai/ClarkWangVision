@@ -25,6 +25,7 @@ classify_skus.js        # Sprint 5: ABC-XYZ SKU classification
 notify.js               # Sprint 5: Feishu webhook notification module
 seed_factories.js       # Sprint 5: Factory capacity seed data
 delivery_analysis.js    # Sprint 7: Delivery performance analysis + self-improvement
+cache.js                # Sprint 8: Local JSON cache module (30min TTL)
 fix_permission.js       # Utility: Open Bitable permissions to org
 test_rule1.js           # Test: Insert blank orders to verify Rule 1
 test_10_orders.js       # Test: Insert 10 diverse simulated orders
@@ -334,9 +335,22 @@ node seed_factories.js      # seeds 3 factory records
 node seed_config.js         # seeds 25 rule config parameters
 node automations.js all     # runs all 9 business rules (reads config)
 node classify_skus.js       # ABC-XYZ classification
+node delivery_analysis.js   # delivery performance analysis + simulation
 node ai_analysis.js         # generates AI report
 node dashboard.js           # generates dashboard HTML
 node full_test.js           # verify everything works (32 assertions)
+```
+
+### Daily development (with cache + quiet mode)
+```bash
+node automations.js all -q          # quiet: 46 lines (vs 643 normal)
+node delivery_analysis.js -q        # quiet: 1 line scorecard
+node dashboard.js                   # cached: ~1.6s (vs ~8s fresh)
+
+# When data changes, bypass cache:
+node automations.js all --fresh     # skip cache, re-fetch from API
+node automations.js all -q --fresh  # quiet + fresh
+node dashboard.js --fresh           # fresh dashboard data
 ```
 
 ### Migrate to real data
@@ -363,6 +377,17 @@ node full_test.js           # verify (expect 32/32 pass)
 | Sprint 5 | 2026-03-29 | Phase 1-3 supply chain upgrade | ✅ Done |
 | Sprint 6 | 2026-03-29 | Rule config externalization | ✅ Done |
 | Sprint 7 | 2026-03-29 | Delivery performance analysis engine | ✅ Done |
+| Sprint 8 | 2026-03-29 | Performance optimization (cache + quiet mode) | ✅ Done |
+
+### Sprint 8 Changelog (Performance Optimization)
+
+- Created `cache.js` — local JSON cache for Feishu API responses (30min TTL)
+- Integrated cache into `automations.js`, `delivery_analysis.js`, `dashboard.js`
+- Added `-q` quiet mode: `automations.js` output 643 → 46 lines (-93%), `delivery_analysis.js` 83 → 1 line (-99%)
+- Added `--fresh` flag to bypass cache when data has changed
+- Global data preload in `automations.js`: 9 tables loaded once (was 20 redundant API calls)
+- `notify.js`: webhook warning printed once instead of per-rule
+- Reduced test data from 310 → 100 orders (1 API page instead of 4)
 
 ### Sprint 7 Changelog (Delivery Performance Self-Improvement)
 

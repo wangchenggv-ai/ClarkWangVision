@@ -39,6 +39,7 @@ A Node.js automation suite that builds and manages an **eyeglass lens supply cha
 | `fix_permission.js` | Opens Bitable document permissions |
 | `test_rule1.js` | Inserts test orders to verify Rule 1 |
 | `delivery_analysis.js` | Delivery performance analysis, simulation & self-improvement engine |
+| `cache.js` | Local JSON cache for API responses (30min TTL, `--fresh` to bypass) |
 | `full_test.js` | End-to-end integration test (32 assertions) |
 
 ## Tech Stack
@@ -90,9 +91,19 @@ A 7-step closed-loop system that measures, diagnoses, simulates, and auto-evolve
 node delivery_analysis.js              # Full analysis + simulation
 node delivery_analysis.js --apply      # Auto-apply improvements
 node delivery_analysis.js --report     # Analysis only
+node delivery_analysis.js -q           # Quiet mode (1-line scorecard)
 ```
 
-## Development History (6 Sprints + Sprint 7)
+## Performance Optimization
+
+| Feature | Flag | Effect |
+|---------|------|--------|
+| Quiet mode | `-q` | automations: 643→46 lines (-93%), delivery: 83→1 line (-99%) |
+| Local cache | auto | 30min TTL, reads .cache/*.json instead of API |
+| Fresh fetch | `--fresh` | Bypass cache, re-fetch from Feishu API |
+| Global preload | auto | 9 tables loaded once (was 20 redundant calls) |
+
+## Development History (8 Sprints)
 
 - **Sprint 1:** Table creation + mock data seeding
 - **Sprint 2:** 4 automated business rules
@@ -101,6 +112,7 @@ node delivery_analysis.js --report     # Analysis only
 - **Sprint 5:** Supply chain upgrade — 5 new rules, 4 new tables, ABC-XYZ, notifications, dashboard upgrade
 - **Sprint 6:** Rule config externalization — 25 params to Feishu table, business users self-service
 - **Sprint 7:** Delivery performance analysis engine — actual vs predicted fill rate, gap analysis, simulation, auto-improvement recommendations, dashboard upgrade
+- **Sprint 8:** Performance optimization — local JSON cache, quiet mode, global data preload, test data reduction (310→100 orders)
 
 ## Quick Start
 
@@ -113,8 +125,14 @@ node seed_factories.js      # seed factory data
 node seed_config.js         # seed rule config (25 params)
 node automations.js all     # run all 9 business rules
 node classify_skus.js       # ABC-XYZ classification
+node delivery_analysis.js   # delivery performance analysis + simulation
 node ai_analysis.js         # generate AI report
 node dashboard.js           # generate dashboard HTML
-node delivery_analysis.js   # delivery performance analysis + simulation
 node full_test.js           # verify (32/32 pass)
+
+# Daily development (optimized)
+node automations.js all -q          # cached + quiet
+node delivery_analysis.js -q        # 1-line scorecard
+node dashboard.js                   # cached ~1.6s
+node automations.js all -q --fresh  # force API refresh
 ```
