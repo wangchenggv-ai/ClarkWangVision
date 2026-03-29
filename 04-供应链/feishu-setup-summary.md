@@ -38,6 +38,7 @@ A Node.js automation suite that builds and manages an **eyeglass lens supply cha
 | `seed_factories.js` | Seeds 3 factory records (欧陆/九次方/圣谱) |
 | `fix_permission.js` | Opens Bitable document permissions |
 | `test_rule1.js` | Inserts test orders to verify Rule 1 |
+| `delivery_analysis.js` | Delivery performance analysis, simulation & self-improvement engine |
 | `full_test.js` | End-to-end integration test (32 assertions) |
 
 ## Tech Stack
@@ -71,7 +72,27 @@ A Node.js automation suite that builds and manages an **eyeglass lens supply cha
 
 All parameters configurable via Feishu "规则配置" table — no code changes needed.
 
-## Development History (6 Sprints)
+## Delivery Performance Self-Improvement Engine
+
+A 7-step closed-loop system that measures, diagnoses, simulates, and auto-evolves:
+
+| Step | What | Output |
+|------|------|--------|
+| 1 | Measure actual delivery (fill rate, overdue rate) | 72.7% fill, 97.4% overdue |
+| 2 | Measure predicted delivery (stock vs safety) | 39.0% predicted fill |
+| 3 | Gap analysis (per-SKU, weighted by ABC class) | Top underperforming SKUs |
+| 4 | Root cause diagnosis | zero_stock, below_safety, blank_low, etc. |
+| 5 | Simulation (7 what-if scenarios) | Best: Safety+50% & +1wk → 85.7% |
+| 6 | Generate prioritized recommendations | P1-P3 with config changes |
+| 7 | Auto-apply config changes to Feishu | `--apply` flag |
+
+```bash
+node delivery_analysis.js              # Full analysis + simulation
+node delivery_analysis.js --apply      # Auto-apply improvements
+node delivery_analysis.js --report     # Analysis only
+```
+
+## Development History (6 Sprints + Sprint 7)
 
 - **Sprint 1:** Table creation + mock data seeding
 - **Sprint 2:** 4 automated business rules
@@ -79,6 +100,7 @@ All parameters configurable via Feishu "规则配置" table — no code changes 
 - **Sprint 4:** Real data import pipeline + end-to-end testing
 - **Sprint 5:** Supply chain upgrade — 5 new rules, 4 new tables, ABC-XYZ, notifications, dashboard upgrade
 - **Sprint 6:** Rule config externalization — 25 params to Feishu table, business users self-service
+- **Sprint 7:** Delivery performance analysis engine — actual vs predicted fill rate, gap analysis, simulation, auto-improvement recommendations, dashboard upgrade
 
 ## Quick Start
 
@@ -93,5 +115,6 @@ node automations.js all     # run all 9 business rules
 node classify_skus.js       # ABC-XYZ classification
 node ai_analysis.js         # generate AI report
 node dashboard.js           # generate dashboard HTML
+node delivery_analysis.js   # delivery performance analysis + simulation
 node full_test.js           # verify (32/32 pass)
 ```

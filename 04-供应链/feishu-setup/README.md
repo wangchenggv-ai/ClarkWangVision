@@ -24,8 +24,10 @@ migrate_tables.js       # Sprint 5+6: Idempotent migration framework (10 migrati
 classify_skus.js        # Sprint 5: ABC-XYZ SKU classification
 notify.js               # Sprint 5: Feishu webhook notification module
 seed_factories.js       # Sprint 5: Factory capacity seed data
+delivery_analysis.js    # Sprint 7: Delivery performance analysis + self-improvement
 fix_permission.js       # Utility: Open Bitable permissions to org
 test_rule1.js           # Test: Insert blank orders to verify Rule 1
+test_10_orders.js       # Test: Insert 10 diverse simulated orders
 full_test.js            # Sprint 4+5: End-to-end integration test (32 assertions)
 ```
 
@@ -360,6 +362,18 @@ node full_test.js           # verify (expect 32/32 pass)
 | Sprint 4 | 2026-03 | Real data import + E2E test | ✅ Done |
 | Sprint 5 | 2026-03-29 | Phase 1-3 supply chain upgrade | ✅ Done |
 | Sprint 6 | 2026-03-29 | Rule config externalization | ✅ Done |
+| Sprint 7 | 2026-03-29 | Delivery performance analysis engine | ✅ Done |
+
+### Sprint 7 Changelog (Delivery Performance Self-Improvement)
+
+- Created `delivery_analysis.js` — 7-step closed-loop self-improvement engine
+- Step 1-2: Measure actual vs predicted delivery performance (fill rate, overdue rate)
+- Step 3: Per-SKU gap analysis weighted by ABC classification
+- Step 4: Root cause diagnosis (zero stock, below safety, blank low, mold critical, capacity bottleneck)
+- Step 5: Simulation engine — 7 what-if scenarios (safety stock ×, buffer weeks)
+- Step 6: Prioritized recommendations with specific config changes
+- Step 7: Auto-apply mode (`--apply`) updates Feishu config table directly
+- Dashboard upgraded with delivery performance section (4 KPIs, simulation chart, gap table)
 
 ### Sprint 6 Changelog (Rule Configuration)
 
