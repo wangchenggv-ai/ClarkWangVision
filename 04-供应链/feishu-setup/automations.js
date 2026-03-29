@@ -17,12 +17,15 @@
  *   node automations.js rule9   # Mold usage auto-increment
  *   node automations.js all     # Run all 9 rules sequentially
  *   node automations.js all -q  # Quiet mode (summary only, saves tokens)
+ *   node automations.js all --fresh  # Bypass cache, fetch fresh from API
+ *   node automations.js all -q --fresh  # Quiet + fresh
  */
 
 import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { notifyBatch } from "./notify.js";
+import { cachedFetch, cacheStatus } from "./cache.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -122,9 +125,16 @@ function log(...args) { if (!QUIET) console.log(...args); }
 const DATA = {};  // populated by preloadData()
 
 async function preloadData() {
-  console.log("📥 Preloading data...");
+  const cs = cacheStatus();
+  if (cs.valid > 0 && !cs.fresh) {
+    console.log(`📥 Loading data (cache: ${cs.valid}/${cs.files} valid, TTL ${cs.ttl}min)...`);
+  } else {
+    console.log(`📥 Loading data from Feishu API${cs.fresh ? " (--fresh)" : ""}...`);
+  }
   const keys = ["sku", "finished_inventory", "blank_inventory", "mold", "production", "forecast", "order", "procurement", "factory"];
-  const results = await Promise.all(keys.map(k => TABLES[k] ? listRecords(TABLES[k]) : Promise.resolve([])));
+  const results = await Promise.all(keys.map(k =>
+    TABLES[k] ? cachedFetch(k, () => listRecords(TABLES[k])) : Promise.resolve([])
+  ));
   keys.forEach((k, i) => { DATA[k] = results[i]; });
   if (!QUIET) {
     const counts = keys.map(k => `${k}:${DATA[k].length}`).join(", ");

@@ -1,13 +1,15 @@
 /**
  * 供应链可视化看板 — 从飞书拉数据，生成 HTML 看板
  *
- * 用法: node dashboard.js
+ * 用法: node dashboard.js          # Use cache if available
+ *        node dashboard.js --fresh  # Bypass cache
  * 生成 dashboard.html，浏览器打开即可
  */
 
 import { readFileSync, writeFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { cachedFetch } from "./cache.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -70,24 +72,24 @@ async function listRecords(tableId) {
 }
 
 async function main() {
-  console.log("Fetching data from Feishu ...");
+  console.log("Loading data...");
   await getToken();
 
   const [skus, inventory, molds, production, orders, aiRecords, forecasts] = await Promise.all([
-    listRecords(TABLES.sku),
-    listRecords(TABLES.finished_inventory),
-    listRecords(TABLES.mold),
-    listRecords(TABLES.production),
-    listRecords(TABLES.order),
-    listRecords(TABLES.ai_analysis),
-    listRecords(TABLES.forecast),
+    cachedFetch("sku", () => listRecords(TABLES.sku)),
+    cachedFetch("finished_inventory", () => listRecords(TABLES.finished_inventory)),
+    cachedFetch("mold", () => listRecords(TABLES.mold)),
+    cachedFetch("production", () => listRecords(TABLES.production)),
+    cachedFetch("order", () => listRecords(TABLES.order)),
+    cachedFetch("ai_analysis", () => listRecords(TABLES.ai_analysis)),
+    cachedFetch("forecast", () => listRecords(TABLES.forecast)),
   ]);
 
   // Fetch new tables conditionally
-  const blanks = TABLES.blank_inventory ? await listRecords(TABLES.blank_inventory) : [];
-  const factories = TABLES.factory ? await listRecords(TABLES.factory) : [];
-  const procurements = TABLES.procurement ? await listRecords(TABLES.procurement) : [];
-  const afterSalesData = TABLES.after_sales ? await listRecords(TABLES.after_sales) : [];
+  const blanks = TABLES.blank_inventory ? await cachedFetch("blank_inventory", () => listRecords(TABLES.blank_inventory)) : [];
+  const factories = TABLES.factory ? await cachedFetch("factory", () => listRecords(TABLES.factory)) : [];
+  const procurements = TABLES.procurement ? await cachedFetch("procurement", () => listRecords(TABLES.procurement)) : [];
+  const afterSalesData = TABLES.after_sales ? await cachedFetch("after_sales", () => listRecords(TABLES.after_sales)) : [];
 
   console.log(`  SKU: ${skus.length}, Inventory: ${inventory.length}, Molds: ${molds.length}, Production: ${production.length}, Orders: ${orders.length}, AI: ${aiRecords.length}`);
   console.log(`  Blanks: ${blanks.length}, Factories: ${factories.length}, Procurement: ${procurements.length}, AfterSales: ${afterSalesData.length}`);

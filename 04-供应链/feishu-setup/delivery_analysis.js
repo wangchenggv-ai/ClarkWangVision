@@ -13,10 +13,12 @@
  *   node delivery_analysis.js --apply      # Auto-apply best improvements
  *   node delivery_analysis.js --report     # Analysis only, no simulation
  *   node delivery_analysis.js -q           # Quiet mode (scorecard only)
+ *   node delivery_analysis.js --fresh     # Bypass cache, fetch from API
  */
 import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
+import { cachedFetch, cacheStatus } from "./cache.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -572,16 +574,17 @@ async function main() {
   log("═".repeat(70));
   await getToken();
 
-  // Fetch all data
-  log("\n📥 Loading data...");
+  // Fetch all data (with cache)
+  const cs = cacheStatus();
+  log(`\n📥 Loading data${cs.valid > 0 && !cs.fresh ? ` (cache: ${cs.valid} valid)` : " from API"}...`);
   const [orders, skus, inventory, forecasts, molds, blanks, factories] = await Promise.all([
-    listRecords(TABLES.order),
-    listRecords(TABLES.sku),
-    listRecords(TABLES.finished_inventory),
-    listRecords(TABLES.forecast),
-    listRecords(TABLES.mold),
-    listRecords(TABLES.blank_inventory),
-    listRecords(TABLES.factory),
+    cachedFetch("order", () => listRecords(TABLES.order)),
+    cachedFetch("sku", () => listRecords(TABLES.sku)),
+    cachedFetch("finished_inventory", () => listRecords(TABLES.finished_inventory)),
+    cachedFetch("forecast", () => listRecords(TABLES.forecast)),
+    cachedFetch("mold", () => listRecords(TABLES.mold)),
+    cachedFetch("blank_inventory", () => listRecords(TABLES.blank_inventory)),
+    cachedFetch("factory", () => listRecords(TABLES.factory)),
   ]);
   log(`  Orders: ${orders.length}, SKUs: ${skus.length}, Inventory: ${inventory.length}`);
 
