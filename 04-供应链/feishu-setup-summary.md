@@ -1,5 +1,19 @@
 # Feishu Supply Chain System Summary (飞书眼镜供应链智能系统摘要)
 
+## Project Totals
+
+| Metric | Value |
+|--------|-------|
+| Total code | 5,467 lines across 18 JS + JSON files |
+| Bitable tables | 12 tables (SKU, inventory ×2, mold, production, forecast, order, procurement, factory, after-sales, AI analysis, rule config) |
+| Business rules | 9 rules, 25 configurable parameters |
+| Sprints | 8 (from table creation to performance optimization) |
+| Git commits | 10 (c97017f → 3e21dc6) |
+| Net lines added | +3,552 lines since Sprint 1 |
+| Test data | 100 orders, 100 SKUs, 7 molds, 3 factories |
+| Dashboard | 12 KPI cards, 9 charts, delivery analysis section |
+| Dependencies | 2 npm packages (undici, xlsx) |
+
 ## Project Location
 
 `C:\Users\wangc\Downloads\ClarkWangVision\04-供应链\feishu-setup\`
