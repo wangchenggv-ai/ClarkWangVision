@@ -12,6 +12,7 @@
  *   node delivery_analysis.js              # Full analysis + simulation
  *   node delivery_analysis.js --apply      # Auto-apply best improvements
  *   node delivery_analysis.js --report     # Analysis only, no simulation
+ *   node delivery_analysis.js -q           # Quiet mode (scorecard only)
  */
 import { readFileSync } from "fs";
 import { resolve, dirname } from "path";
@@ -561,16 +562,18 @@ async function applyRecommendations(recs) {
 // ─── Main ───────────────────────────────────────────────
 
 async function main() {
-  const mode = process.argv[2] || "";
-  const autoApply = mode === "--apply";
-  const reportOnly = mode === "--report";
+  const args = process.argv.slice(2);
+  const autoApply = args.includes("--apply");
+  const reportOnly = args.includes("--report");
+  const QUIET = args.includes("-q");
+  const log = (...a) => { if (!QUIET) console.log(...a); };
 
-  console.log("📊 Delivery Performance Analysis & Self-Improvement Engine\n");
-  console.log("═".repeat(70));
+  log("📊 Delivery Performance Analysis & Self-Improvement Engine\n");
+  log("═".repeat(70));
   await getToken();
 
   // Fetch all data
-  console.log("\n📥 Loading data...");
+  log("\n📥 Loading data...");
   const [orders, skus, inventory, forecasts, molds, blanks, factories] = await Promise.all([
     listRecords(TABLES.order),
     listRecords(TABLES.sku),
@@ -580,14 +583,14 @@ async function main() {
     listRecords(TABLES.blank_inventory),
     listRecords(TABLES.factory),
   ]);
-  console.log(`  Orders: ${orders.length}, SKUs: ${skus.length}, Inventory: ${inventory.length}`);
+  log(`  Orders: ${orders.length}, SKUs: ${skus.length}, Inventory: ${inventory.length}`);
 
   // ── Step 1: Actual performance ──
-  console.log("\n" + "─".repeat(70));
-  console.log("📈 STEP 1: Actual Delivery Performance");
-  console.log("─".repeat(70));
+  log("\n" + "─".repeat(70));
+  log("📈 STEP 1: Actual Delivery Performance");
+  log("─".repeat(70));
   const actual = measureActual(orders);
-  console.log(`
+  log(`
   Total orders:        ${actual.total}
   In-stock (3-day):    ${actual.inStock}  (${(actual.inStock / actual.total * 100).toFixed(1)}%)
   Custom (5-day):      ${actual.custom}   (${(actual.custom / actual.total * 100).toFixed(1)}%)
@@ -600,11 +603,11 @@ async function main() {
   Pending:             ${actual.pending}`);
 
   // ── Step 2: Predicted performance ──
-  console.log("\n" + "─".repeat(70));
-  console.log("🔮 STEP 2: Predicted Delivery Performance");
-  console.log("─".repeat(70));
+  log("\n" + "─".repeat(70));
+  log("🔮 STEP 2: Predicted Delivery Performance");
+  log("─".repeat(70));
   const predicted = measurePredicted(skus, inventory, forecasts);
-  console.log(`
+  log(`
   Total SKUs:          ${predicted.totalSKUs}
   Can fulfill:         ${predicted.canFulfill}  (stock >= safety)
   Cannot fulfill:      ${predicted.cannotFulfill}
@@ -612,32 +615,32 @@ async function main() {
   PREDICTED FILL RATE: ${predicted.predictedFillRate.toFixed(1)}%`);
 
   // ── Step 3: Gap analysis ──
-  console.log("\n" + "─".repeat(70));
-  console.log("🔍 STEP 3: Gap Analysis (Predicted vs Actual)");
-  console.log("─".repeat(70));
+  log("\n" + "─".repeat(70));
+  log("🔍 STEP 3: Gap Analysis (Predicted vs Actual)");
+  log("─".repeat(70));
   const gapAnalysis = analyzeGaps(actual, predicted);
 
   for (const gap of gapAnalysis.gaps) {
     const icon = gap.severity === "critical" ? "🔴" : gap.severity === "warning" ? "🟡" : "🟢";
-    console.log(`\n  ${icon} ${gap.metric}: Predicted ${gap.predicted.toFixed(1)}% vs Actual ${gap.actual.toFixed(1)}% (gap: ${gap.gap > 0 ? "+" : ""}${gap.gap.toFixed(1)}%)`);
-    console.log(`     ${gap.insight}`);
+    log(`\n  ${icon} ${gap.metric}: Predicted ${gap.predicted.toFixed(1)}% vs Actual ${gap.actual.toFixed(1)}% (gap: ${gap.gap > 0 ? "+" : ""}${gap.gap.toFixed(1)}%)`);
+    log(`     ${gap.insight}`);
   }
 
   // Top problem SKUs
   const problemSKUs = gapAnalysis.skuGaps.filter(s => s.actualFill < 50 && s.orders > 0);
   if (problemSKUs.length > 0) {
-    console.log(`\n  📋 Top underperforming SKUs (fill rate < 50%):`);
-    console.log(`  ${"SKU".padEnd(28)} ${"ABC".padEnd(4)} ${"Orders".padEnd(8)} ${"Fill%".padEnd(8)} ${"Stock".padEnd(8)} ${"Cover(wk)".padEnd(10)}`);
-    console.log(`  ${"─".repeat(66)}`);
+    log(`\n  📋 Top underperforming SKUs (fill rate < 50%):`);
+    log(`  ${"SKU".padEnd(28)} ${"ABC".padEnd(4)} ${"Orders".padEnd(8)} ${"Fill%".padEnd(8)} ${"Stock".padEnd(8)} ${"Cover(wk)".padEnd(10)}`);
+    log(`  ${"─".repeat(66)}`);
     for (const s of problemSKUs.slice(0, 15)) {
-      console.log(`  ${s.sku.padEnd(28)} ${s.abc.padEnd(4)} ${String(s.orders).padEnd(8)} ${s.actualFill.toFixed(0).padEnd(8)} ${String(s.currentStock).padEnd(8)} ${String(s.coverageWeeks).padEnd(10)}`);
+      log(`  ${s.sku.padEnd(28)} ${s.abc.padEnd(4)} ${String(s.orders).padEnd(8)} ${s.actualFill.toFixed(0).padEnd(8)} ${String(s.currentStock).padEnd(8)} ${String(s.coverageWeeks).padEnd(10)}`);
     }
   }
 
   // ── Step 4: Root cause diagnosis ──
-  console.log("\n" + "─".repeat(70));
-  console.log("🔬 STEP 4: Root Cause Diagnosis");
-  console.log("─".repeat(70));
+  log("\n" + "─".repeat(70));
+  log("🔬 STEP 4: Root Cause Diagnosis");
+  log("─".repeat(70));
   const rootCauses = diagnoseRootCauses(gapAnalysis.skuGaps, molds, blanks, factories);
 
   const causeCounts = {};
@@ -651,7 +654,7 @@ async function main() {
     }
   }
 
-  console.log("\n  Root cause distribution:");
+  log("\n  Root cause distribution:");
   const causeLabels = {
     zero_stock: "Zero stock (no inventory at all)",
     below_safety: "Below safety stock level",
@@ -662,42 +665,42 @@ async function main() {
     capacity_bottleneck: "Factory capacity bottleneck",
   };
   for (const [cause, count] of Object.entries(causeCounts).sort((a, b) => b[1] - a[1])) {
-    console.log(`  ${String(count).padStart(4)}× ${causeLabels[cause] || cause}`);
+    log(`  ${String(count).padStart(4)}× ${causeLabels[cause] || cause}`);
   }
 
   if (!reportOnly) {
     // ── Step 5: Simulation ──
-    console.log("\n" + "─".repeat(70));
-    console.log("🧪 STEP 5: Simulation — What-If Scenarios");
-    console.log("─".repeat(70));
+    log("\n" + "─".repeat(70));
+    log("🧪 STEP 5: Simulation — What-If Scenarios");
+    log("─".repeat(70));
     const simResults = runSimulations(gapAnalysis.skuGaps, predicted, actual);
 
-    console.log(`\n  ${"Scenario".padEnd(35)} ${"Fill Rate".padEnd(12)} ${"Δ vs Current".padEnd(15)} ${"SKUs Improved"}`);
-    console.log(`  ${"─".repeat(70)}`);
+    log(`\n  ${"Scenario".padEnd(35)} ${"Fill Rate".padEnd(12)} ${"Δ vs Current".padEnd(15)} ${"SKUs Improved"}`);
+    log(`  ${"─".repeat(70)}`);
     const currentFill = simResults[0].result.simulatedFillRate;
     for (const s of simResults) {
       const delta = s.result.simulatedFillRate - currentFill;
       const deltaStr = delta > 0 ? `+${delta.toFixed(1)}%` : `${delta.toFixed(1)}%`;
-      console.log(`  ${s.name.padEnd(35)} ${(s.result.simulatedFillRate.toFixed(1) + "%").padEnd(12)} ${deltaStr.padEnd(15)} ${s.result.improved}/${s.result.total}`);
+      log(`  ${s.name.padEnd(35)} ${(s.result.simulatedFillRate.toFixed(1) + "%").padEnd(12)} ${deltaStr.padEnd(15)} ${s.result.improved}/${s.result.total}`);
     }
 
     // ── Step 6: Recommendations ──
-    console.log("\n" + "─".repeat(70));
-    console.log("💡 STEP 6: Improvement Recommendations");
-    console.log("─".repeat(70));
+    log("\n" + "─".repeat(70));
+    log("💡 STEP 6: Improvement Recommendations");
+    log("─".repeat(70));
     const recs = generateRecommendations(actual, predicted, gapAnalysis, rootCauses, simResults);
 
     if (recs.length === 0) {
-      console.log("\n  ✅ No critical improvements needed at this time.");
+      log("\n  ✅ No critical improvements needed at this time.");
     } else {
       for (let i = 0; i < recs.length; i++) {
         const rec = recs[i];
         const icon = rec.priority === 1 ? "🔴" : rec.priority === 2 ? "🟡" : "🟢";
-        console.log(`\n  ${icon} #${i + 1} [P${rec.priority}] ${rec.title}`);
-        console.log(`     Action: ${rec.action}`);
-        console.log(`     Impact: ${rec.impact}`);
+        log(`\n  ${icon} #${i + 1} [P${rec.priority}] ${rec.title}`);
+        log(`     Action: ${rec.action}`);
+        log(`     Impact: ${rec.impact}`);
         if (Object.keys(rec.config_changes).length > 0) {
-          console.log(`     Config: ${JSON.stringify(rec.config_changes)}`);
+          log(`     Config: ${JSON.stringify(rec.config_changes)}`);
         }
       }
     }
@@ -705,25 +708,14 @@ async function main() {
     // ── Step 7: Auto-apply ──
     if (autoApply && recs.length > 0) {
       await applyRecommendations(recs);
-      console.log("\n  💡 Config changes applied. Run 'node automations.js all' to execute with new parameters.");
-    } else if (recs.some(r => Object.keys(r.config_changes).length > 0)) {
-      console.log("\n  💡 To auto-apply these changes, run: node delivery_analysis.js --apply");
+      console.log("\n  Config changes applied. Run 'node automations.js all' to execute with new parameters.");
+    } else if (!QUIET && recs.some(r => Object.keys(r.config_changes).length > 0)) {
+      log("\n  💡 To auto-apply these changes, run: node delivery_analysis.js --apply");
     }
   }
 
-  // ── Summary ──
-  console.log("\n" + "═".repeat(70));
-  console.log("📊 DELIVERY PERFORMANCE SCORECARD");
-  console.log("═".repeat(70));
-  console.log(`
-  Actual Fill Rate:       ${actual.fillRate.toFixed(1)}%   ${actual.fillRate >= 80 ? "✅" : actual.fillRate >= 50 ? "🟡" : "🔴"}
-  Predicted Fill Rate:    ${predicted.predictedFillRate.toFixed(1)}%   ${predicted.predictedFillRate >= 80 ? "✅" : "🟡"}
-  Gap:                    ${(predicted.predictedFillRate - actual.fillRate).toFixed(1)}%
-  Overdue Rate:           ${actual.overdueRate.toFixed(1)}%   ${actual.overdueRate <= 5 ? "✅" : actual.overdueRate <= 15 ? "🟡" : "🔴"}
-  A-class SKUs at zero:   ${gapAnalysis.skuGaps.filter(s => s.abc === "A" && s.currentStock === 0).length}
-  Root causes found:      ${rootCauses.length}
-`);
-  console.log("═".repeat(70));
+  // ── Summary (always printed) ──
+  console.log("\n📊 SCORECARD: Fill=" + actual.fillRate.toFixed(1) + "% Predicted=" + predicted.predictedFillRate.toFixed(1) + "% Overdue=" + actual.overdueRate.toFixed(1) + "% A-zero=" + gapAnalysis.skuGaps.filter(s => s.abc === "A" && s.currentStock === 0).length + " Causes=" + rootCauses.length);
 }
 
 main().catch(err => { console.error("💥 Failed:", err.message); process.exit(1); });

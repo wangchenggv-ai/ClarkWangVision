@@ -30,9 +30,10 @@ const WEBHOOK_URL = env.FEISHU_WEBHOOK_URL;
  * @param {string} content - Markdown content
  * @param {"red"|"orange"|"green"} color - Card header color
  */
+let _webhookWarned = false;
 export async function notify(title, content, color = "orange") {
   if (!WEBHOOK_URL) {
-    console.log("  ⚠️  FEISHU_WEBHOOK_URL not set, skipping notification");
+    if (!_webhookWarned) { console.log("  ⚠️  FEISHU_WEBHOOK_URL not set, skipping notifications"); _webhookWarned = true; }
     return;
   }
 

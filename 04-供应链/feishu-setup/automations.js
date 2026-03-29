@@ -16,6 +16,7 @@
  *   node automations.js rule8   # Factory routing
  *   node automations.js rule9   # Mold usage auto-increment
  *   node automations.js all     # Run all 9 rules sequentially
+ *   node automations.js all -q  # Quiet mode (summary only, saves tokens)
  */
 
 import { readFileSync } from "fs";
@@ -111,6 +112,29 @@ function cfg(rule, param, fallback) {
   return val !== undefined ? val : fallback;
 }
 
+// ─── Quiet mode: -q flag suppresses per-record logs ─────
+
+const QUIET = process.argv.includes("-q");
+function log(...args) { if (!QUIET) console.log(...args); }
+
+// ─── Global data cache: load each table once, reuse across rules ──
+
+const DATA = {};  // populated by preloadData()
+
+async function preloadData() {
+  console.log("📥 Preloading data...");
+  const keys = ["sku", "finished_inventory", "blank_inventory", "mold", "production", "forecast", "order", "procurement", "factory"];
+  const results = await Promise.all(keys.map(k => TABLES[k] ? listRecords(TABLES[k]) : Promise.resolve([])));
+  keys.forEach((k, i) => { DATA[k] = results[i]; });
+  if (!QUIET) {
+    const counts = keys.map(k => `${k}:${DATA[k].length}`).join(", ");
+    console.log(`  ${counts}`);
+  }
+}
+
+/** Get cached data (preloaded) or fetch if not cached */
+function getData(key) { return DATA[key] || []; }
+
 // ─── HTTP 工具 ──────────────────────────────────────────
 
 async function api(method, path, body) {
@@ -169,18 +193,18 @@ async function createRecord(tableId, fields) {
 // ─── 通用：发飞书消息（通过 webhook 或直接写入 AI 分析表记录） ──
 
 function logAlert(emoji, message) {
-  console.log(`  ${emoji} ${message}`);
+  log(`  ${emoji} ${message}`);
 }
 
 // ─── 规则1：订单 → 查库存 → 写交期 ────────────────────
 
 async function rule1() {
   console.log("\n📦 规则1：处理订单 → 查库存 → 写交期");
-  console.log("─".repeat(50));
+  log("─".repeat(50));
 
-  const orders = await listRecords(TABLES.order);
-  const inventory = await listRecords(TABLES.finished_inventory);
-  const skuData = await listRecords(TABLES.sku);
+  const orders = getData("order");
+  const inventory = getData("finished_inventory");
+  const skuData = getData("sku");
 
   // 建立 SKU 类型索引
   const skuMap = {};
@@ -214,7 +238,7 @@ async function rule1() {
     const f = order.fields;
     // 跳过已处理的订单（已有交期类型）
     if (f["交期类型"]) {
-      console.log(`  ⏭️  ${f["订单编号"]} 已处理，跳过`);
+      log(`  ⏭️  ${f["订单编号"]} 已处理，跳过`);
       continue;
     }
 
@@ -225,7 +249,7 @@ async function rule1() {
         "订单状态": "待人工审核",
         "备注": issues.join("; "),
       });
-      console.log(`  ⚠️  ${f["订单编号"]} 参数异常: ${issues.join("; ")}`);
+      log(`  ⚠️  ${f["订单编号"]} 参数异常: ${issues.join("; ")}`);
       continue;
     }
 
@@ -252,7 +276,7 @@ async function rule1() {
         const newStock = currentStock - qty;
         await updateRecord(TABLES.finished_inventory, inv.record_id, { "当前库存": newStock });
         inv.fields["当前库存"] = newStock;
-        console.log(`  📉 ${sku} 库存扣减: ${currentStock} → ${newStock}`);
+        log(`  📉 ${sku} 库存扣减: ${currentStock} → ${newStock}`);
       }
     } else {
       deliveryType = `定制${customDays}天`;
@@ -273,7 +297,7 @@ async function rule1() {
     if (promiseDate) update["承诺交货日"] = promiseDate;
 
     await updateRecord(TABLES.order, order.record_id, update);
-    console.log(`  ✅ ${f["订单编号"]} | ${sku} × ${qty} → ${deliveryType}（库存${currentStock}）`);
+    log(`  ✅ ${f["订单编号"]} | ${sku} × ${qty} → ${deliveryType}（库存${currentStock}）`);
     processedItems.push({ emoji: "✅", text: `${f["订单编号"]} | ${sku} × ${qty} → ${deliveryType}` });
     processed++;
   }
@@ -289,10 +313,10 @@ async function rule1() {
 
 async function rule2() {
   console.log("\n📊 规则2：库存预警检查");
-  console.log("─".repeat(50));
+  log("─".repeat(50));
 
-  const inventory = await listRecords(TABLES.finished_inventory);
-  const skuData = await listRecords(TABLES.sku);
+  const inventory = getData("finished_inventory");
+  const skuData = getData("sku");
 
   // SKU编号 -> 安全库存
   const safetyMap = {};
@@ -329,7 +353,7 @@ async function rule2() {
       alerts++;
     } else {
       status = "✅有货";
-      console.log(`  ✅ ${sku}（${info.name}）库存正常: ${current} / 安全线${info.safety}`);
+      log(`  ✅ ${sku}（${info.name}）库存正常: ${current} / 安全线${info.safety}`);
     }
 
     // 更新状态字段
@@ -348,9 +372,9 @@ async function rule2() {
 
 async function rule3() {
   console.log("\n🔧 规则3：模芯寿命预警");
-  console.log("─".repeat(50));
+  log("─".repeat(50));
 
-  const molds = await listRecords(TABLES.mold);
+  const molds = getData("mold");
 
   let alerts = 0;
   const alertItems = [];
@@ -376,7 +400,7 @@ async function rule3() {
       alerts++;
     } else {
       status = "🟢正常";
-      console.log(`  🟢 ${id}（${f["SKU"]}）剩余 ${remaining} 次，正常`);
+      log(`  🟢 ${id}（${f["SKU"]}）剩余 ${remaining} 次，正常`);
     }
 
     // 更新剩余次数和状态
@@ -397,11 +421,11 @@ async function rule3() {
 
 async function rule4() {
   console.log("\n📋 规则4：销售预测 → 排产建议");
-  console.log("─".repeat(50));
+  log("─".repeat(50));
 
-  const forecasts = await listRecords(TABLES.forecast);
-  const inventory = await listRecords(TABLES.finished_inventory);
-  const existingPlans = await listRecords(TABLES.production);
+  const forecasts = getData("forecast");
+  const inventory = getData("finished_inventory");
+  const existingPlans = getData("production");
 
   // 库存索引
   const invMap = {};
@@ -429,7 +453,7 @@ async function rule4() {
   }
 
   const seasonalCoeff = getSeasonalCoefficient();
-  console.log(`  📅 Seasonal coefficient: ${seasonalCoeff}`);
+  log(`  📅 Seasonal coefficient: ${seasonalCoeff}`);
 
   let created = 0;
   const planItems = [];
@@ -441,7 +465,7 @@ async function rule4() {
 
     // 跳过已有排产计划
     if (planSet.has(`${week}_${sku}`)) {
-      console.log(`  ⏭️  ${week} ${sku} 已有排产计划，跳过`);
+      log(`  ⏭️  ${week} ${sku} 已有排产计划，跳过`);
       continue;
     }
 
@@ -464,7 +488,7 @@ async function rule4() {
       planItems.push({ emoji: "📌", text: `${week} ${sku}: 建议产量 ${gap}` });
       created++;
     } else {
-      console.log(`  ✅ ${week} ${sku}: 库存+在产 (${currentStock}+${inProduction}) ≥ 预测 (${forecastQty})，无需排产`);
+      log(`  ✅ ${week} ${sku}: 库存+在产 (${currentStock}+${inProduction}) ≥ 预测 (${forecastQty})，无需排产`);
     }
   }
 
@@ -479,10 +503,10 @@ async function rule4() {
 
 async function rule5() {
   console.log("\n🧱 规则5：毛坯库存预警");
-  console.log("─".repeat(50));
+  log("─".repeat(50));
 
-  const blanks = await listRecords(TABLES.blank_inventory);
-  const skuData = await listRecords(TABLES.sku);
+  const blanks = getData("blank_inventory");
+  const skuData = getData("sku");
 
   const skuMap = {};
   for (const r of skuData) {
@@ -521,7 +545,7 @@ async function rule5() {
     }
 
     await updateRecord(TABLES.blank_inventory, r.record_id, { "状态": status });
-    console.log(`  ${status} ${sku}: 毛坯${current}片, 在产${inProduction}片, 安全线${safetyBlank}片`);
+    log(`  ${status} ${sku}: 毛坯${current}片, 在产${inProduction}片, 安全线${safetyBlank}片`);
   }
 
   if (alertItems.length > 0) {
@@ -536,9 +560,9 @@ async function rule5() {
 
 async function rule6() {
   console.log("\n⏰ 规则6：订单超期预警");
-  console.log("─".repeat(50));
+  log("─".repeat(50));
 
-  const orders = await listRecords(TABLES.order);
+  const orders = getData("order");
   const now = Date.now();
   const warningHours = cfg("rule6", "warning_hours", 24);
   const WARNING_MS = warningHours * 60 * 60 * 1000;
@@ -569,7 +593,7 @@ async function rule6() {
       overdueCount++;
       logAlert("🟡", `${f["订单编号"]} 距交期仅剩 ${hoursLeft} 小时（状态: ${status}）`);
     } else {
-      console.log(`  ✅ ${f["订单编号"]} 交期正常，剩余 ${Math.ceil(remaining / (24*60*60*1000))} 天`);
+      log(`  ✅ ${f["订单编号"]} 交期正常，剩余 ${Math.ceil(remaining / (24*60*60*1000))} 天`);
     }
   }
 
@@ -584,16 +608,16 @@ async function rule6() {
 
 async function rule7() {
   console.log("\n🛒 规则7：采购自动触发");
-  console.log("─".repeat(50));
+  log("─".repeat(50));
 
   if (!TABLES.procurement) {
     console.log("  ⚠️  采购表未配置，请先运行 migrate_tables.js 并填入 table ID");
     return;
   }
 
-  const molds = await listRecords(TABLES.mold);
-  const blanks = await listRecords(TABLES.blank_inventory);
-  const existingPO = await listRecords(TABLES.procurement);
+  const molds = getData("mold");
+  const blanks = getData("blank_inventory");
+  const existingPO = getData("procurement");
 
   // Index existing open procurement by type+SKU
   const openPO = new Set();
@@ -615,7 +639,7 @@ async function rule7() {
     if (remaining < moldThreshold) {
       const key = `模具_${f["SKU"]}`;
       if (openPO.has(key)) {
-        console.log(`  ⏭️  ${f["模芯编号"]} 已有在途采购，跳过`);
+        log(`  ⏭️  ${f["模芯编号"]} 已有在途采购，跳过`);
         continue;
       }
       const moldLeadDays = cfg("rule7", "mold_lead_days", 28);
@@ -630,7 +654,7 @@ async function rule7() {
       });
       openPO.add(key);
       alertItems.push({ emoji: "🔧", text: `模具采购: ${f["SKU"]}（模芯${f["模芯编号"]}剩余${remaining}次）` });
-      console.log(`  📌 创建模具采购: ${f["SKU"]}（模芯${f["模芯编号"]}剩余${remaining}次）`);
+      log(`  📌 创建模具采购: ${f["SKU"]}（模芯${f["模芯编号"]}剩余${remaining}次）`);
       created++;
     }
   }
@@ -643,7 +667,7 @@ async function rule7() {
     if (current < blankReorderPoint) {
       const key = `毛坯_${f["SKU"]}`;
       if (openPO.has(key)) {
-        console.log(`  ⏭️  ${f["SKU"]} 毛坯已有在途采购，跳过`);
+        log(`  ⏭️  ${f["SKU"]} 毛坯已有在途采购，跳过`);
         continue;
       }
       const replenishTarget = cfg("rule7", "blank_replenish_target", 5000);
@@ -661,7 +685,7 @@ async function rule7() {
       });
       openPO.add(key);
       alertItems.push({ emoji: "🧱", text: `毛坯采购: ${f["SKU"]} × ${orderQty}片` });
-      console.log(`  📌 创建毛坯采购: ${f["SKU"]} × ${orderQty}片`);
+      log(`  📌 创建毛坯采购: ${f["SKU"]} × ${orderQty}片`);
       created++;
     }
   }
@@ -677,15 +701,15 @@ async function rule7() {
 
 async function rule8() {
   console.log("\n🏭 规则8：排产分配车房");
-  console.log("─".repeat(50));
+  log("─".repeat(50));
 
   if (!TABLES.factory) {
     console.log("  ⚠️  车房表未配置，请先运行 migrate_tables.js 并填入 table ID");
     return;
   }
 
-  const plans = await listRecords(TABLES.production);
-  const factories = await listRecords(TABLES.factory);
+  const plans = getData("production");
+  const factories = getData("factory");
 
   // Build factory index
   const factoryMap = {};
@@ -699,7 +723,7 @@ async function rule8() {
   for (const plan of plans) {
     const f = plan.fields;
     if (f["分配车房"]) {
-      console.log(`  ⏭️  ${f["周次"]} ${f["SKU"]} 已分配至 ${f["分配车房"]}`);
+      log(`  ⏭️  ${f["周次"]} ${f["SKU"]} 已分配至 ${f["分配车房"]}`);
       continue;
     }
 
@@ -728,7 +752,7 @@ async function rule8() {
       const newQueue = Math.max((fac["当前排队量"] || 0) + qty, 1);
       await updateRecord(TABLES.factory, fac.record_id, { "当前排队量": newQueue });
       fac["当前排队量"] = newQueue;
-      console.log(`  ✅ ${f["周次"]} ${f["SKU"]} × ${qty} → ${bestFactory}`);
+      log(`  ✅ ${f["周次"]} ${f["SKU"]} × ${qty} → ${bestFactory}`);
       assigned++;
     }
   }
@@ -740,10 +764,10 @@ async function rule8() {
 
 async function rule9() {
   console.log("\n🔧 规则9：模芯使用累加");
-  console.log("─".repeat(50));
+  log("─".repeat(50));
 
-  const plans = await listRecords(TABLES.production);
-  const molds = await listRecords(TABLES.mold);
+  const plans = getData("production");
+  const molds = getData("mold");
 
   // Build mold index by SKU
   const moldMap = {};
@@ -759,7 +783,7 @@ async function rule9() {
     // Only process completed production with uncounted mold usage
     if (f["状态"] !== "完成") continue;
     if (f["已计模芯"] === "是") {
-      console.log(`  ⏭️  ${f["周次"]} ${f["SKU"]} 已计模芯，跳过`);
+      log(`  ⏭️  ${f["周次"]} ${f["SKU"]} 已计模芯，跳过`);
       continue;
     }
 
@@ -767,7 +791,7 @@ async function rule9() {
     const qty = f["建议产量"] || 0;
     const skuMolds = moldMap[sku];
     if (!skuMolds || skuMolds.length === 0) {
-      console.log(`  ⚠️  ${sku} 无关联模芯，跳过`);
+      log(`  ⚠️  ${sku} 无关联模芯，跳过`);
       continue;
     }
 
@@ -790,7 +814,7 @@ async function rule9() {
     // Update local cache
     mf["已使用次数"] = newUsed;
 
-    console.log(`  🔧 ${f["周次"]} ${f["SKU"]} × ${qty} → 模芯${mf["模芯编号"]} 使用+${qty}, 剩余${remaining}次`);
+    log(`  🔧 ${f["周次"]} ${f["SKU"]} × ${qty} → 模芯${mf["模芯编号"]} 使用+${qty}, 剩余${remaining}次`);
     incremented++;
   }
 
@@ -808,6 +832,9 @@ async function main() {
 
   // Load config: local defaults + Feishu overrides
   await loadConfigOverrides();
+
+  // Preload all tables once (avoids redundant API calls across rules)
+  await preloadData();
 
   const rules = {
     rule1,
