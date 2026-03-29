@@ -38,6 +38,7 @@ const TABLES = {
   factory: "tblJ6RXFENJFQe9A",      // fill after migration
   procurement: "tblZX1qW7RvcJieg",  // fill after migration
   after_sales: "tblzr1b8kH9yERZt",  // fill after migration
+  forecast: "tblFLAHOXLSgWS6Q",
 };
 
 let TOKEN = "";
@@ -72,13 +73,14 @@ async function main() {
   console.log("Fetching data from Feishu ...");
   await getToken();
 
-  const [skus, inventory, molds, production, orders, aiRecords] = await Promise.all([
+  const [skus, inventory, molds, production, orders, aiRecords, forecasts] = await Promise.all([
     listRecords(TABLES.sku),
     listRecords(TABLES.finished_inventory),
     listRecords(TABLES.mold),
     listRecords(TABLES.production),
     listRecords(TABLES.order),
     listRecords(TABLES.ai_analysis),
+    listRecords(TABLES.forecast),
   ]);
 
   // Fetch new tables conditionally
@@ -239,6 +241,96 @@ async function main() {
     procByStatus[s] = (procByStatus[s] || 0) + 1;
   }
 
+  // --- Delivery Performance Analysis ---
+
+  // Actual delivery metrics
+  let delivActualFill = 0, delivInStock = 0, delivCustom = 0, delivProcessed = 0;
+  let delivOverdue = 0, delivOnTime = 0, delivPending = 0;
+  const delivSkuStats = {};
+  for (const r of orders) {
+    const f = r.fields;
+    const sku = f["SKU"] || "";
+    const dt = f["交期类型"] || "";
+    if (!delivSkuStats[sku]) delivSkuStats[sku] = { total: 0, inStock: 0, totalQty: 0, overdue: 0 };
+    delivSkuStats[sku].total++;
+    delivSkuStats[sku].totalQty += Number(f["数量"]) || 0;
+    if (dt.includes("有货")) { delivInStock++; delivSkuStats[sku].inStock++; }
+    else if (dt.includes("定制")) { delivCustom++; }
+    const status = f["订单状态"] || "";
+    const promiseDate = f["承诺交货日"];
+    if (promiseDate) {
+      const pTs = typeof promiseDate === "number" ? promiseDate : new Date(promiseDate).getTime();
+      if (["已发货","完成","已签收"].includes(status)) delivOnTime++;
+      else if (pTs < now) { delivOverdue++; delivSkuStats[sku].overdue++; }
+      else delivPending++;
+    }
+  }
+  delivProcessed = delivInStock + delivCustom;
+  delivActualFill = delivProcessed > 0 ? (delivInStock / delivProcessed * 100) : 0;
+  const delivOverdueRate = (delivOverdue + delivPending + delivOnTime) > 0
+    ? (delivOverdue / (delivOverdue + delivPending + delivOnTime) * 100) : 0;
+
+  // Predicted delivery metrics
+  const invMapDeliv = {};
+  for (const r of inventory) invMapDeliv[r.fields["SKU"]] = r.fields;
+  const demandMap = {};
+  for (const r of forecasts) {
+    const sku = r.fields["SKU"];
+    demandMap[sku] = (demandMap[sku] || 0) + (r.fields["预测销量"] || 0);
+  }
+  let canFulfill = 0, cannotFulfill = 0;
+  const skuPredictions = {};
+  for (const r of skus) {
+    const f = r.fields;
+    const sku = f["SKU编号"];
+    const safety = f["安全库存"] || 0;
+    const inv = invMapDeliv[sku] || {};
+    const stock = Number(inv["当前库存"]) || 0;
+    const demand = demandMap[sku] || 0;
+    const weekly = demand / 2;
+    const coverage = weekly > 0 ? stock / weekly : (stock > 0 ? 99 : 0);
+    const ok = stock >= safety && stock > 0;
+    if (ok) canFulfill++; else cannotFulfill++;
+    skuPredictions[sku] = { stock, safety, weekly, coverage: Math.round(coverage * 10) / 10, ok, abc: f["ABC分类"] || "?" };
+  }
+  const predictedFill = (canFulfill + cannotFulfill) > 0 ? (canFulfill / (canFulfill + cannotFulfill) * 100) : 0;
+
+  // Gap analysis — top problem SKUs
+  const gapSKUs = [];
+  for (const [sku, pred] of Object.entries(skuPredictions)) {
+    const act = delivSkuStats[sku] || { total: 0, inStock: 0, totalQty: 0, overdue: 0 };
+    if (act.total === 0) continue;
+    const actualFill = act.inStock / act.total * 100;
+    gapSKUs.push({ sku, abc: pred.abc, orders: act.total, qty: act.totalQty, fill: Math.round(actualFill), stock: pred.stock, cover: pred.coverage, overdue: act.overdue });
+  }
+  gapSKUs.sort((a, b) => {
+    const aw = (a.abc === "A" ? 3 : a.abc === "B" ? 2 : 1) * a.orders;
+    const bw = (b.abc === "A" ? 3 : b.abc === "B" ? 2 : 1) * b.orders;
+    return a.fill - b.fill || bw - aw;
+  });
+  const topGaps = gapSKUs.filter(s => s.fill < 80).slice(0, 10);
+
+  // Simulation (lightweight — estimate improvement from buffer stock)
+  const simScenarios = [
+    { name: "当前状态", weeks: 0, mult: 1.0 },
+    { name: "安全库存 +50%", weeks: 0, mult: 1.5 },
+    { name: "+1周缓冲库存", weeks: 1, mult: 1.0 },
+    { name: "+2周缓冲库存", weeks: 2, mult: 1.0 },
+    { name: "安全+50% & +1周", weeks: 1, mult: 1.5 },
+  ];
+  const simResults = simScenarios.map(sc => {
+    let improved = 0, total = 0;
+    for (const [sku, pred] of Object.entries(skuPredictions)) {
+      const act = delivSkuStats[sku];
+      if (!act || act.total === 0) continue;
+      total++;
+      let simStock = pred.stock + Math.ceil(pred.weekly * sc.weeks);
+      let simSafety = Math.ceil(pred.safety * sc.mult);
+      if (simStock >= simSafety && simStock > 0) improved++;
+    }
+    return { name: sc.name, fill: total > 0 ? Math.round(improved / total * 100) : 0, improved, total };
+  });
+
   // --- Generate HTML ---
   const html = `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -344,6 +436,61 @@ async function main() {
     <div class="label">待处理采购</div>
     <div class="num">${pendingProcurement}</div>
     <div class="label">进行中</div>
+  </div>
+</div>
+
+<!-- Delivery Performance Section -->
+<div style="padding:20px 20px 0">
+  <div style="background: #1a2a3a; border-radius: 12px; padding: 20px; border: 2px solid #1e90ff;">
+    <h3 style="color:#1e90ff; font-size:18px; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #1e90ff;">交付水平分析引擎</h3>
+    <div class="kpi-row" style="padding:0;">
+      <div class="kpi ${delivActualFill >= 80 ? 'green' : delivActualFill >= 50 ? 'orange' : 'red'}" style="background:#0d1b2a">
+        <div class="label">实际填充率</div>
+        <div class="num">${delivActualFill.toFixed(1)}%</div>
+        <div class="label">有货${delivInStock} / 总${delivProcessed}单</div>
+      </div>
+      <div class="kpi ${predictedFill >= 80 ? 'green' : predictedFill >= 50 ? 'orange' : 'red'}" style="background:#0d1b2a">
+        <div class="label">预测填充率</div>
+        <div class="num">${predictedFill.toFixed(1)}%</div>
+        <div class="label">${canFulfill}/${canFulfill + cannotFulfill} SKU可履约</div>
+      </div>
+      <div class="kpi ${delivOverdueRate <= 5 ? 'green' : delivOverdueRate <= 15 ? 'orange' : 'red'}" style="background:#0d1b2a">
+        <div class="label">超期率</div>
+        <div class="num">${delivOverdueRate.toFixed(1)}%</div>
+        <div class="label">超期${delivOverdue} / 准时${delivOnTime}</div>
+      </div>
+      <div class="kpi blue" style="background:#0d1b2a">
+        <div class="label">最优模拟方案</div>
+        <div class="num">${simResults.reduce((b, s) => s.fill > b.fill ? s : b).fill}%</div>
+        <div class="label">${simResults.reduce((b, s) => s.fill > b.fill ? s : b).name}</div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px;">
+      <div>
+        <h3 style="color:#1e90ff; font-size:14px; margin-bottom:8px; border:none; padding:0;">模拟优化方案对比</h3>
+        <div id="chart-simulation" style="width:100%; height:250px;"></div>
+      </div>
+      <div>
+        <h3 style="color:#1e90ff; font-size:14px; margin-bottom:8px; border:none; padding:0;">交付差距 Top SKU (填充率 &lt; 80%)</h3>
+        <div style="max-height:250px; overflow-y:auto;">
+          <table>
+            <tr><th>SKU</th><th>ABC</th><th>订单</th><th>填充率</th><th>库存</th><th>覆盖(周)</th></tr>
+            ${topGaps.map(s => {
+              const fillColor = s.fill === 0 ? '#f44336' : s.fill < 50 ? '#ff9800' : '#ffeb3b';
+              return '<tr>' +
+                '<td style="font-size:12px">' + s.sku + '</td>' +
+                '<td><span class="tag ' + (s.abc === 'A' ? 'tag-danger' : s.abc === 'B' ? 'tag-warn' : 'tag-ok') + '">' + s.abc + '</span></td>' +
+                '<td>' + s.orders + '</td>' +
+                '<td><strong style="color:' + fillColor + '">' + s.fill + '%</strong></td>' +
+                '<td>' + s.stock + '</td>' +
+                '<td>' + s.cover + '</td>' +
+              '</tr>';
+            }).join("")}
+            ${topGaps.length === 0 ? '<tr><td colspan="6" style="text-align:center;color:#666">All SKU fill rate >= 80%</td></tr>' : ''}
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -587,6 +734,31 @@ echarts.init(document.getElementById('chart-orders')).setOption({
     xAxis: { type: 'category', data: statuses, axisLabel: { color: '#888', fontSize: 11 } },
     yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
     series: [{ type: 'bar', data: counts.map(function(v, i) { return { value: v, itemStyle: { color: colors[i], borderRadius: [4,4,0,0] } }; }) }]
+  });
+})();
+
+// Chart: Simulation results bar chart
+(function() {
+  var el = document.getElementById('chart-simulation');
+  if (!el) return;
+  var names = ${JSON.stringify(simResults.map(s => s.name))};
+  var fills = ${JSON.stringify(simResults.map(s => s.fill))};
+  if (names.length === 0) return;
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'axis', formatter: function(p) { return p[0].name + ': ' + p[0].value + '% fill rate'; } },
+    grid: { top: 10, bottom: 60, left: 50, right: 20 },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#888', rotate: 25, fontSize: 11 } },
+    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { color: '#888', formatter: '{value}%' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    series: [{
+      type: 'bar',
+      data: fills.map(function(v, i) {
+        var color = i === 0 ? '#666' : v > fills[0] ? '#00c853' : '#ff9800';
+        var maxFill = Math.max.apply(null, fills);
+        if (v === maxFill && i > 0) color = '#1e90ff';
+        return { value: v, itemStyle: { color: color, borderRadius: [4,4,0,0] } };
+      }),
+      label: { show: true, position: 'top', color: '#ccc', fontSize: 12, formatter: '{c}%' }
+    }]
   });
 })();
 </script>

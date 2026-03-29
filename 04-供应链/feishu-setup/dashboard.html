@@ -54,7 +54,7 @@
 
 <div class="header">
   <h1>眼镜供应链智能看板</h1>
-  <div class="time">数据更新: 2026/3/29 07:08:21</div>
+  <div class="time">数据更新: 2026/3/29 11:25:31</div>
 </div>
 
 <!-- KPI -->
@@ -102,6 +102,51 @@
     <div class="label">待处理采购</div>
     <div class="num">100</div>
     <div class="label">进行中</div>
+  </div>
+</div>
+
+<!-- Delivery Performance Section -->
+<div style="padding:20px 20px 0">
+  <div style="background: #1a2a3a; border-radius: 12px; padding: 20px; border: 2px solid #1e90ff;">
+    <h3 style="color:#1e90ff; font-size:18px; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #1e90ff;">交付水平分析引擎</h3>
+    <div class="kpi-row" style="padding:0;">
+      <div class="kpi orange" style="background:#0d1b2a">
+        <div class="label">实际填充率</div>
+        <div class="num">72.7%</div>
+        <div class="label">有货224 / 总308单</div>
+      </div>
+      <div class="kpi red" style="background:#0d1b2a">
+        <div class="label">预测填充率</div>
+        <div class="num">39.0%</div>
+        <div class="label">39/100 SKU可履约</div>
+      </div>
+      <div class="kpi red" style="background:#0d1b2a">
+        <div class="label">超期率</div>
+        <div class="num">97.4%</div>
+        <div class="label">超期300 / 准时0</div>
+      </div>
+      <div class="kpi blue" style="background:#0d1b2a">
+        <div class="label">最优模拟方案</div>
+        <div class="num">67%</div>
+        <div class="label">+1周缓冲库存</div>
+      </div>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px;">
+      <div>
+        <h3 style="color:#1e90ff; font-size:14px; margin-bottom:8px; border:none; padding:0;">模拟优化方案对比</h3>
+        <div id="chart-simulation" style="width:100%; height:250px;"></div>
+      </div>
+      <div>
+        <h3 style="color:#1e90ff; font-size:14px; margin-bottom:8px; border:none; padding:0;">交付差距 Top SKU (填充率 &lt; 80%)</h3>
+        <div style="max-height:250px; overflow-y:auto;">
+          <table>
+            <tr><th>SKU</th><th>ABC</th><th>订单</th><th>填充率</th><th>库存</th><th>覆盖(周)</th></tr>
+            <tr><td style="font-size:12px">Ultra双效 -2.25/-0.50</td><td><span class="tag tag-danger">A</span></td><td>13</td><td><strong style="color:#f44336">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra双效 -1.50/-0.50</td><td><span class="tag tag-danger">A</span></td><td>9</td><td><strong style="color:#f44336">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">A版 -1.50/-0.50</td><td><span class="tag tag-ok">C</span></td><td>2</td><td><strong style="color:#f44336">0%</strong></td><td>4</td><td>99</td></tr><tr><td style="font-size:12px">D8</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>2</td><td>0.1</td></tr><tr><td style="font-size:12px">A版 -1.00</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>9</td><td>1.6</td></tr><tr><td style="font-size:12px">Ultra -2.00</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>5</td><td>99</td></tr><tr><td style="font-size:12px">Ultra双效</td><td><span class="tag tag-danger">A</span></td><td>40</td><td><strong style="color:#ff9800">28%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra双效 -0.75/-0.50</td><td><span class="tag tag-danger">A</span></td><td>13</td><td><strong style="color:#ff9800">31%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">AB版 -1.25</td><td><span class="tag tag-danger">A</span></td><td>5</td><td><strong style="color:#ff9800">40%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra双效 -2.50/-0.50</td><td><span class="tag tag-danger">A</span></td><td>12</td><td><strong style="color:#ffeb3b">58%</strong></td><td>0</td><td>0</td></tr>
+            
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -553,6 +598,31 @@ echarts.init(document.getElementById('chart-orders')).setOption({
     xAxis: { type: 'category', data: statuses, axisLabel: { color: '#888', fontSize: 11 } },
     yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
     series: [{ type: 'bar', data: counts.map(function(v, i) { return { value: v, itemStyle: { color: colors[i], borderRadius: [4,4,0,0] } }; }) }]
+  });
+})();
+
+// Chart: Simulation results bar chart
+(function() {
+  var el = document.getElementById('chart-simulation');
+  if (!el) return;
+  var names = ["当前状态","安全库存 +50%","+1周缓冲库存","+2周缓冲库存","安全+50% & +1周"];
+  var fills = [48,33,67,67,57];
+  if (names.length === 0) return;
+  echarts.init(el).setOption({
+    tooltip: { trigger: 'axis', formatter: function(p) { return p[0].name + ': ' + p[0].value + '% fill rate'; } },
+    grid: { top: 10, bottom: 60, left: 50, right: 20 },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#888', rotate: 25, fontSize: 11 } },
+    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { color: '#888', formatter: '{value}%' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    series: [{
+      type: 'bar',
+      data: fills.map(function(v, i) {
+        var color = i === 0 ? '#666' : v > fills[0] ? '#00c853' : '#ff9800';
+        var maxFill = Math.max.apply(null, fills);
+        if (v === maxFill && i > 0) color = '#1e90ff';
+        return { value: v, itemStyle: { color: color, borderRadius: [4,4,0,0] } };
+      }),
+      label: { show: true, position: 'top', color: '#ccc', fontSize: 12, formatter: '{c}%' }
+    }]
   });
 })();
 </script>
