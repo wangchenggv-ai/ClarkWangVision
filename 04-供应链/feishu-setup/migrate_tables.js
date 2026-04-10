@@ -216,6 +216,49 @@ async function main() {
     console.log(`  📝 Rule config table ID: ${ruleConfigId} — add to TABLES.rule_config in automations.js`);
   }
 
+  // Migration 11: Create 终端客户 table
+  console.log("\nMigration 11: 终端客户表");
+  const customerId = await ensureTable("终端客户", [
+    { field_name: "客户ID", type: 1 },
+    { field_name: "客户名称", type: 1 },
+    { field_name: "客户类型", type: 3, property: { options: [
+      { name: "眼科医院" }, { name: "眼镜门店" }, { name: "个人" }, { name: "其他" }
+    ]}},
+    { field_name: "所在城市", type: 1 },
+    { field_name: "来源系统", type: 3, property: { options: [
+      { name: "订单同步" }, { name: "CRM手动" }
+    ]}},
+    { field_name: "创建时间", type: 1001 },
+  ]);
+  if (customerId) {
+    console.log(`  📝 Customer table ID: ${customerId} — add to TABLES.customer in automations.js`);
+  }
+
+  // Migration 12: Add sync fields to order table
+  console.log("\nMigration 12: order.客户ID + 来源订单号 + 同步时间");
+  await ensureField("tblk9Ch4gk2uQ1zG", "order", { field_name: "客户ID", type: 1 });
+  await ensureField("tblk9Ch4gk2uQ1zG", "order", { field_name: "来源订单号", type: 1 });
+  await ensureField("tblk9Ch4gk2uQ1zG", "order", {
+    field_name: "同步时间",
+    type: 5, property: { date_formatter: "yyyy/MM/dd HH:mm" },
+  });
+
+  // Migration 13: Add supply chain workflow fields to order table
+  console.log("\nMigration 13: order.SKU + 数量 + 订单状态 + 交期类型 + 预计交期");
+  await ensureField("tblk9Ch4gk2uQ1zG", "order", { field_name: "SKU", type: 1 });
+  await ensureField("tblk9Ch4gk2uQ1zG", "order", { field_name: "数量", type: 2, property: { formatter: "0" } });
+  await ensureField("tblk9Ch4gk2uQ1zG", "order", {
+    field_name: "订单状态",
+    type: 3, property: { options: [
+      { name: "待处理" }, { name: "待人工审核" }, { name: "已发货" }, { name: "完成" }, { name: "已签收" }
+    ]},
+  });
+  await ensureField("tblk9Ch4gk2uQ1zG", "order", { field_name: "交期类型", type: 1 });
+  await ensureField("tblk9Ch4gk2uQ1zG", "order", {
+    field_name: "预计交期",
+    type: 5, property: { date_formatter: "yyyy/MM/dd" },
+  });
+
   console.log("\n✅ All migrations complete");
 }
 

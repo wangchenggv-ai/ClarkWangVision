@@ -1,0 +1,4 @@
+.env
+.sync_cursor.json
+node_modules/
+*.cache.json
