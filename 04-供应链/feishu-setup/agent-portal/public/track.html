@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 · 订单查询</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #1a1a1a; }
+
+  .header { background: #1677ff; color: #fff; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header .agent-name { font-size: 13px; opacity: 0.85; margin-left: auto; }
+
+  .container { max-width: 800px; margin: 0 auto; padding: 16px; }
+
+  .nav { display: flex; gap: 8px; margin-bottom: 16px; }
+  .nav a { padding: 8px 16px; border-radius: 6px; font-size: 14px; text-decoration: none; background: #fff; color: #666; border: 1px solid #d9d9d9; }
+  .nav a.active { background: #1677ff; color: #fff; border-color: #1677ff; }
+
+  .card { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 10px 12px; background: #fafafa; color: #666; font-weight: 500; border-bottom: 1px solid #f0f0f0; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f5f5f5; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafafa; }
+
+  .status-badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 500; }
+  .status-待审核 { background: #fff7e6; color: #d46b08; }
+  .status-已确认 { background: #e6f4ff; color: #0958d9; }
+  .status-生产中 { background: #f0f5ff; color: #2f54eb; }
+  .status-已发货 { background: #f6ffed; color: #389e0d; }
+  .status-已签收 { background: #d9f7be; color: #237804; }
+
+  .loading { text-align: center; padding: 40px; color: #999; }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #d9d9d9; border-top-color: #1677ff; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty { text-align: center; padding: 40px; color: #bbb; font-size: 14px; }
+
+  .filter { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filter select { padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; outline: none; }
+
+  @media (max-width: 600px) {
+    .hide-mobile { display: none; }
+    td, th { padding: 8px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>高视高清 · 订单查询</h1>
+  </div>
+  <div class="agent-name" id="agentName">加载中...</div>
+</div>
+
+<div class="container">
+  <div class="nav">
+    <a href="#" id="navOrder">下单</a>
+    <a href="#" class="active">订单查询</a>
+  </div>
+
+  <div class="card">
+    <div class="filter">
+      <select id="filterStatus" onchange="applyFilter()">
+        <option value="">全部状态</option>
+        <option value="待审核">待审核</option>
+        <option value="已确认">已确认</option>
+        <option value="生产中">生产中</option>
+        <option value="已发货">已发货</option>
+        <option value="已签收">已签收</option>
+      </select>
+    </div>
+
+    <div id="loading" class="loading"><span class="spinner"></span>加载中...</div>
+    <div id="empty" class="empty" style="display:none">暂无订单记录</div>
+
+    <div id="tableWrap" style="display:none; overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>订单编号</th>
+            <th>顾客</th>
+            <th class="hide-mobile">产品</th>
+            <th class="hide-mobile">眼别</th>
+            <th>状态</th>
+            <th class="hide-mobile">下单日期</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const token = new URLSearchParams(location.search).get("t") || "";
+let allOrders = [];
+
+document.getElementById("navOrder").href = `/order?t=${token}`;
+
+async function init() {
+  if (!token) {
+    document.getElementById("agentName").textContent = "无效链接";
+    document.getElementById("loading").textContent = "链接无效，请联系销售人员";
+    return;
+  }
+
+  // 获取代理商信息
+  try {
+    const res = await fetch(`/api/agent?t=${token}`);
+    const info = await res.json();
+    document.getElementById("agentName").textContent = info.name;
+  } catch { document.getElementById("agentName").textContent = ""; }
+
+  // 加载订单
+  try {
+    const res = await fetch(`/api/orders?t=${token}`);
+    allOrders = await res.json();
+    renderTable(allOrders);
+  } catch {
+    document.getElementById("loading").textContent = "加载失败，请刷新重试";
+  }
+}
+
+function renderTable(orders) {
+  document.getElementById("loading").style.display = "none";
+  if (orders.length === 0) {
+    document.getElementById("empty").style.display = "block";
+    return;
+  }
+  document.getElementById("tableWrap").style.display = "block";
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = orders.map(o => `
+    <tr>
+      <td style="font-family:monospace;font-size:12px">${o.orderNo}</td>
+      <td>${o.patient}</td>
+      <td class="hide-mobile">${o.sku}</td>
+      <td class="hide-mobile">${o.eye}</td>
+      <td><span class="status-badge status-${o.status}">${o.status}</span></td>
+      <td class="hide-mobile" style="color:#999">${o.date}</td>
+    </tr>
+  `).join("");
+}
+
+function applyFilter() {
+  const status = document.getElementById("filterStatus").value;
+  const filtered = status ? allOrders.filter(o => o.status === status) : allOrders;
+  document.getElementById("empty").style.display = "none";
+  document.getElementById("tableWrap").style.display = "none";
+  renderTable(filtered);
+}
+
+init();
+</script>
+</body>
+</html>

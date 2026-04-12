@@ -1,0 +1,16 @@
+[
+  {
+    "id": "AG-001",
+    "name": "示例代理商（待替换）",
+    "token": "AG001-replace-this-token",
+    "phone": "",
+    "address": ""
+  },
+  {
+    "id": "AG-002",
+    "name": "测试代理商",
+    "token": "AG-002-zxkmgoryb6nprmv6",
+    "phone": "",
+    "address": ""
+  }
+]

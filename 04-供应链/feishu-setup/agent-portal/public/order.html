@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 · 订单提交</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #1a1a1a; }
+
+  .header { background: #1677ff; color: #fff; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header .agent-name { font-size: 13px; opacity: 0.85; margin-left: auto; }
+
+  .container { max-width: 800px; margin: 0 auto; padding: 16px; }
+
+  .card { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+  .card-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #333; border-left: 3px solid #1677ff; padding-left: 10px; }
+
+  label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+  label .req { color: #f00; }
+  input, select, textarea {
+    width: 100%; padding: 9px 12px; border: 1px solid #d9d9d9; border-radius: 6px;
+    font-size: 14px; outline: none; transition: border-color 0.2s;
+  }
+  input:focus, select:focus, textarea:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgba(22,119,255,0.1); }
+  .field { margin-bottom: 14px; }
+
+  /* 患者卡片 */
+  .patient-card { border: 1px solid #e8e8e8; border-radius: 8px; padding: 16px; margin-bottom: 12px; position: relative; background: #fafafa; }
+  .patient-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .patient-no { font-size: 13px; font-weight: 600; color: #1677ff; }
+  .btn-remove { background: none; border: none; color: #ff4d4f; cursor: pointer; font-size: 13px; padding: 4px 8px; border-radius: 4px; }
+  .btn-remove:hover { background: #fff1f0; }
+
+  .eyes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 500px) { .eyes-grid { grid-template-columns: 1fr; } }
+
+  .eye-block { background: #fff; border: 1px solid #e0e7ff; border-radius: 6px; padding: 12px; }
+  .eye-label { font-size: 12px; font-weight: 600; color: #4f46e5; margin-bottom: 10px; text-align: center; background: #eef2ff; padding: 4px; border-radius: 4px; }
+
+  .rx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .rx-field label { font-size: 11px; color: #888; margin-bottom: 3px; }
+  .rx-field input { padding: 7px 8px; font-size: 13px; }
+
+  .eye-checkbox { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+  .eye-checkbox input[type=checkbox] { width: auto; margin: 0; }
+  .eye-checkbox label { margin: 0; font-size: 13px; cursor: pointer; }
+
+  /* 按钮 */
+  .btn { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 500; transition: opacity 0.2s; }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: #1677ff; color: #fff; width: 100%; padding: 13px; font-size: 15px; margin-top: 8px; }
+  .btn-add { background: #f0f7ff; color: #1677ff; border: 1px dashed #91caff; width: 100%; padding: 12px; }
+
+  /* 状态提示 */
+  .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 999; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .toast.success { background: #f6ffed; border: 1px solid #b7eb8f; color: #135200; }
+  .toast.error { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; }
+
+  .loading { display: none; text-align: center; color: #999; padding: 10px; }
+  .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #d9d9d9; border-top-color: #1677ff; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .success-page { display: none; text-align: center; padding: 40px 20px; }
+  .success-icon { font-size: 56px; margin-bottom: 16px; }
+  .success-page h2 { font-size: 20px; color: #135200; margin-bottom: 8px; }
+  .success-page p { color: #666; font-size: 14px; line-height: 1.6; }
+  .order-nos { background: #f6ffed; border-radius: 6px; padding: 12px; margin: 16px 0; font-family: monospace; font-size: 13px; color: #333; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>高视高清 · 订单提交</h1>
+  </div>
+  <div class="agent-name" id="agentName">加载中...</div>
+</div>
+
+<div class="container">
+  <!-- 成功页 -->
+  <div class="success-page" id="successPage">
+    <div class="success-icon">✅</div>
+    <h2>订单提交成功</h2>
+    <p>我们已收到您的订单，助理将尽快审核确认。</p>
+    <div class="order-nos" id="successOrderNos"></div>
+    <p style="color:#999;font-size:13px">如有疑问，请联系销售人员</p>
+    <br>
+    <button class="btn btn-primary" onclick="resetForm()" style="max-width:200px;margin:0 auto;display:block">再次提交</button>
+  </div>
+
+  <!-- 表单 -->
+  <div id="formPage">
+    <div class="card">
+      <div class="card-title">收货信息</div>
+      <div class="field">
+        <label>收货地址 <span class="req">*</span></label>
+        <input type="text" id="address" placeholder="请填写详细收货地址" required>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">患者订单</div>
+      <div id="patientList"></div>
+      <button class="btn btn-add" onclick="addPatient()">＋ 添加患者</button>
+    </div>
+
+    <div class="card" style="padding:16px 20px">
+      <div class="field">
+        <label>批次备注（选填）</label>
+        <textarea id="remark" rows="2" placeholder="如有特殊要求请备注"></textarea>
+      </div>
+      <div class="loading" id="loading"><span class="spinner"></span>提交中，请稍候...</div>
+      <button class="btn btn-primary" onclick="submitForm()" id="submitBtn">提交订单</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SKUS = ["Ultra", "时空之眼A", "时空之眼B", "小旋风"];
+const token = new URLSearchParams(location.search).get("t") || "";
+let agentInfo = null;
+let patientCount = 0;
+
+// ─── 初始化 ───────────────────────────────────────────────────────────────────
+
+async function init() {
+  if (!token) {
+    document.getElementById("agentName").textContent = "无效链接";
+    showToast("链接无效，请联系销售人员获取专属链接", "error");
+    return;
+  }
+  try {
+    const res = await fetch(`/api/agent?t=${token}`);
+    if (!res.ok) throw new Error();
+    agentInfo = await res.json();
+    document.getElementById("agentName").textContent = agentInfo.name;
+    addPatient(); // 默认一个患者
+  } catch {
+    document.getElementById("agentName").textContent = "验证失败";
+    showToast("链接无效或已过期，请联系销售人员", "error");
+  }
+}
+
+// ─── 患者卡片 ─────────────────────────────────────────────────────────────────
+
+function addPatient() {
+  patientCount++;
+  const id = patientCount;
+  const skuOptions = SKUS.map(s => `<option value="${s}">${s}</option>`).join("");
+
+  const div = document.createElement("div");
+  div.className = "patient-card";
+  div.id = `patient-${id}`;
+  div.innerHTML = `
+    <div class="patient-header">
+      <span class="patient-no">患者 ${id}</span>
+      ${id > 1 ? `<button class="btn-remove" onclick="removePatient(${id})">✕ 删除</button>` : ""}
+    </div>
+    <div class="field">
+      <label>顾客姓名 <span class="req">*</span></label>
+      <input type="text" id="name-${id}" placeholder="请输入顾客姓名">
+    </div>
+    <div class="field">
+      <label>产品型号 <span class="req">*</span></label>
+      <select id="sku-${id}">
+        <option value="">请选择</option>
+        ${skuOptions}
+      </select>
+    </div>
+    <div class="eyes-grid">
+      ${eyeBlock(id, "right", "右眼")}
+      ${eyeBlock(id, "left", "左眼")}
+    </div>
+    <div class="field" style="margin-top:12px">
+      <label>备注（选填）</label>
+      <input type="text" id="premark-${id}" placeholder="此患者特殊备注">
+    </div>
+  `;
+  document.getElementById("patientList").appendChild(div);
+}
+
+function eyeBlock(id, side, label) {
+  const sid = `${id}-${side}`;
+  return `
+    <div class="eye-block">
+      <div class="eye-checkbox">
+        <input type="checkbox" id="eye-check-${sid}" checked onchange="toggleEye('${sid}')">
+        <label for="eye-check-${sid}" class="eye-label" style="background:none;text-align:left;padding:0">${label}</label>
+      </div>
+      <div id="eye-fields-${sid}">
+        <div class="rx-grid">
+          <div class="rx-field"><label>球镜 SPH</label><input type="number" step="0.25" id="sph-${sid}" placeholder="如 -2.75"></div>
+          <div class="rx-field"><label>柱镜 CYL</label><input type="number" step="0.25" id="cyl-${sid}" placeholder="如 -1.00"></div>
+          <div class="rx-field"><label>轴位 AXIS</label><input type="number" step="1" min="0" max="180" id="axis-${sid}" placeholder="0-180"></div>
+          <div class="rx-field"><label>瞳距（单眼）</label><input type="number" step="0.5" id="pd-${sid}" placeholder="如 32.0"></div>
+        </div>
+        <div class="rx-grid" style="margin-top:8px">
+          <div class="rx-field"><label>瞳高（单眼）</label><input type="number" step="0.5" id="ph-${sid}" placeholder="如 29"></div>
+          <div class="rx-field"><label>镜框型号（选填）</label><input type="text" id="frame-${sid}" placeholder="如 52-17-145"></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function toggleEye(sid) {
+  const checked = document.getElementById(`eye-check-${sid}`).checked;
+  document.getElementById(`eye-fields-${sid}`).style.opacity = checked ? "1" : "0.3";
+  document.getElementById(`eye-fields-${sid}`).style.pointerEvents = checked ? "" : "none";
+}
+
+function removePatient(id) {
+  document.getElementById(`patient-${id}`)?.remove();
+}
+
+// ─── 表单收集 ─────────────────────────────────────────────────────────────────
+
+function collectPatients() {
+  const cards = document.querySelectorAll(".patient-card");
+  const patients = [];
+  for (const card of cards) {
+    const id = card.id.replace("patient-", "");
+    const name = document.getElementById(`name-${id}`)?.value.trim();
+    const sku = document.getElementById(`sku-${id}`)?.value;
+    const premark = document.getElementById(`premark-${id}`)?.value.trim();
+
+    if (!name || !sku) continue;
+    const eyes = [];
+    for (const [side, label] of [["right","右眼"],["left","左眼"]]) {
+      const sid = `${id}-${side}`;
+      const checked = document.getElementById(`eye-check-${sid}`)?.checked;
+      if (!checked) continue;
+      eyes.push({
+        side: label,
+        sph:   document.getElementById(`sph-${sid}`)?.value || "0",
+        cyl:   document.getElementById(`cyl-${sid}`)?.value || "0",
+        axis:  document.getElementById(`axis-${sid}`)?.value || "0",
+        pd:    document.getElementById(`pd-${sid}`)?.value || "0",
+        ph:    document.getElementById(`ph-${sid}`)?.value || "0",
+        frame: document.getElementById(`frame-${sid}`)?.value.trim() || "",
+      });
+    }
+    if (eyes.length > 0) patients.push({ name, sku, remark: premark, eyes });
+  }
+  return patients;
+}
+
+// ─── 提交 ─────────────────────────────────────────────────────────────────────
+
+async function submitForm() {
+  const address = document.getElementById("address").value.trim();
+  if (!address) { showToast("请填写收货地址", "error"); return; }
+
+  const patients = collectPatients();
+  if (patients.length === 0) { showToast("请至少填写一位患者的处方信息", "error"); return; }
+
+  document.getElementById("submitBtn").disabled = true;
+  document.getElementById("loading").style.display = "block";
+
+  try {
+    const res = await fetch(`/api/submit?t=${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, patients }),
+    });
+    const json = await res.json();
+    if (json.ok) {
+      document.getElementById("formPage").style.display = "none";
+      document.getElementById("successPage").style.display = "block";
+      document.getElementById("successOrderNos").textContent =
+        `共 ${json.totalLenses} 片 · 订单编号：${json.orderNos.join("、")}`;
+    } else {
+      showToast(json.error || "提交失败，请重试", "error");
+    }
+  } catch {
+    showToast("网络错误，请重试", "error");
+  } finally {
+    document.getElementById("submitBtn").disabled = false;
+    document.getElementById("loading").style.display = "none";
+  }
+}
+
+function resetForm() {
+  document.getElementById("address").value = "";
+  document.getElementById("remark").value = "";
+  document.getElementById("patientList").innerHTML = "";
+  patientCount = 0;
+  document.getElementById("successPage").style.display = "none";
+  document.getElementById("formPage").style.display = "block";
+  addPatient();
+}
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+
+function showToast(msg, type = "success") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = `toast ${type}`;
+  el.style.display = "block";
+  setTimeout(() => el.style.display = "none", 4000);
+}
+
+init();
+</script>
+</body>
+</html>
