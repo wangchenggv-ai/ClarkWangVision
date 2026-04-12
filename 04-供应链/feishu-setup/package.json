@@ -7,6 +7,7 @@
     "setup": "node setup_tables.js"
   },
   "dependencies": {
+    "qrcode": "^1.5.4",
     "undici": "^7.24.6",
     "xlsx": "^0.18.5"
   }

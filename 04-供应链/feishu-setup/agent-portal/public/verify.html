@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 · 镜片真伪验证</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f8f9fc; color: #333; min-height: 100vh; }
+
+.hero { padding: 48px 20px 32px; text-align: center; }
+.hero-ok { background: linear-gradient(135deg, #e8f5e9, #c8e6c9); }
+.hero-fail { background: linear-gradient(135deg, #ffebee, #ffcdd2); }
+
+.brand { font-size: 14px; color: #666; letter-spacing: 3px; margin-bottom: 24px; }
+.brand span:first-child { font-weight: 700; color: #0066cc; }
+
+.shield { width: 56px; height: 56px; margin: 0 auto 16px; }
+.shield svg { width: 100%; height: 100%; }
+
+.hero-ok .shield svg { stroke: #2e7d32; }
+.hero-fail .shield svg { stroke: #c62828; }
+
+.status { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.hero-ok .status { color: #2e7d32; }
+.hero-fail .status { color: #c62828; }
+
+.status-sub { font-size: 14px; color: #666; line-height: 1.6; }
+
+.card { background: #fff; border-radius: 12px; margin: 16px 20px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+.card-title { font-size: 15px; font-weight: 600; color: #0066cc; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
+
+.row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
+.row .label { color: #999; }
+.row .value { font-weight: 500; color: #333; }
+
+.rx-table { width: 100%; font-size: 14px; border-collapse: collapse; }
+.rx-table th { text-align: left; color: #999; font-weight: 500; padding: 6px 0; }
+.rx-table td { padding: 8px 0; font-weight: 500; }
+.rx-table .eye-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+.eye-L { background: #e3f2fd; color: #0066cc; }
+.eye-R { background: #fce4ec; color: #c62828; }
+.rx-num { color: #2e7d32; font-weight: 600; }
+
+.footer { text-align: center; padding: 24px 20px 32px; font-size: 12px; color: #999; line-height: 2; }
+.footer .mono { font-family: 'SF Mono', 'Menlo', monospace; color: #666; }
+.footer .brand-name { letter-spacing: 2px; color: #0066cc; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="hero {{HERO_CLASS}}">
+  <div class="brand"><span>GAUSH</span> <span style="color:#ccc">|</span> <span>CLEAR</span></div>
+  <div class="shield">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <polyline class="check" points="9 12 11 14 15 10"/>
+      <line class="cross1" x1="15" y1="9" x2="9" y2="15"/>
+      <line class="cross2" x1="9" y1="9" x2="15" y2="15"/>
+    </svg>
+  </div>
+  <h1 class="status" id="statusText"></h1>
+  <p class="status-sub" id="statusSub"></p>
+</div>
+
+<div id="foundContent" style="display:none">
+  <div class="card">
+    <div class="row"><span class="label">订单号</span><span class="value">{{ORDER_NO}}</span></div>
+    <div class="row"><span class="label">顾客姓名</span><span class="value">{{CUSTOMER_NAME}}</span></div>
+    <div class="row"><span class="label">产品型号</span><span class="value">{{SKU}}</span></div>
+    <div class="row"><span class="label">下单日期</span><span class="value">{{DATE}}</span></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">处方参数</div>
+    <table class="rx-table">
+      <tr><th></th><th>球镜 SPH</th><th>柱镜 CYL</th></tr>
+      <tr>
+        <td><span class="eye-tag eye-L">L 左眼</span></td>
+        <td class="rx-num">{{LEFT_SPH}}</td>
+        <td class="rx-num">{{LEFT_CYL}}</td>
+      </tr>
+      <tr>
+        <td><span class="eye-tag eye-R">R 右眼</span></td>
+        <td class="rx-num">{{RIGHT_SPH}}</td>
+        <td class="rx-num">{{RIGHT_CYL}}</td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<div class="footer">
+  <p>镜片码 <span class="mono">{{LENS_CODE}}</span></p>
+  <p>验证时间 {{NOW}}</p>
+  <p class="brand-name">GAUSH | CLEAR &middot; 高视高清</p>
+</div>
+
+<script>
+var found = {{FOUND}};
+var hero = document.querySelector('.hero');
+var checkEl = document.querySelector('.check');
+var cross1 = document.querySelector('.cross1');
+var cross2 = document.querySelector('.cross2');
+
+if (found) {
+  hero.classList.add('hero-ok');
+  cross1.style.display = 'none';
+  cross2.style.display = 'none';
+  document.getElementById('statusText').textContent = '正品验证通过';
+  document.getElementById('statusSub').textContent = '该镜片已通过溯源系统认证';
+  document.getElementById('foundContent').style.display = '';
+} else {
+  hero.classList.add('hero-fail');
+  checkEl.style.display = 'none';
+  document.getElementById('statusText').textContent = '未找到记录';
+  document.getElementById('statusSub').innerHTML = '此镜片码未在系统中登记<br>请联系销售商确认产品真伪';
+}
+</script>
+</body>
+</html>

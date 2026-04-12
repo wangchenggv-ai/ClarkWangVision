@@ -262,6 +262,16 @@ async function showDetail(orderNo) {
 
     document.getElementById("detailTitle").textContent = `订单 ${data.orderNo}`;
 
+    // 获取镜片码
+    let lensCodes = [];
+    try {
+      const qrRes = await fetch(`/api/order/${encodeURIComponent(orderNo)}/lens-codes?t=${token}`);
+      if (qrRes.ok) {
+        const qrData = await qrRes.json();
+        lensCodes = qrData.lensCodes || [];
+      }
+    } catch {}
+
     let html = `<div style="margin-bottom:16px;font-size:14px">`;
     html += `<div style="margin-bottom:6px"><strong>下单时间：</strong>${formatDate(data.date)}</div>`;
     html += `<div style="margin-bottom:6px"><strong>收货地址：</strong>${data.address || '-'}</div>`;
@@ -293,6 +303,31 @@ async function showDetail(orderNo) {
     }
 
     html += `</tbody></table>`;
+
+    // 操作按钮
+    html += `<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">`;
+    if (data.status === "待处理") {
+      html += `<button class="btn btn-primary" onclick="confirmOrder('${orderNo}')" id="confirmBtn">确认订单</button>`;
+    }
+    if (lensCodes.length > 0) {
+      html += `<a class="btn btn-outline" href="/api/order/${encodeURIComponent(orderNo)}/qrcode?t=${token}" target="_blank">下载二维码</a>`;
+      html += `<a class="btn btn-outline" href="/api/order/${encodeURIComponent(orderNo)}/factory-zip?t=${token}" target="_blank">导出工厂包</a>`;
+    }
+    html += `</div>`;
+
+    // QR 码展示
+    if (lensCodes.length > 0) {
+      html += `<div style="margin-top:12px;padding:12px;background:#f8f9fc;border-radius:8px">`;
+      html += `<div style="font-size:13px;color:#666;margin-bottom:8px">镜片码</div>`;
+      for (const lc of lensCodes) {
+        html += `<div style="display:inline-block;margin:4px;text-align:center">`;
+        html += `<img src="/qrcodes/${lc}.png" style="width:100px;height:100px;border:1px solid #e8eaef;border-radius:4px" onerror="this.style.display='none'">`;
+        html += `<div style="font-size:10px;color:#999;font-family:monospace;margin-top:2px">${lc}</div>`;
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+
     content.innerHTML = html;
 
   } catch {
@@ -308,6 +343,39 @@ function closeDetail() {
 document.getElementById("detailModal").addEventListener("click", function(e) {
   if (e.target === this) closeDetail();
 });
+
+// ─── 确认订单 ──────────────────────────────────────────────────────────────
+async function confirmOrder(orderNo) {
+  const btn = document.getElementById("confirmBtn");
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = "生成中...";
+
+  try {
+    const res = await fetch(`/api/order/${encodeURIComponent(orderNo)}/confirm?t=${token}`, {
+      method: "POST",
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`已生成 ${data.lensCodes.length} 个镜片码`, "success");
+      btn.textContent = "已确认";
+      btn.className = "btn btn-outline";
+      btn.disabled = true;
+      // 刷新列表
+      loadOrders();
+      // 重新打开详情展示 QR
+      setTimeout(() => showDetail(orderNo), 500);
+    } else {
+      showToast(data.error || "确认失败", "error");
+      btn.disabled = false;
+      btn.textContent = "确认订单";
+    }
+  } catch {
+    showToast("网络错误", "error");
+    btn.disabled = false;
+    btn.textContent = "确认订单";
+  }
+}
 
 // ─── CSV 导出 ──────────────────────────────────────────────────────────────
 function exportCsv() {

@@ -19,14 +19,17 @@
  */
 
 import { createServer } from "http";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve, dirname, extname } from "path";
 import { fileURLToPath } from "url";
+import { randomBytes } from "crypto";
+import QRCode from "qrcode";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
 const BASE = "https://open.feishu.cn/open-apis";
 const APP_TOKEN = "B3xQbbqicaome1sKdZbcwdk8nWg";
+const QR_DIR = resolve(__dirname, "public", "qrcodes");
 
 // 表 ID（与 automations.js 一致）
 const TABLES = {
@@ -358,6 +361,190 @@ function csvEscape(val) {
   return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+// ─── QR 溯源码 ──────────────────────────────────────────────────────────────
+
+function genLensCode() {
+  return randomBytes(8).toString("hex").toUpperCase();
+}
+
+function getServerBaseUrl() {
+  return ENV.SERVER_BASE_URL || `http://localhost:${PORT}`;
+}
+
+async function generateQRPng(lensCode) {
+  const url = `${getServerBaseUrl()}/verify/${lensCode}`;
+  mkdirSync(QR_DIR, { recursive: true });
+  const filePath = resolve(QR_DIR, `${lensCode}.png`);
+  await QRCode.toFile(filePath, url, {
+    errorCorrectionLevel: "H",
+    width: 400,
+    margin: 2,
+  });
+  return filePath;
+}
+
+// 生成带标签的工厂打印图（QR + 处方信息，PNG 格式）
+async function generateLabelPng(order) {
+  const { createCanvas } = await import("@aspect-ratio/canvas").catch(() => ({ createCanvas: null }));
+  // 回退：用纯 QR 图片作为标签（无 canvas 时）
+  const lensCode = order.lensCode;
+  if (!lensCode) return null;
+  const qrBuf = await QRCode.toBuffer(`${getServerBaseUrl()}/verify/${lensCode}`, {
+    errorCorrectionLevel: "H",
+    width: 600,
+    margin: 2,
+  });
+  return qrBuf;
+}
+
+// 构建工厂导出 ZIP（手写 ZIP 格式，利用 Node.js 内置 zlib）
+async function buildFactoryZip(records, orderNo) {
+  const { deflateRawSync } = await import("zlib");
+
+  const files = [];
+
+  for (const rec of records) {
+    const f = rec.fields;
+    const lensCode = f["镜片码"];
+    if (!lensCode) continue;
+
+    const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
+    const eye = f["眼别"] || "unknown";
+
+    // QR 图片
+    const qrPath = resolve(QR_DIR, `${lensCode}.png`);
+    if (existsSync(qrPath)) {
+      files.push({ name: `qrcodes/${lensCode}.png`, data: readFileSync(qrPath) });
+      // 标签图 = QR 图片（简化版，后续可加处方文字渲染）
+      files.push({ name: `labels/${orderNo}_${customer}_${eye}.png`, data: readFileSync(qrPath) });
+    }
+  }
+
+  // 说明文件
+  const readme = `工厂打印包使用说明
+==================
+
+本压缩包包含 ${files.filter(f => f.name.startsWith("labels/")).length} 个镜片的打印素材。
+
+【labels/ 文件夹】—— 推荐使用
+  每个文件对应一张镜片标签，包含二维码。
+  标签可直接打印在 6cm x 3cm 标签纸上。
+
+【qrcodes/ 文件夹】—— 仅二维码
+  单独的高分辨率二维码图片。
+
+注意事项：
+  - 每个镜片码全球唯一，请勿复制或重复使用
+  - 消费者扫描二维码即可验证产品真伪
+`;
+  files.push({ name: "说明.txt", data: Buffer.from(readme, "utf-8") });
+
+  // 构建 ZIP（手写格式）
+  return buildZipBuffer(files);
+}
+
+// 最小 ZIP 实现（Store 模式，不压缩）
+function buildZipBuffer(fileEntries) {
+  const localHeaders = [];
+  const centralHeaders = [];
+  let offset = 0;
+
+  const parts = [];
+
+  for (const entry of fileEntries) {
+    const nameBuf = Buffer.from(entry.name, "utf-8");
+    const data = entry.data;
+    const crc = crc32(data);
+
+    // Local file header
+    const local = Buffer.alloc(30 + nameBuf.length);
+    local.writeUInt32LE(0x04034b50, 0);  // signature
+    local.writeUInt16LE(20, 4);           // version needed
+    local.writeUInt16LE(0, 6);            // flags
+    local.writeUInt16LE(0, 8);            // compression (store)
+    local.writeUInt16LE(0, 10);           // mod time
+    local.writeUInt16LE(0, 12);           // mod date
+    local.writeUInt32LE(crc, 14);         // crc32
+    local.writeUInt32LE(data.length, 18); // compressed size
+    local.writeUInt32LE(data.length, 22); // uncompressed size
+    local.writeUInt16LE(nameBuf.length, 26);
+    local.writeUInt16LE(0, 28);           // extra field length
+    nameBuf.copy(local, 30);
+
+    parts.push(local, data);
+
+    // Central directory header
+    const central = Buffer.alloc(46 + nameBuf.length);
+    central.writeUInt32LE(0x02014b50, 0); // signature
+    central.writeUInt16LE(20, 4);          // version made by
+    central.writeUInt16LE(20, 6);          // version needed
+    central.writeUInt16LE(0, 8);           // flags
+    central.writeUInt16LE(0, 10);          // compression
+    central.writeUInt16LE(0, 12);          // mod time
+    central.writeUInt16LE(0, 14);          // mod date
+    central.writeUInt32LE(crc, 16);        // crc32
+    central.writeUInt32LE(data.length, 20);// compressed size
+    central.writeUInt32LE(data.length, 24);// uncompressed size
+    central.writeUInt16LE(nameBuf.length, 28);
+    central.writeUInt16LE(0, 30);          // extra field length
+    central.writeUInt16LE(0, 32);          // file comment length
+    central.writeUInt16LE(0, 34);          // disk number start
+    central.writeUInt16LE(0, 36);          // internal attributes
+    central.writeUInt32LE(0, 38);          // external attributes
+    central.writeUInt32LE(offset, 42);     // relative offset of local header
+    nameBuf.copy(central, 46);
+
+    centralHeaders.push(central);
+    offset += local.length + data.length;
+  }
+
+  const centralDirOffset = offset;
+  const centralDirBuf = Buffer.concat(centralHeaders);
+
+  // End of central directory
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(0, 4);               // disk number
+  eocd.writeUInt16LE(0, 6);               // disk with central dir
+  eocd.writeUInt16LE(fileEntries.length, 8);
+  eocd.writeUInt16LE(fileEntries.length, 10);
+  eocd.writeUInt32LE(centralDirBuf.length, 12);
+  eocd.writeUInt32LE(centralDirOffset, 16);
+  eocd.writeUInt16LE(0, 20);              // comment length
+
+  return Buffer.concat([...parts, centralDirBuf, eocd]);
+}
+
+// CRC32 查找表
+const _crc32Table = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    table[i] = c;
+  }
+  return table;
+})();
+
+function crc32(buf) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < buf.length; i++) {
+    crc = _crc32Table[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// 确保镜片码字段存在
+async function ensureLensCodeField() {
+  const data = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/fields`);
+  if (data?.items?.some(f => f.field_name === "镜片码")) return;
+  await feishuApi("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/fields`, {
+    field_name: "镜片码",
+    type: 1, // 文本
+  });
+  console.log("  已创建飞书字段: 镜片码");
+}
+
 // ─── 路由处理 ──────────────────────────────────────────────────────────────
 
 const MIME = {
@@ -402,7 +589,7 @@ const server = createServer(async (req, res) => {
     }
 
     // ── 静态资源 ──
-    if (pathname.startsWith("/css/") || pathname.startsWith("/js/")) {
+    if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/qrcodes/")) {
       serveStatic(res, resolve(__dirname, "public", pathname.slice(1)));
       return logReq(req, 200, start);
     }
@@ -661,7 +848,7 @@ const server = createServer(async (req, res) => {
     }
 
     // ── API: 单个订单详情 ──
-    if (pathname.startsWith("/api/order/")) {
+    if (pathname.startsWith("/api/order/") && pathname.split("/").length === 4) {
       const agent = findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
@@ -791,6 +978,181 @@ const server = createServer(async (req, res) => {
       });
       res.end(csv);
       return logReq(req, 200, start);
+    }
+
+    // ── API: 查询订单镜片码 ──
+    const lensCodesMatch = pathname.match(/^\/api\/order\/([^/]+)\/lens-codes$/);
+    if (lensCodesMatch) {
+      const agent = findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+
+      const orderNo = decodeURIComponent(lensCodesMatch[1]);
+      const encodedLC = encodeURIComponent(`"${orderNo}"`);
+      const dataLC = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encodedLC}`
+      );
+      if (!dataLC?.items?.length) { jsonRes(res, 200, { lensCodes: [] }); return logReq(req, 200, start); }
+
+      if (dataLC.items[0].fields["代理商ID"] !== agent.id) {
+        jsonRes(res, 403, { error: "无权查看" }); return logReq(req, 403, start);
+      }
+
+      const codes = dataLC.items.map(r => r.fields["镜片码"]).filter(Boolean);
+      jsonRes(res, 200, { lensCodes: codes });
+      return logReq(req, 200, start);
+    }
+
+    // ── API: 确认订单 → 生成镜片码 + QR ──
+    const confirmMatch = pathname.match(/^\/api\/order\/([^/]+)\/confirm$/);
+    if (confirmMatch && req.method === "POST") {
+      const agent = findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+
+      const orderNo = decodeURIComponent(confirmMatch[1]);
+
+      // 查飞书订单
+      const encoded2 = encodeURIComponent(`"${orderNo}"`);
+      const data2 = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encoded2}`
+      );
+      if (!data2?.items?.length) { jsonRes(res, 404, { error: "未找到该订单" }); return logReq(req, 404, start); }
+
+      // 权限校验
+      if (data2.items[0].fields["代理商ID"] !== agent.id) {
+        jsonRes(res, 403, { error: "无权操作此订单" }); return logReq(req, 403, start);
+      }
+
+      // 确保镜片码字段存在
+      await ensureLensCodeField();
+
+      const lensCodes = [];
+      for (const rec of data2.items) {
+        const existingCode = rec.fields["镜片码"];
+        if (existingCode) { lensCodes.push(existingCode); continue; }
+
+        const lensCode = genLensCode();
+        await updateRecord(TABLES.order, rec.record_id, {
+          "镜片码": lensCode,
+          "订单状态": "生产中",
+        });
+        await generateQRPng(lensCode);
+        lensCodes.push(lensCode);
+        console.log(`  镜片码生成: ${orderNo} → ${lensCode}`);
+      }
+
+      jsonRes(res, 200, { success: true, orderNo, lensCodes });
+      return logReq(req, 200, start);
+    }
+
+    // ── API: 下载 QR 码 ──
+    const qrMatch = pathname.match(/^\/api\/order\/([^/]+)\/qrcode$/);
+    if (qrMatch) {
+      const agent = findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+
+      const orderNo = decodeURIComponent(qrMatch[1]);
+      const encoded3 = encodeURIComponent(`"${orderNo}"`);
+      const data3 = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encoded3}`
+      );
+      if (!data3?.items?.length) { jsonRes(res, 404, { error: "未找到该订单" }); return logReq(req, 404, start); }
+
+      const codes = data3.items.map(r => r.fields["镜片码"]).filter(Boolean);
+      if (codes.length === 0) { jsonRes(res, 400, { error: "该订单尚未生成镜片码，请先确认订单" }); return logReq(req, 400, start); }
+
+      // 返回第一个镜片的 QR（可扩展为批量下载 ZIP）
+      const filePath = resolve(QR_DIR, `${codes[0]}.png`);
+      if (!existsSync(filePath)) { jsonRes(res, 404, { error: "QR 文件不存在" }); return logReq(req, 404, start); }
+      serveStatic(res, filePath);
+      return logReq(req, 200, start);
+    }
+
+    // ── API: 工厂导出 ZIP ──
+    const zipMatch = pathname.match(/^\/api\/order\/([^/]+)\/factory-zip$/);
+    if (zipMatch) {
+      const agent = findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+
+      const orderNo = decodeURIComponent(zipMatch[1]);
+      const encoded4 = encodeURIComponent(`"${orderNo}"`);
+      const data4 = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encoded4}`
+      );
+      if (!data4?.items?.length) { jsonRes(res, 404, { error: "未找到该订单" }); return logReq(req, 404, start); }
+
+      if (data4.items[0].fields["代理商ID"] !== agent.id) {
+        jsonRes(res, 403, { error: "无权操作此订单" }); return logReq(req, 403, start);
+      }
+
+      // 动态导入 zlib（内置）
+      const { createGzip } = await import("zlib");
+
+      // 手写 ZIP（使用 Node.js 内置 zlib deflated）
+      // 为简化，先生成一个包含所有 QR + 标签的 tar-like 压缩
+      // 实际用 Node.js 的简单 ZIP 实现
+      const zipBuf = await buildFactoryZip(data4.items, orderNo);
+
+      res.writeHead(200, {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename=factory-${orderNo}.zip`,
+      });
+      res.end(zipBuf);
+      return logReq(req, 200, start);
+    }
+
+    // ── 验真页面（无 auth）──
+    const verifyMatch = pathname.match(/^\/verify\/([A-Fa-f0-9]+)$/);
+    if (verifyMatch) {
+      const lensCode = verifyMatch[1].toUpperCase();
+      const encoded5 = encodeURIComponent(`"${lensCode}"`);
+      const data5 = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[镜片码]=${encoded5}`
+      );
+
+      let found = false;
+      let orderInfo = {};
+      if (data5?.items?.length > 0) {
+        found = true;
+        const f = data5.items[0].fields;
+        // 同一来源订单号的所有记录
+        const srcOrderNo = f["来源订单号"] || "";
+        const encodedSrc = encodeURIComponent(`"${srcOrderNo}"`);
+        const allRecs = await feishuApi("GET",
+          `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encodedSrc}`
+        );
+        const allItems = allRecs?.items || [];
+        const leftEye = allItems.find(r => r.fields["眼别"] === "左眼");
+        const rightEye = allItems.find(r => r.fields["眼别"] === "右眼");
+
+        orderInfo = {
+          orderNo: srcOrderNo,
+          customerName: f["顾客姓名"] || "",
+          sku: f["SKU"] || "",
+          date: formatDate(f["下单日期"]),
+          leftSph: leftEye?.fields["球镜SPH"] ?? "",
+          leftCyl: leftEye?.fields["柱镜CYL"] ?? "",
+          rightSph: rightEye?.fields["球镜SPH"] ?? "",
+          rightCyl: rightEye?.fields["柱镜CYL"] ?? "",
+        };
+      }
+
+      // 读取 verify.html 模板并渲染
+      let html = readFileSync(resolve(__dirname, "public/verify.html"), "utf-8");
+      html = html.replace("{{FOUND}}", found ? "true" : "false");
+      html = html.replace("{{LENS_CODE}}", lensCode);
+      html = html.replace("{{ORDER_NO}}", orderInfo.orderNo || "");
+      html = html.replace("{{CUSTOMER_NAME}}", orderInfo.customerName || "");
+      html = html.replace("{{SKU}}", orderInfo.sku || "");
+      html = html.replace("{{DATE}}", orderInfo.date || "");
+      html = html.replace("{{LEFT_SPH}}", String(orderInfo.leftSph ?? "—"));
+      html = html.replace("{{LEFT_CYL}}", String(orderInfo.leftCyl ?? "—"));
+      html = html.replace("{{RIGHT_SPH}}", String(orderInfo.rightSph ?? "—"));
+      html = html.replace("{{RIGHT_CYL}}", String(orderInfo.rightCyl ?? "—"));
+      html = html.replace("{{NOW}}", new Date().toLocaleString("zh-CN"));
+
+      res.writeHead(found ? 200 : 404, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(html);
+      return logReq(req, found ? 200 : 404, start);
     }
 
     // ── 404 ──
