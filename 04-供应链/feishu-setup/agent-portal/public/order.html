@@ -136,7 +136,12 @@
 <script>
 const token = new URLSearchParams(location.search).get("t") || "";
 let agentInfo = null;
-let skuList = [];
+const SKU_OPTIONS = [
+  { value: "Ultra", label: "Ultra" },
+  { value: "时空之眼A", label: "时空之眼A" },
+  { value: "时空之眼B", label: "时空之眼B" },
+  { value: "小旋风", label: "小旋风" },
+];
 let customerNames = [];
 let patientCount = 0;
 let estimateTimers = {};
@@ -163,16 +168,12 @@ async function init() {
   }
 
   try {
-    const [skuRes, custRes] = await Promise.all([
-      fetch(`/api/skus?t=${token}`),
-      fetch(`/api/customers?t=${token}`),
-    ]);
-    if (skuRes.ok) skuList = await skuRes.json();
+    const custRes = await fetch(`/api/customers?t=${token}`);
     if (custRes.ok) {
       const custData = await custRes.json();
       customerNames = custData.customers || [];
     }
-  } catch (e) { console.error("数据加载失败:", e); }
+  } catch (e) { console.error("客户数据加载失败:", e); }
 
   renderCustomerDatalist();
   addPatient();
@@ -189,25 +190,9 @@ function renderCustomerDatalist() {
 }
 
 function renderSkuOptions() {
-  const stockItems = skuList.filter(s => s.type === "备货品");
-  const customItems = skuList.filter(s => s.type === "定制品");
   let html = '<option value="">请选择产品</option>';
-
-  if (stockItems.length) {
-    html += '<optgroup label="── 备货品 ──">';
-    for (const s of stockItems) {
-      const icon = s.status === "instock" ? "✓" : s.status === "low" ? "⚠" : "✗";
-      html += `<option value="${s.sku}" data-type="${s.type}" data-status="${s.status}" data-days="${s.deliveryDays}" data-stock="${s.currentStock}">${s.sku} ${s.name} [${s.statusLabel} ${icon}] (约${s.deliveryDays}天)</option>`;
-    }
-    html += '</optgroup>';
-  }
-
-  if (customItems.length) {
-    html += '<optgroup label="── 定制品 ──">';
-    for (const s of customItems) {
-      html += `<option value="${s.sku}" data-type="${s.type}" data-status="custom" data-days="${s.deliveryDays}" data-stock="0">${s.sku} ${s.name} [定制 ●] (约${s.deliveryDays}天)</option>`;
-    }
-    html += '</optgroup>';
+  for (const s of SKU_OPTIONS) {
+    html += `<option value="${s.value}">${s.label}</option>`;
   }
   return html;
 }
@@ -333,20 +318,9 @@ async function fetchEstimate(id) {
   const el = document.getElementById(`estimate-${id}`);
   if (!sku || qty <= 0) { el.className = "delivery-estimate"; return; }
 
-  // 即时显示（基于 option data）
-  const opt = document.querySelector(`#sku-${id} option[value="${sku}"]`);
-  if (opt) {
-    const status = opt.dataset.status;
-    const days = opt.dataset.days || "3";
-    const label = (status === "instock" || status === "low") ? "有货3天" : "定制5天";
-    const cls = (status === "instock" || status === "low") ? "instock" : "custom";
-    const d = new Date(Date.now() + Number(days) * 86400000);
-    const ds = d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
-    el.innerHTML = `<span class="badge badge-${cls === 'instock' ? 'instock' : 'custom'}">${label}</span> 预计 ${ds} 交付`;
-    el.className = `delivery-estimate show ${cls}`;
-  }
+  el.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;vertical-align:middle"></span>';
+  el.className = "delivery-estimate show";
 
-  // API 精确查询
   try {
     const res = await fetch(`/api/delivery-estimate?t=${token}&sku=${encodeURIComponent(sku)}&qty=${qty}`);
     if (!res.ok) return;
@@ -369,12 +343,10 @@ function updateSummary() {
   let totalLenses = 0, html = "";
   for (const p of patients) {
     totalLenses += p.eyes.length;
-    const skuInfo = skuList.find(s => s.sku === p.sku);
-    const skuName = skuInfo ? skuInfo.name : p.sku;
     const estEl = document.getElementById(`estimate-${p.id}`);
     const estBadge = estEl ? estEl.innerHTML : "";
     html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5;font-size:14px">
-      <span><strong>${p.customerName}</strong> · ${skuName} × ${p.eyes.length}片</span>
+      <span><strong>${p.customerName}</strong> · ${p.sku} × ${p.eyes.length}片</span>
       ${estBadge ? `<span style="font-size:12px">${estBadge}</span>` : ""}
     </div>`;
   }
@@ -444,9 +416,8 @@ function showConfirm() {
   html += `<div class="row"><span class="label">收货地址</span><span class="value">${document.getElementById("address").value.trim()}</span></div>`;
   for (const p of patients) {
     totalLenses += p.eyes.length;
-    const skuInfo = skuList.find(s => s.sku === p.sku);
     const estEl = document.getElementById(`estimate-${p.id}`);
-    html += `<div class="row"><span class="label">${p.customerName} · ${(skuInfo?.name || p.sku)} × ${p.eyes.length}片</span><span class="value">${estEl ? estEl.textContent.trim() : ''}</span></div>`;
+    html += `<div class="row"><span class="label">${p.customerName} · ${p.sku} × ${p.eyes.length}片</span><span class="value">${estEl ? estEl.textContent.trim() : ''}</span></div>`;
   }
   html += `<div class="row" style="font-weight:600;border-top:2px solid #eee;padding-top:12px"><span>合计</span><span>${patients.length} 位患者，${totalLenses} 片镜片</span></div></div>`;
   document.getElementById("confirmSummary").innerHTML = html;
