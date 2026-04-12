@@ -403,7 +403,7 @@ const server = createServer(async (req, res) => {
 
     // ── 静态资源 ──
     if (pathname.startsWith("/css/") || pathname.startsWith("/js/")) {
-      serveStatic(res, resolve(__dirname, "public", pathname));
+      serveStatic(res, resolve(__dirname, "public", pathname.slice(1)));
       return logReq(req, 200, start);
     }
 
