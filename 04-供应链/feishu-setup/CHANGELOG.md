@@ -1,5 +1,44 @@
 # Changelog
 
+## [2026-04-12] Sprint 11 v2：工厂导出包升级（Excel + 可打印标签）
+
+**修改文件**
+- `agent-portal/server.js` — 新增 `buildFactoryExcel` + `buildLabelHtml`，重写 `buildFactoryZip`，删除死代码 `generateLabelPng`
+
+### 变更内容
+
+**Excel 导出**
+- 工厂 ZIP 包内新增 `订单_<orderNo>.xlsx`（18KB，14列）
+- 列：订单号、顾客、SKU、数量、眼别、SPH、CYL、AXIS、瞳距、瞳高、镜框型号、镜片码、交期类型、收货地址
+- 使用已安装的 `xlsx` 库生成（无新依赖），工厂可直接导入排产系统
+
+**可打印标签**
+- 标签从简单 QR 图片升级为 HTML 格式（QR + 处方文字）
+- QR 码内嵌为 base64 data URL，HTML 完全自包含
+- `@page { size: 6cm 3cm }` 适配热敏标签纸，浏览器 `Ctrl+P` 直接打印
+- 每个标签内容：订单号、顾客+眼别、SKU+SPH+CYL+AXIS、镜片码、品牌标识
+
+**ZIP 结构升级**
+```
+factory-<orderNo>.zip
+├── 订单_<orderNo>.xlsx           ← 新增：Excel 全部订单数据
+├── qrcodes/<lensCode>.png        ← 原始 QR 图片
+├── labels/<orderNo>_<顾客>_<眼别>.html  ← 升级：HTML 可打印标签
+└── 说明.txt                       ← 更新：使用说明
+```
+
+**清理**
+- 删除 `generateLabelPng` 死代码（从未调用，依赖未安装的 @aspect-ratio/canvas）
+- 删除 factory-zip 路由中无用的 `createGzip` import 和模糊注释
+
+### 验证结果
+- Excel 18KB，14列完整，xlsx 格式有效 ✅
+- HTML 标签 4KB，QR 内嵌、处方文字正确（王小明 Ultra SPH -4.5 CYL -1 AXIS 180）✅
+- 浏览器打开标签，打印预览布局正确 ✅
+- ZIP 共 6 文件 34KB ✅
+
+---
+
 ## [2026-04-12] Sprint 11：QR 溯源验真系统整合
 
 **修改文件**

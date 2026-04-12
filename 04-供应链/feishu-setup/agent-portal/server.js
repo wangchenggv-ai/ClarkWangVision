@@ -24,6 +24,7 @@ import { resolve, dirname, extname } from "path";
 import { fileURLToPath } from "url";
 import { randomBytes } from "crypto";
 import QRCode from "qrcode";
+import XLSX from "xlsx";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
@@ -383,26 +384,96 @@ async function generateQRPng(lensCode) {
   return filePath;
 }
 
-// 生成带标签的工厂打印图（QR + 处方信息，PNG 格式）
-async function generateLabelPng(order) {
-  const { createCanvas } = await import("@aspect-ratio/canvas").catch(() => ({ createCanvas: null }));
-  // 回退：用纯 QR 图片作为标签（无 canvas 时）
-  const lensCode = order.lensCode;
-  if (!lensCode) return null;
-  const qrBuf = await QRCode.toBuffer(`${getServerBaseUrl()}/verify/${lensCode}`, {
-    errorCorrectionLevel: "H",
-    width: 600,
-    margin: 2,
+// 生成工厂 Excel 文件
+function buildFactoryExcel(records, orderNo) {
+  const rows = records.map(rec => {
+    const f = rec.fields;
+    return {
+      "订单号": f["来源订单号"] || "",
+      "顾客": f["顾客姓名"] || "",
+      "SKU": f["SKU"] || "",
+      "数量": Number(f["数量"]) || 1,
+      "眼别": f["眼别"] || "",
+      "球镜SPH": f["球镜SPH"] ?? "",
+      "柱镜CYL": f["柱镜CYL"] ?? "",
+      "轴位AXIS": f["轴位AXIS"] ?? "",
+      "瞳距": f["瞳距"] ?? "",
+      "瞳高": f["瞳高"] ?? "",
+      "镜框型号": f["镜框型号"] || "",
+      "镜片码": f["镜片码"] || "",
+      "交期类型": f["交期类型"] || "",
+      "收货地址": f["收货地址"] || "",
+    };
   });
-  return qrBuf;
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [
+    { wch: 20 }, { wch: 10 }, { wch: 20 }, { wch: 6 },
+    { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
+    { wch: 8 }, { wch: 8 }, { wch: 16 }, { wch: 18 },
+    { wch: 10 }, { wch: 30 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`);
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 }
 
-// 构建工厂导出 ZIP（手写 ZIP 格式，利用 Node.js 内置 zlib）
-async function buildFactoryZip(records, orderNo) {
-  const { deflateRawSync } = await import("zlib");
+// 生成可打印 HTML 标签（QR 内嵌为 base64 data URL）
+async function buildLabelHtml(record, orderNo) {
+  const f = record.fields;
+  const lensCode = f["镜片码"];
+  if (!lensCode) return null;
 
+  const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
+  const eye = f["眼别"] || "";
+  const sku = f["SKU"] || "";
+  const sph = f["球镜SPH"] ?? "";
+  const cyl = f["柱镜CYL"] ?? "";
+  const axis = f["轴位AXIS"] ?? "";
+
+  const qrDataUrl = await QRCode.toDataURL(
+    `${getServerBaseUrl()}/verify/${lensCode}`,
+    { errorCorrectionLevel: "H", width: 200, margin: 2 }
+  );
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<title>${orderNo} ${customer} ${eye}</title>
+<style>
+@page{size:6cm 3cm;margin:0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:3mm;height:100%}
+.label{display:flex;gap:2mm;align-items:center;height:100%}
+.qr img{width:18mm;height:18mm;display:block}
+.info{flex:1;min-width:0}
+.order{font-size:6pt;color:#999;margin-bottom:1mm}
+.customer{font-weight:700;font-size:9pt;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rx{font-family:"SF Mono",Menlo,monospace;font-size:7pt;line-height:1.4;color:#333}
+.code{font-size:6pt;color:#888;margin-top:1mm;font-family:monospace;word-break:break-all}
+.brand{font-size:5pt;color:#bbb;text-align:right;margin-top:1mm}
+@media print{body{padding:2mm}}
+</style></head><body>
+<div class="label">
+<div class="qr"><img src="${qrDataUrl}"></div>
+<div class="info">
+<div class="order">${orderNo}</div>
+<div class="customer">${f["顾客姓名"]||""} ${eye}</div>
+<div class="rx">${sku} SPH ${sph} CYL ${cyl} ${axis ? "AXIS " + axis : ""}</div>
+<div class="code">${lensCode}</div>
+<div class="brand">GAUSH | CLEAR</div>
+</div></div></body></html>`;
+
+  return { name: `labels/${orderNo}_${customer}_${eye}.html`, data: Buffer.from(html, "utf-8") };
+}
+
+// 构建工厂导出 ZIP
+async function buildFactoryZip(records, orderNo) {
   const files = [];
 
+  // Excel 文件
+  files.push({ name: `订单_${orderNo}.xlsx`, data: buildFactoryExcel(records, orderNo) });
+
+  // QR + 标签
   for (const rec of records) {
     const f = rec.fields;
     const lensCode = f["镜片码"];
@@ -411,35 +482,38 @@ async function buildFactoryZip(records, orderNo) {
     const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
     const eye = f["眼别"] || "unknown";
 
-    // QR 图片
     const qrPath = resolve(QR_DIR, `${lensCode}.png`);
     if (existsSync(qrPath)) {
       files.push({ name: `qrcodes/${lensCode}.png`, data: readFileSync(qrPath) });
-      // 标签图 = QR 图片（简化版，后续可加处方文字渲染）
-      files.push({ name: `labels/${orderNo}_${customer}_${eye}.png`, data: readFileSync(qrPath) });
     }
+
+    const labelEntry = await buildLabelHtml(rec, orderNo);
+    if (labelEntry) files.push(labelEntry);
   }
 
   // 说明文件
-  const readme = `工厂打印包使用说明
-==================
+  const labelCount = files.filter(f => f.name.startsWith("labels/")).length;
+  const qrCount = files.filter(f => f.name.startsWith("qrcodes/")).length;
+  const readme = `工厂打印包 — 订单 ${orderNo}
+${"=".repeat(34)}
 
-本压缩包包含 ${files.filter(f => f.name.startsWith("labels/")).length} 个镜片的打印素材。
+本压缩包包含：
+  订单_${orderNo}.xlsx    订单数据（Excel，可导入工厂系统）
+  qrcodes/                ${qrCount} 个原始二维码图片
+  labels/                 ${labelCount} 个可打印标签（HTML 格式）
 
-【labels/ 文件夹】—— 推荐使用
-  每个文件对应一张镜片标签，包含二维码。
-  标签可直接打印在 6cm x 3cm 标签纸上。
-
-【qrcodes/ 文件夹】—— 仅二维码
-  单独的高分辨率二维码图片。
+标签使用方法：
+  1. 在浏览器中打开 labels/ 下的 HTML 文件
+  2. Ctrl+P（Mac: Cmd+P）打印
+  3. 推荐标签纸：6cm × 3cm
 
 注意事项：
   - 每个镜片码全球唯一，请勿复制或重复使用
   - 消费者扫描二维码即可验证产品真伪
+  - Excel 包含完整处方参数，可直接用于生产排产
 `;
   files.push({ name: "说明.txt", data: Buffer.from(readme, "utf-8") });
 
-  // 构建 ZIP（手写格式）
   return buildZipBuffer(files);
 }
 
@@ -1084,12 +1158,6 @@ const server = createServer(async (req, res) => {
         jsonRes(res, 403, { error: "无权操作此订单" }); return logReq(req, 403, start);
       }
 
-      // 动态导入 zlib（内置）
-      const { createGzip } = await import("zlib");
-
-      // 手写 ZIP（使用 Node.js 内置 zlib deflated）
-      // 为简化，先生成一个包含所有 QR + 标签的 tar-like 压缩
-      // 实际用 Node.js 的简单 ZIP 实现
       const zipBuf = await buildFactoryZip(data4.items, orderNo);
 
       res.writeHead(200, {
