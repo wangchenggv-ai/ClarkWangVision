@@ -1,5 +1,52 @@
 # Changelog
 
+## [2026-04-12] Sprint 11：QR 溯源验真系统整合
+
+**修改文件**
+- `agent-portal/server.js` — 新增 5 个 API 端点 + QR/ZIP 生成函数 + 路由修复
+- `agent-portal/public/track.html` — 订单详情增加确认/QR/导出按钮
+- `package.json` — 新增 `qrcode` 依赖
+
+**新增文件**
+- `agent-portal/public/verify.html` — 消费者扫码验真页面
+- `agent-portal/public/qrcodes/` — QR PNG 存储目录
+
+### 新增 API 端点
+
+| 端点 | 说明 |
+|------|------|
+| `POST /api/order/:orderNo/confirm` | 确认订单 → 生成镜片码 → 写入飞书 → 生成 QR PNG |
+| `GET /api/order/:orderNo/lens-codes` | 查询订单的镜片码列表 |
+| `GET /api/order/:orderNo/qrcode` | 下载订单 QR 码 PNG |
+| `GET /api/order/:orderNo/factory-zip` | 导出工厂打印包 ZIP（labels + QR） |
+| `GET /verify/:lensCode` | 无认证消费者验真页面 |
+
+### 核心流程
+
+1. 代理商下单 → 订单状态 `待处理`
+2. 助理在追踪页点击「确认订单」→ 为每个镜片生成 16 位 hex 码 → 状态变为 `生产中`
+3. 自动生成 QR PNG（内容指向验真 URL），可下载单张或导出工厂 ZIP 包
+4. 消费者扫描镜片上的 QR → 打开验真页面 → 显示订单信息 + 处方参数 + 正品标识
+
+### 技术实现
+
+- 镜片码：`crypto.randomBytes(8)` → 16 位大写十六进制
+- QR 生成：`qrcode` npm 包（纯 JS，零 native 依赖）
+- 工厂 ZIP：手写 ZIP 格式（Store 模式 + CRC32），无外部依赖
+- 验真路由：动态渲染 verify.html 模板（`{{FOUND}}` 控制正品/未找到状态）
+- 路由修复：`/api/order/:orderNo` 改为精确匹配（`split.length === 4`），避免拦截子路径
+
+### 验证结果
+- 确认订单 → 生成 2 个镜片码 ✅
+- 查询镜片码 ✅
+- 下载 QR PNG (3.3KB) ✅
+- 导出工厂 ZIP (14.5KB) ✅
+- 消费者验真 → 正品验证通过 ✅
+- 无效码 → 未找到记录 ✅
+- 订单状态 待处理 → 生产中 ✅
+
+---
+
 ## [2026-04-12] Sprint 10 v2：代理商订单门户生产级升级
 
 **修改文件**
