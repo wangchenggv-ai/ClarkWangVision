@@ -1,5 +1,64 @@
 # Changelog
 
+## [2026-04-12] Sprint 10 v2：代理商订单门户生产级升级
+
+**修改文件**
+- `agent-portal/server.js` — 重写，新增 5 个 API 端点，集成 Rule 1 交期逻辑
+- `agent-portal/public/order.html` — 重写，动态 SKU + 交期预估 + 订单摘要
+- `agent-portal/public/track.html` — 重写，分组展示 + 详情弹窗 + CSV 导出
+
+**新增文件**
+- `agent-portal/public/css/common.css` — 共享样式（badge、modal、toast、分页等）
+
+### 新增 API 端点
+
+| 端点 | 说明 |
+|------|------|
+| `GET /api/skus` | SKU 列表 + 实时库存状态（5 分钟缓存，从飞书 SKU 主数据 + 成品库存表 join） |
+| `GET /api/delivery-estimate` | Rule 1 交期预估：定制品→定制5天，备货品库存充足→有货3天，不足→定制5天 |
+| `GET /api/order/:orderNo` | 单个订单详情（按来源订单号查询，含权限校验） |
+| `GET /api/orders/export` | CSV 导出（BOM 头，Excel 兼容中文，支持筛选参数透传） |
+| `GET /api/customers` | 代理商历史客户名列表（10 分钟缓存，用于下单页自动补全） |
+
+### 增强功能
+
+**下单页 (order.html)**
+- SKU 从飞书动态加载，按备货品/定制品分组，显示库存状态标签 [有货✓] [低库存⚠] [缺货✗] [定制●]
+- 选择 SKU+数量后实时交期预估（本地即时 + API 精确校验，debounce 300ms）
+- 顾客姓名自动补全（基于历史下单记录）
+- 订单摘要卡片（实时更新总患者数、总镜片数、各品交期）
+- 提交确认弹窗 → 成功页（展示订单号 + 每品交期详情）
+- 复制右眼处方到左眼
+- CYL≠0 时自动显示 AXIS 字段
+- 移动端优化：font-size 16px 防 iOS 缩放、inputmode、sticky 提交栏
+
+**追踪页 (track.html)**
+- 统计栏：总订单 / 待处理 / 有货 / 定制 / 已发货
+- 筛选增强：状态 + SKU + 日期范围
+- 订单按来源订单号分组展示
+- 点击订单组弹出详情弹窗（完整处方信息、交期、收货地址）
+- CSV 导出（带当前筛选参数）
+- 分页控件
+
+**后端 (server.js)**
+- SKU + 库存缓存（5 分钟 TTL），客户名缓存（10 分钟 TTL）
+- 代理商缓存（30 秒 TTL），飞书 token 自动刷新（~2 小时）
+- 提交订单时自动扣减库存（有货情况）
+- 订单列表支持 status / sku / from / to / page / pageSize 筛选分页 + 汇总统计
+- 请求日志：`METHOD PATH → STATUS (ms)`
+- 静态资源路由修复（/css/ 前导斜杠导致 path.resolve 错误）
+
+### 验证结果（本地，无 .env 环境）
+- 静态页面 `/order` `/track` 200 ✅
+- CSS `/css/common.css` 200 ✅
+- 无效 token → 401 ✅
+- 缺参数 → 400 校验提示 ✅
+- 未知路径 → 404 ✅
+- 请求日志输出 ✅
+- 飞书 API 功能（SKU/提交/订单）需配置 .env 后完整测试
+
+---
+
 ## [2026-04-12] Sprint 10：代理商订单门户（Agent Portal）
 
 **新增文件**
