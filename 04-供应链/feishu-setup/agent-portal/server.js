@@ -505,7 +505,7 @@ const server = createServer(async (req, res) => {
               "数量": quantity,
               "订单状态": "待处理",
               "交期类型": est.deliveryType,
-              "承诺交货日": est.promiseDate,
+              "预计交期": est.promiseDate,
               "下单日期": now,
               "同步时间": now,
               "顾客姓名": customerName.trim(),
@@ -615,7 +615,7 @@ const server = createServer(async (req, res) => {
           customerName: f["顾客姓名"] || "",
           eye: f["眼别"] || "",
           date: f["同步时间"] || f["下单日期"] || null,
-          promiseDate: f["承诺交货日"] || null,
+          promiseDate: f["预计交期"] || null,
           address: f["收货地址"] || "",
           remark: f["备注"] || "",
           // 处方详情
@@ -712,7 +712,7 @@ const server = createServer(async (req, res) => {
         address: firstItem.fields["收货地址"] || "",
         remark: firstItem.fields["备注"] || "",
         deliveryType: firstItem.fields["交期类型"] || "",
-        promiseDate: firstItem.fields["承诺交货日"] || null,
+        promiseDate: firstItem.fields["预计交期"] || null,
         status: firstItem.fields["订单状态"] || "",
         items,
       });
@@ -760,7 +760,7 @@ const server = createServer(async (req, res) => {
           deliveryType: f["交期类型"] || "",
           status: f["订单状态"] || "",
           date: f["下单日期"] ? formatDate(f["下单日期"]) : "",
-          promiseDate: f["承诺交货日"] ? formatDate(f["承诺交货日"]) : "",
+          promiseDate: f["预计交期"] ? formatDate(f["预计交期"]) : "",
           address: f["收货地址"] || "",
           remark: f["备注"] || "",
         };
@@ -778,7 +778,7 @@ const server = createServer(async (req, res) => {
 
       rows.sort((a, b) => a.orderNo.localeCompare(b.orderNo));
 
-      const headers = ["订单号","顾客","SKU","数量","眼别","球镜SPH","柱镜CYL","轴位AXIS","瞳距","瞳高","镜框型号","交期类型","状态","下单日期","承诺交货日","收货地址","备注"];
+      const headers = ["订单号","顾客","SKU","数量","眼别","球镜SPH","柱镜CYL","轴位AXIS","瞳距","瞳高","镜框型号","交期类型","状态","下单日期","预计交期","收货地址","备注"];
       const csvRows = [headers.join(",")];
       for (const r of rows) {
         csvRows.push([r.orderNo, r.customer, r.sku, r.qty, r.eye, r.sph, r.cyl, r.axis, r.pd, r.ph, r.frame, r.deliveryType, r.status, r.date, r.promiseDate, r.address, r.remark].map(csvEscape).join(","));
