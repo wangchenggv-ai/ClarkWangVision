@@ -343,13 +343,13 @@ async function main() {
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #0f1923; color: #e0e0e0; }
-  .header { background: linear-gradient(135deg, #1a2a3a, #0d1b2a); padding: 20px 40px; border-bottom: 2px solid #1e90ff; display: flex; justify-content: space-between; align-items: center; }
-  .header h1 { font-size: 24px; color: #1e90ff; letter-spacing: 2px; }
-  .header .time { color: #888; font-size: 14px; }
+  body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f8f9fc; color: #333; }
+  .header { background: #fff; padding: 20px 40px; border-bottom: 1px solid #e8eaef; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .header h1 { font-size: 24px; color: #0066cc; letter-spacing: 2px; }
+  .header .time { color: #999; font-size: 14px; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 20px; }
-  .card { background: #1a2a3a; border-radius: 12px; padding: 20px; border: 1px solid #2a3a4a; }
-  .card h3 { color: #1e90ff; font-size: 16px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a3a4a; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e8eaef; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .card h3 { color: #0066cc; font-size: 16px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
   .card-full { grid-column: 1 / -1; }
   .card-2col { grid-column: span 2; }
   .chart { width: 100%; height: 280px; }
@@ -357,32 +357,32 @@ async function main() {
 
   /* KPI cards */
   .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 20px 20px 0; }
-  .kpi { background: #1a2a3a; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #2a3a4a; }
+  .kpi { background: #fff; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #e8eaef; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
   .kpi .num { font-size: 36px; font-weight: bold; margin: 8px 0; }
-  .kpi .label { color: #888; font-size: 13px; }
-  .kpi.green .num { color: #00c853; }
-  .kpi.orange .num { color: #ff9800; }
-  .kpi.red .num { color: #f44336; }
-  .kpi.blue .num { color: #1e90ff; }
+  .kpi .label { color: #999; font-size: 13px; }
+  .kpi.green .num { color: #2e7d32; }
+  .kpi.orange .num { color: #e65100; }
+  .kpi.red .num { color: #c62828; }
+  .kpi.blue .num { color: #0066cc; }
 
   /* Table */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { background: #0d1b2a; color: #1e90ff; text-align: left; padding: 8px 12px; }
-  td { padding: 8px 12px; border-bottom: 1px solid #2a3a4a; }
-  tr:hover { background: #223344; }
+  th { background: #f5f7fa; color: #666; font-weight: 600; text-align: left; padding: 8px 12px; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; color: #444; }
+  tr:hover { background: #f8f9fc; }
   .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-  .tag-ok { background: #00c85322; color: #00c853; }
-  .tag-warn { background: #ff980022; color: #ff9800; }
-  .tag-danger { background: #f4433622; color: #f44336; }
-  .tag-pending { background: #1e90ff22; color: #1e90ff; }
+  .tag-ok { background: #e8f5e9; color: #2e7d32; }
+  .tag-warn { background: #fff3e0; color: #e65100; }
+  .tag-danger { background: #ffebee; color: #c62828; }
+  .tag-pending { background: #e3f2fd; color: #0066cc; }
 
   /* AI section */
-  .ai-content { font-size: 13px; line-height: 1.8; white-space: pre-wrap; max-height: 400px; overflow-y: auto; color: #ccc; }
+  .ai-content { font-size: 13px; line-height: 1.8; white-space: pre-wrap; max-height: 400px; overflow-y: auto; color: #555; }
   .ai-content::-webkit-scrollbar { width: 6px; }
-  .ai-content::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+  .ai-content::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
 
   /* Progress bar */
-  .progress-bar { height: 8px; background: #2a3a4a; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .progress-bar { height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; margin-top: 4px; }
   .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
 </style>
 </head>
@@ -443,25 +443,25 @@ async function main() {
 
 <!-- Delivery Performance Section -->
 <div style="padding:20px 20px 0">
-  <div style="background: #1a2a3a; border-radius: 12px; padding: 20px; border: 2px solid #1e90ff;">
-    <h3 style="color:#1e90ff; font-size:18px; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #1e90ff;">交付水平分析引擎</h3>
+  <div style="background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e8eaef; box-shadow: 0 1px 4px rgba(0,0,0,0.04);">
+    <h3 style="color:#0066cc; font-size:18px; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #0066cc;">交付水平分析引擎</h3>
     <div class="kpi-row" style="padding:0;">
-      <div class="kpi ${delivActualFill >= 80 ? 'green' : delivActualFill >= 50 ? 'orange' : 'red'}" style="background:#0d1b2a">
+      <div class="kpi ${delivActualFill >= 80 ? 'green' : delivActualFill >= 50 ? 'orange' : 'red'}" style="background:#fff">
         <div class="label">实际填充率</div>
         <div class="num">${delivActualFill.toFixed(1)}%</div>
         <div class="label">有货${delivInStock} / 总${delivProcessed}单</div>
       </div>
-      <div class="kpi ${predictedFill >= 80 ? 'green' : predictedFill >= 50 ? 'orange' : 'red'}" style="background:#0d1b2a">
+      <div class="kpi ${predictedFill >= 80 ? 'green' : predictedFill >= 50 ? 'orange' : 'red'}" style="background:#fff">
         <div class="label">预测填充率</div>
         <div class="num">${predictedFill.toFixed(1)}%</div>
         <div class="label">${canFulfill}/${canFulfill + cannotFulfill} SKU可履约</div>
       </div>
-      <div class="kpi ${delivOverdueRate <= 5 ? 'green' : delivOverdueRate <= 15 ? 'orange' : 'red'}" style="background:#0d1b2a">
+      <div class="kpi ${delivOverdueRate <= 5 ? 'green' : delivOverdueRate <= 15 ? 'orange' : 'red'}" style="background:#fff">
         <div class="label">超期率</div>
         <div class="num">${delivOverdueRate.toFixed(1)}%</div>
         <div class="label">超期${delivOverdue} / 准时${delivOnTime}</div>
       </div>
-      <div class="kpi blue" style="background:#0d1b2a">
+      <div class="kpi blue" style="background:#fff">
         <div class="label">最优模拟方案</div>
         <div class="num">${simResults.reduce((b, s) => s.fill > b.fill ? s : b).fill}%</div>
         <div class="label">${simResults.reduce((b, s) => s.fill > b.fill ? s : b).name}</div>
@@ -469,16 +469,16 @@ async function main() {
     </div>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px;">
       <div>
-        <h3 style="color:#1e90ff; font-size:14px; margin-bottom:8px; border:none; padding:0;">模拟优化方案对比</h3>
+        <h3 style="color:#0066cc; font-size:14px; margin-bottom:8px; border:none; padding:0;">模拟优化方案对比</h3>
         <div id="chart-simulation" style="width:100%; height:250px;"></div>
       </div>
       <div>
-        <h3 style="color:#1e90ff; font-size:14px; margin-bottom:8px; border:none; padding:0;">交付差距 Top SKU (填充率 &lt; 80%)</h3>
+        <h3 style="color:#0066cc; font-size:14px; margin-bottom:8px; border:none; padding:0;">交付差距 Top SKU (填充率 &lt; 80%)</h3>
         <div style="max-height:250px; overflow-y:auto;">
           <table>
             <tr><th>SKU</th><th>ABC</th><th>订单</th><th>填充率</th><th>库存</th><th>覆盖(周)</th></tr>
             ${topGaps.map(s => {
-              const fillColor = s.fill === 0 ? '#f44336' : s.fill < 50 ? '#ff9800' : '#ffeb3b';
+              const fillColor = s.fill === 0 ? '#c62828' : s.fill < 50 ? '#e65100' : '#ffeb3b';
               return '<tr>' +
                 '<td style="font-size:12px">' + s.sku + '</td>' +
                 '<td><span class="tag ' + (s.abc === 'A' ? 'tag-danger' : s.abc === 'B' ? 'tag-warn' : 'tag-ok') + '">' + s.abc + '</span></td>' +
@@ -568,7 +568,7 @@ async function main() {
       <tr><th>模芯编号</th><th>对应 SKU</th><th>总寿命</th><th>已使用</th><th>剩余</th><th>使用率</th><th>状态</th></tr>
       ${moldData.map(d => {
         const pct = d.total > 0 ? Math.round(d.used / d.total * 100) : 0;
-        const color = d.remaining <= 50 ? '#f44336' : d.remaining < d.threshold ? '#ff9800' : '#00c853';
+        const color = d.remaining <= 50 ? '#c62828' : d.remaining < d.threshold ? '#e65100' : '#2e7d32';
         const tag = d.remaining <= 50 ? 'tag-danger' : d.remaining < d.threshold ? 'tag-warn' : 'tag-ok';
         return `<tr>
           <td>${d.id}</td>
@@ -602,11 +602,11 @@ echarts.init(document.getElementById('chart-health')).setOption({
   tooltip: { trigger: 'item' },
   series: [{
     type: 'pie', radius: ['45%', '70%'], center: ['50%', '55%'],
-    label: { color: '#ccc', fontSize: 12 },
+    label: { color: '#999', fontSize: 12 },
     data: [
-      { value: ${statusCounts.ok}, name: '正常', itemStyle: { color: '#00c853' } },
-      { value: ${statusCounts.low}, name: '低库存', itemStyle: { color: '#ff9800' } },
-      { value: ${statusCounts.out}, name: '缺货', itemStyle: { color: '#f44336' } },
+      { value: ${statusCounts.ok}, name: '正常', itemStyle: { color: '#2e7d32' } },
+      { value: ${statusCounts.low}, name: '低库存', itemStyle: { color: '#e65100' } },
+      { value: ${statusCounts.out}, name: '缺货', itemStyle: { color: '#c62828' } },
     ]
   }]
 });
@@ -614,14 +614,14 @@ echarts.init(document.getElementById('chart-health')).setOption({
 // 库存 vs 安全线柱状图
 echarts.init(document.getElementById('chart-inventory')).setOption({
   tooltip: { trigger: 'axis' },
-  legend: { data: ['当前库存', '在产量', '安全库存'], textStyle: { color: '#888' }, top: 0 },
+  legend: { data: ['当前库存', '在产量', '安全库存'], textStyle: { color: '#999' }, top: 0 },
   grid: { top: 30, bottom: 30, left: 50, right: 20 },
-  xAxis: { type: 'category', data: ${JSON.stringify(invData.map(d => d.sku))}, axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
-  yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+  xAxis: { type: 'category', data: ${JSON.stringify(invData.map(d => d.sku))}, axisLabel: { color: '#999', rotate: 30, fontSize: 11 } },
+  yAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
   series: [
-    { name: '当前库存', type: 'bar', stack: 'total', data: ${JSON.stringify(invData.map(d => d.current))}, itemStyle: { color: '#1e90ff' } },
-    { name: '在产量', type: 'bar', stack: 'total', data: ${JSON.stringify(invData.map(d => d.inProd))}, itemStyle: { color: '#1e90ff44' } },
-    { name: '安全库存', type: 'line', data: ${JSON.stringify(invData.map(d => d.safety))}, itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
+    { name: '当前库存', type: 'bar', stack: 'total', data: ${JSON.stringify(invData.map(d => d.current))}, itemStyle: { color: '#0066cc' } },
+    { name: '在产量', type: 'bar', stack: 'total', data: ${JSON.stringify(invData.map(d => d.inProd))}, itemStyle: { color: '#0066cc44' } },
+    { name: '安全库存', type: 'line', data: ${JSON.stringify(invData.map(d => d.safety))}, itemStyle: { color: '#c62828' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
   ]
 });
 
@@ -629,12 +629,12 @@ echarts.init(document.getElementById('chart-inventory')).setOption({
 echarts.init(document.getElementById('chart-mold')).setOption({
   tooltip: { trigger: 'axis' },
   grid: { top: 10, bottom: 30, left: 70, right: 20 },
-  xAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
-  yAxis: { type: 'category', data: ${JSON.stringify(moldData.map(d => d.id))}, axisLabel: { color: '#888' } },
+  xAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
+  yAxis: { type: 'category', data: ${JSON.stringify(moldData.map(d => d.id))}, axisLabel: { color: '#999' } },
   series: [
-    { name: '已使用', type: 'bar', stack: 'life', data: ${JSON.stringify(moldData.map(d => d.used))}, itemStyle: { color: '#ff9800' } },
+    { name: '已使用', type: 'bar', stack: 'life', data: ${JSON.stringify(moldData.map(d => d.used))}, itemStyle: { color: '#e65100' } },
     { name: '剩余', type: 'bar', stack: 'life', data: ${JSON.stringify(moldData.map(d => d.remaining))},
-      itemStyle: { color: function(p) { return ${JSON.stringify(moldData.map(d => d.remaining))}[p.dataIndex] < 500 ? '#f44336' : '#00c853'; } }
+      itemStyle: { color: function(p) { return ${JSON.stringify(moldData.map(d => d.remaining))}[p.dataIndex] < 500 ? '#c62828' : '#2e7d32'; } }
     },
   ]
 });
@@ -645,9 +645,9 @@ const orderQtys = ${JSON.stringify(Object.values(orderBySku))};
 echarts.init(document.getElementById('chart-orders')).setOption({
   tooltip: { trigger: 'axis' },
   grid: { top: 10, bottom: 40, left: 50, right: 20 },
-  xAxis: { type: 'category', data: orderSkus, axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
-  yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
-  series: [{ type: 'bar', data: orderQtys, itemStyle: { color: '#7c4dff', borderRadius: [4, 4, 0, 0] } }]
+  xAxis: { type: 'category', data: orderSkus, axisLabel: { color: '#999', rotate: 30, fontSize: 11 } },
+  yAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
+  series: [{ type: 'bar', data: orderQtys, itemStyle: { color: '#6a1b9a', borderRadius: [4, 4, 0, 0] } }]
 });
 
 // Chart 5: Blank inventory bar chart
@@ -660,13 +660,13 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   if (names.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无毛坯库存数据</div>'; return; }
   echarts.init(el).setOption({
     tooltip: { trigger: 'axis' },
-    legend: { data: ['当前毛坯库存', '安全毛坯库存'], textStyle: { color: '#888' }, top: 0 },
+    legend: { data: ['当前毛坯库存', '安全毛坯库存'], textStyle: { color: '#999' }, top: 0 },
     grid: { top: 30, bottom: 30, left: 50, right: 20 },
-    xAxis: { type: 'category', data: names, axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
-    yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#999', rotate: 30, fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
     series: [
-      { name: '当前毛坯库存', type: 'bar', data: currents, itemStyle: { color: '#26a69a', borderRadius: [4,4,0,0] } },
-      { name: '安全毛坯库存', type: 'line', data: safeties, itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
+      { name: '当前毛坯库存', type: 'bar', data: currents, itemStyle: { color: '#00838f', borderRadius: [4,4,0,0] } },
+      { name: '安全毛坯库存', type: 'line', data: safeties, itemStyle: { color: '#c62828' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
     ]
   });
 })();
@@ -690,11 +690,11 @@ echarts.init(document.getElementById('chart-orders')).setOption({
       return s;
     }},
     grid: { top: 10, bottom: 30, left: 80, right: 20 },
-    xAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
-    yAxis: { type: 'category', data: names, axisLabel: { color: '#888' } },
+    xAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
+    yAxis: { type: 'category', data: names, axisLabel: { color: '#999' } },
     series: [
-      { name: '当前排队量', type: 'bar', data: queues, itemStyle: { color: '#ff9800' } },
-      { name: '日产能', type: 'bar', data: caps, itemStyle: { color: '#00c85344' } },
+      { name: '当前排队量', type: 'bar', data: queues, itemStyle: { color: '#e65100' } },
+      { name: '日产能', type: 'bar', data: caps, itemStyle: { color: '#2e7d3244' } },
     ]
   });
 })();
@@ -705,12 +705,12 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   if (!el) return;
   const data = ${JSON.stringify(Object.entries(afterSalesByType).map(([k, v]) => ({ name: k, value: v })))};
   if (data.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无售后数据</div>'; return; }
-  const colors = ['#1e90ff', '#ff9800', '#f44336', '#00c853', '#7c4dff', '#e91e63', '#00bcd4', '#ffeb3b'];
+  const colors = ['#0066cc', '#e65100', '#c62828', '#2e7d32', '#6a1b9a', '#ad1457', '#00838f', '#f9a825'];
   echarts.init(el).setOption({
     tooltip: { trigger: 'item' },
     series: [{
       type: 'pie', radius: ['40%', '65%'], center: ['50%', '55%'],
-      label: { color: '#ccc', fontSize: 11 },
+      label: { color: '#999', fontSize: 11 },
       data: data.map(function(d, i) { return { value: d.value, name: d.name, itemStyle: { color: colors[i % colors.length] } }; })
     }]
   });
@@ -724,17 +724,17 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   const counts = ${JSON.stringify(Object.values(procByStatus))};
   if (statuses.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无采购数据</div>'; return; }
   const colors = statuses.map(function(s) {
-    if (s === '已到货') return '#00c853';
-    if (s === '已取消') return '#666';
-    if (s === '运输中') return '#1e90ff';
-    if (s === '待下单') return '#ff9800';
-    return '#7c4dff';
+    if (s === '已到货') return '#2e7d32';
+    if (s === '已取消') return '#999';
+    if (s === '运输中') return '#0066cc';
+    if (s === '待下单') return '#e65100';
+    return '#6a1b9a';
   });
   echarts.init(el).setOption({
     tooltip: { trigger: 'axis' },
     grid: { top: 10, bottom: 40, left: 50, right: 20 },
-    xAxis: { type: 'category', data: statuses, axisLabel: { color: '#888', fontSize: 11 } },
-    yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    xAxis: { type: 'category', data: statuses, axisLabel: { color: '#999', fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
     series: [{ type: 'bar', data: counts.map(function(v, i) { return { value: v, itemStyle: { color: colors[i], borderRadius: [4,4,0,0] } }; }) }]
   });
 })();
@@ -749,17 +749,17 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   echarts.init(el).setOption({
     tooltip: { trigger: 'axis', formatter: function(p) { return p[0].name + ': ' + p[0].value + '% fill rate'; } },
     grid: { top: 10, bottom: 60, left: 50, right: 20 },
-    xAxis: { type: 'category', data: names, axisLabel: { color: '#888', rotate: 25, fontSize: 11 } },
-    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { color: '#888', formatter: '{value}%' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#999', rotate: 25, fontSize: 11 } },
+    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { color: '#999', formatter: '{value}%' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
     series: [{
       type: 'bar',
       data: fills.map(function(v, i) {
-        var color = i === 0 ? '#666' : v > fills[0] ? '#00c853' : '#ff9800';
+        var color = i === 0 ? '#999' : v > fills[0] ? '#2e7d32' : '#e65100';
         var maxFill = Math.max.apply(null, fills);
-        if (v === maxFill && i > 0) color = '#1e90ff';
+        if (v === maxFill && i > 0) color = '#0066cc';
         return { value: v, itemStyle: { color: color, borderRadius: [4,4,0,0] } };
       }),
-      label: { show: true, position: 'top', color: '#ccc', fontSize: 12, formatter: '{c}%' }
+      label: { show: true, position: 'top', color: '#999', fontSize: 12, formatter: '{c}%' }
     }]
   });
 })();

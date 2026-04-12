@@ -7,13 +7,13 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #0f1923; color: #e0e0e0; }
-  .header { background: linear-gradient(135deg, #1a2a3a, #0d1b2a); padding: 20px 40px; border-bottom: 2px solid #1e90ff; display: flex; justify-content: space-between; align-items: center; }
-  .header h1 { font-size: 24px; color: #1e90ff; letter-spacing: 2px; }
-  .header .time { color: #888; font-size: 14px; }
+  body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f8f9fc; color: #333; }
+  .header { background: #fff; padding: 20px 40px; border-bottom: 1px solid #e8eaef; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .header h1 { font-size: 24px; color: #0066cc; letter-spacing: 2px; }
+  .header .time { color: #999; font-size: 14px; }
   .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; padding: 20px; }
-  .card { background: #1a2a3a; border-radius: 12px; padding: 20px; border: 1px solid #2a3a4a; }
-  .card h3 { color: #1e90ff; font-size: 16px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #2a3a4a; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e8eaef; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
+  .card h3 { color: #0066cc; font-size: 16px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
   .card-full { grid-column: 1 / -1; }
   .card-2col { grid-column: span 2; }
   .chart { width: 100%; height: 280px; }
@@ -21,32 +21,32 @@
 
   /* KPI cards */
   .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; padding: 20px 20px 0; }
-  .kpi { background: #1a2a3a; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #2a3a4a; }
+  .kpi { background: #fff; border-radius: 12px; padding: 20px; text-align: center; border: 1px solid #e8eaef; box-shadow: 0 1px 4px rgba(0,0,0,0.04); }
   .kpi .num { font-size: 36px; font-weight: bold; margin: 8px 0; }
-  .kpi .label { color: #888; font-size: 13px; }
-  .kpi.green .num { color: #00c853; }
-  .kpi.orange .num { color: #ff9800; }
-  .kpi.red .num { color: #f44336; }
-  .kpi.blue .num { color: #1e90ff; }
+  .kpi .label { color: #999; font-size: 13px; }
+  .kpi.green .num { color: #2e7d32; }
+  .kpi.orange .num { color: #e65100; }
+  .kpi.red .num { color: #c62828; }
+  .kpi.blue .num { color: #0066cc; }
 
   /* Table */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { background: #0d1b2a; color: #1e90ff; text-align: left; padding: 8px 12px; }
-  td { padding: 8px 12px; border-bottom: 1px solid #2a3a4a; }
-  tr:hover { background: #223344; }
+  th { background: #f5f7fa; color: #666; font-weight: 600; text-align: left; padding: 8px 12px; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f0f0f0; color: #444; }
+  tr:hover { background: #f8f9fc; }
   .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-  .tag-ok { background: #00c85322; color: #00c853; }
-  .tag-warn { background: #ff980022; color: #ff9800; }
-  .tag-danger { background: #f4433622; color: #f44336; }
-  .tag-pending { background: #1e90ff22; color: #1e90ff; }
+  .tag-ok { background: #e8f5e9; color: #2e7d32; }
+  .tag-warn { background: #fff3e0; color: #e65100; }
+  .tag-danger { background: #ffebee; color: #c62828; }
+  .tag-pending { background: #e3f2fd; color: #0066cc; }
 
   /* AI section */
-  .ai-content { font-size: 13px; line-height: 1.8; white-space: pre-wrap; max-height: 400px; overflow-y: auto; color: #ccc; }
+  .ai-content { font-size: 13px; line-height: 1.8; white-space: pre-wrap; max-height: 400px; overflow-y: auto; color: #555; }
   .ai-content::-webkit-scrollbar { width: 6px; }
-  .ai-content::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+  .ai-content::-webkit-scrollbar-thumb { background: #ddd; border-radius: 3px; }
 
   /* Progress bar */
-  .progress-bar { height: 8px; background: #2a3a4a; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+  .progress-bar { height: 8px; background: #f0f0f0; border-radius: 4px; overflow: hidden; margin-top: 4px; }
   .progress-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
 </style>
 </head>
@@ -54,24 +54,24 @@
 
 <div class="header">
   <h1>眼镜供应链智能看板</h1>
-  <div class="time">数据更新: 2026/4/12 18:53:40</div>
+  <div class="time">数据更新: 2026/4/12 19:02:17</div>
 </div>
 
 <!-- KPI -->
 <div class="kpi-row">
   <div class="kpi blue">
     <div class="label">总订单数</div>
-    <div class="num">117</div>
-    <div class="label">有货4 / 定制0</div>
+    <div class="num">128</div>
+    <div class="label">有货11 / 定制4</div>
   </div>
   <div class="kpi green">
     <div class="label">库存正常 SKU</div>
-    <div class="num">32</div>
+    <div class="num">31</div>
     <div class="label">备货品</div>
   </div>
   <div class="kpi orange">
     <div class="label">低库存预警</div>
-    <div class="num">53</div>
+    <div class="num">54</div>
     <div class="label">需关注</div>
   </div>
   <div class="kpi red">
@@ -96,7 +96,7 @@
   <div class="kpi green">
     <div class="label">订单超期率</div>
     <div class="num">0%</div>
-    <div class="label">0/117 笔超期</div>
+    <div class="label">0/128 笔超期</div>
   </div>
   <div class="kpi orange">
     <div class="label">待处理采购</div>
@@ -107,41 +107,41 @@
 
 <!-- Delivery Performance Section -->
 <div style="padding:20px 20px 0">
-  <div style="background: #1a2a3a; border-radius: 12px; padding: 20px; border: 2px solid #1e90ff;">
-    <h3 style="color:#1e90ff; font-size:18px; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #1e90ff;">交付水平分析引擎</h3>
+  <div style="background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e8eaef; box-shadow: 0 1px 4px rgba(0,0,0,0.04);">
+    <h3 style="color:#0066cc; font-size:18px; margin-bottom:16px; padding-bottom:10px; border-bottom:2px solid #0066cc;">交付水平分析引擎</h3>
     <div class="kpi-row" style="padding:0;">
-      <div class="kpi green" style="background:#0d1b2a">
+      <div class="kpi orange" style="background:#fff">
         <div class="label">实际填充率</div>
-        <div class="num">100.0%</div>
-        <div class="label">有货4 / 总4单</div>
+        <div class="num">73.3%</div>
+        <div class="label">有货11 / 总15单</div>
       </div>
-      <div class="kpi red" style="background:#0d1b2a">
+      <div class="kpi red" style="background:#fff">
         <div class="label">预测填充率</div>
-        <div class="num">34.0%</div>
-        <div class="label">34/100 SKU可履约</div>
+        <div class="num">33.0%</div>
+        <div class="label">33/100 SKU可履约</div>
       </div>
-      <div class="kpi green" style="background:#0d1b2a">
+      <div class="kpi green" style="background:#fff">
         <div class="label">超期率</div>
         <div class="num">0.0%</div>
         <div class="label">超期0 / 准时0</div>
       </div>
-      <div class="kpi blue" style="background:#0d1b2a">
+      <div class="kpi blue" style="background:#fff">
         <div class="label">最优模拟方案</div>
-        <div class="num">40%</div>
+        <div class="num">46%</div>
         <div class="label">+1周缓冲库存</div>
       </div>
     </div>
     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px;">
       <div>
-        <h3 style="color:#1e90ff; font-size:14px; margin-bottom:8px; border:none; padding:0;">模拟优化方案对比</h3>
+        <h3 style="color:#0066cc; font-size:14px; margin-bottom:8px; border:none; padding:0;">模拟优化方案对比</h3>
         <div id="chart-simulation" style="width:100%; height:250px;"></div>
       </div>
       <div>
-        <h3 style="color:#1e90ff; font-size:14px; margin-bottom:8px; border:none; padding:0;">交付差距 Top SKU (填充率 &lt; 80%)</h3>
+        <h3 style="color:#0066cc; font-size:14px; margin-bottom:8px; border:none; padding:0;">交付差距 Top SKU (填充率 &lt; 80%)</h3>
         <div style="max-height:250px; overflow-y:auto;">
           <table>
             <tr><th>SKU</th><th>ABC</th><th>订单</th><th>填充率</th><th>库存</th><th>覆盖(周)</th></tr>
-            <tr><td style="font-size:12px">AB版 -1.25</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra双效 -0.75/-0.50</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra双效 -2.25/-0.50</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra双效 -1.50</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>3</td><td>99</td></tr><tr><td style="font-size:12px">Ultra双效 -1.75/-0.50</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">D8</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>2</td><td>0.1</td></tr><tr><td style="font-size:12px">Ultra -1.00</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>8</td><td>99</td></tr><tr><td style="font-size:12px">A版 -1.00</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>2</td><td>0.4</td></tr><tr><td style="font-size:12px">Ultra -2.00</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#f44336">0%</strong></td><td>1</td><td>99</td></tr><tr><td style="font-size:12px">Ultra</td><td><span class="tag tag-ok">C</span></td><td>6</td><td><strong style="color:#ffeb3b">67%</strong></td><td>8</td><td>99</td></tr>
+            <tr><td style="font-size:12px">Ultra双效</td><td><span class="tag tag-danger">A</span></td><td>4</td><td><strong style="color:#c62828">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">AB版 -1.25</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#c62828">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra双效 -0.75/-0.50</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#c62828">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra双效 -2.25/-0.50</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#c62828">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra双效 -1.50</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#c62828">0%</strong></td><td>3</td><td>99</td></tr><tr><td style="font-size:12px">Ultra双效 -1.75/-0.50</td><td><span class="tag tag-danger">A</span></td><td>1</td><td><strong style="color:#c62828">0%</strong></td><td>0</td><td>0</td></tr><tr><td style="font-size:12px">Ultra -1.00</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#c62828">0%</strong></td><td>8</td><td>99</td></tr><tr><td style="font-size:12px">A版 -1.00</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#c62828">0%</strong></td><td>2</td><td>0.4</td></tr><tr><td style="font-size:12px">Ultra -2.00</td><td><span class="tag tag-ok">C</span></td><td>1</td><td><strong style="color:#c62828">0%</strong></td><td>1</td><td>99</td></tr><tr><td style="font-size:12px">D8</td><td><span class="tag tag-ok">C</span></td><td>2</td><td><strong style="color:#ffeb3b">50%</strong></td><td>1</td><td>0</td></tr>
             
           </table>
         </div>
@@ -340,10 +340,10 @@
           <td>SKU-001</td>
           <td>5,000</td>
           <td>2,100</td>
-          <td><strong style="color:#00c853">2,900</strong></td>
+          <td><strong style="color:#2e7d32">2,900</strong></td>
           <td>
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:42%;background:#00c853"></div></div>
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:42%;background:#2e7d32"></div></div>
               <span>42%</span>
             </div>
           </td>
@@ -353,10 +353,10 @@
           <td>SKU-002</td>
           <td>5,000</td>
           <td>3,800</td>
-          <td><strong style="color:#00c853">1,200</strong></td>
+          <td><strong style="color:#2e7d32">1,200</strong></td>
           <td>
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:76%;background:#00c853"></div></div>
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:76%;background:#2e7d32"></div></div>
               <span>76%</span>
             </div>
           </td>
@@ -366,10 +366,10 @@
           <td>SKU-003</td>
           <td>5,000</td>
           <td>4,600</td>
-          <td><strong style="color:#ff9800">400</strong></td>
+          <td><strong style="color:#e65100">400</strong></td>
           <td>
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:92%;background:#ff9800"></div></div>
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:92%;background:#e65100"></div></div>
               <span>92%</span>
             </div>
           </td>
@@ -379,10 +379,10 @@
           <td>SKU-004</td>
           <td>4,000</td>
           <td>3,950</td>
-          <td><strong style="color:#f44336">50</strong></td>
+          <td><strong style="color:#c62828">50</strong></td>
           <td>
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:99%;background:#f44336"></div></div>
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:99%;background:#c62828"></div></div>
               <span>99%</span>
             </div>
           </td>
@@ -392,10 +392,10 @@
           <td>SKU-005</td>
           <td>5,000</td>
           <td>1,500</td>
-          <td><strong style="color:#00c853">3,500</strong></td>
+          <td><strong style="color:#2e7d32">3,500</strong></td>
           <td>
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:30%;background:#00c853"></div></div>
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:30%;background:#2e7d32"></div></div>
               <span>30%</span>
             </div>
           </td>
@@ -405,10 +405,10 @@
           <td>SKU-006</td>
           <td>5,000</td>
           <td>2,800</td>
-          <td><strong style="color:#00c853">2,200</strong></td>
+          <td><strong style="color:#2e7d32">2,200</strong></td>
           <td>
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:56%;background:#00c853"></div></div>
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:56%;background:#2e7d32"></div></div>
               <span>56%</span>
             </div>
           </td>
@@ -418,10 +418,10 @@
           <td>SKU-008</td>
           <td>4,000</td>
           <td>3,200</td>
-          <td><strong style="color:#00c853">800</strong></td>
+          <td><strong style="color:#2e7d32">800</strong></td>
           <td>
             <div style="display:flex;align-items:center;gap:8px">
-              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:80%;background:#00c853"></div></div>
+              <div class="progress-bar" style="width:120px"><div class="progress-fill" style="width:80%;background:#2e7d32"></div></div>
               <span>80%</span>
             </div>
           </td>
@@ -469,11 +469,11 @@ echarts.init(document.getElementById('chart-health')).setOption({
   tooltip: { trigger: 'item' },
   series: [{
     type: 'pie', radius: ['45%', '70%'], center: ['50%', '55%'],
-    label: { color: '#ccc', fontSize: 12 },
+    label: { color: '#999', fontSize: 12 },
     data: [
-      { value: 32, name: '正常', itemStyle: { color: '#00c853' } },
-      { value: 53, name: '低库存', itemStyle: { color: '#ff9800' } },
-      { value: 13, name: '缺货', itemStyle: { color: '#f44336' } },
+      { value: 31, name: '正常', itemStyle: { color: '#2e7d32' } },
+      { value: 54, name: '低库存', itemStyle: { color: '#e65100' } },
+      { value: 13, name: '缺货', itemStyle: { color: '#c62828' } },
     ]
   }]
 });
@@ -481,14 +481,14 @@ echarts.init(document.getElementById('chart-health')).setOption({
 // 库存 vs 安全线柱状图
 echarts.init(document.getElementById('chart-inventory')).setOption({
   tooltip: { trigger: 'axis' },
-  legend: { data: ['当前库存', '在产量', '安全库存'], textStyle: { color: '#888' }, top: 0 },
+  legend: { data: ['当前库存', '在产量', '安全库存'], textStyle: { color: '#999' }, top: 0 },
   grid: { top: 30, bottom: 30, left: 50, right: 20 },
-  xAxis: { type: 'category', data: ["Ultra","Ultra -1.25/-0.50","AB版 -1.25","D8","Ultra双效 -0.75/-0.50","Ultra双效 -2.25/-0.50","Ultra双效 -1.50/-0.50","Ultra -1.50/-0.50","Ultra -1.00","Ultra -1.25","A版 -1.00","Ultra -0.75","Ultra双效 -1.25","AB版 -1.00","Ultra双效 -1.75","A版 -0.75","Ultra双效 -1.00","Ultra -0.75/-0.50","Ultra -2.25","Ultra双效 -2.75/-0.50","AB版 -1.50","Ultra -1.50","B版 -1.00","A版","Ultra双效 -2.75","Ultra双效 -1.25/-0.50","Ultra双效","AB版 -2.00","B版 -0.75","A版 -1.25","A版 -1.50","Ultra双效 -1.50","Ultra -1.75","Ultra双效 -0.75","Ultra -2.00","A版 -2.25","A版 -0.50","A版 -1.75","Ultra双效 -2.00/-0.50","B版 -1.25","Ultra双效 -1.00/-0.75","Ultra双效 -1.75/-0.50","B版 -1.50","Ultra双效 -2.00","Ultra -0.50","Ultra双效 -1.00/-0.50","Ultra -0.50/-0.50","B版 -2.25","Ultra -1.00/-0.50","AB版 -1.50/-0.50","Ultra -2.50","B版 -1.75","B版 -0.50","Ultra双效 -3.00/-0.50","A版 -2.00","Ultra双效 -2.50","Ultra双效 -3.00","AB版 -0.75/-0.50","B版","Ultra双效 -3.25/-0.50","Ultra双效 -2.50/-0.50","Ultra双效 -1.75/-0.75","AB版 -2.25","Ultra -3.50","Ultra -2.00/-0.50","Ultra -2.75","Ultra双效 -2.25","Ultra双效 -0.50","AB版 -1.75/-0.50","Ultra -1.75/-0.50","A版 -2.25/-0.50","AB版 -2.50","B版 -2.00","Ultra双效 -2.25/-0.75","Ultra -1.50/-0.75","Ultra双效 -2.00/-0.75","D8 -0.75","AB版 -1.25/-0.50","B版 -2.25/-0.50","Ultra -2.50/-0.50","A版 -0.75/-0.50","Ultra -0.75/-0.75","Ultra +0.00/-0.50","A版 +0.00/-0.50","Ultra双效 -1.75/-1.00","Ultra双效 -1.50/-1.00","Ultra -1.25/-0.75","B版 -1.50/-0.50","Ultra双效 -2.00/-1.00","Ultra双效 -1.25/-0.75","Ultra -2.25/-0.50","Ultra -3.25/-0.50","Ultra双效 -3.25","A版 -1.00/-0.50","AB版 -1.75","Ultra双效 -2.75/-0.75","Ultra -3.25","AB版 -0.75"], axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
-  yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+  xAxis: { type: 'category', data: ["Ultra","Ultra -1.25/-0.50","AB版 -1.25","D8","Ultra双效 -0.75/-0.50","Ultra双效 -2.25/-0.50","Ultra双效 -1.50/-0.50","Ultra -1.50/-0.50","Ultra -1.00","Ultra -1.25","A版 -1.00","Ultra -0.75","Ultra双效 -1.25","AB版 -1.00","Ultra双效 -1.75","A版 -0.75","Ultra双效 -1.00","Ultra -0.75/-0.50","Ultra -2.25","Ultra双效 -2.75/-0.50","AB版 -1.50","Ultra -1.50","B版 -1.00","A版","Ultra双效 -2.75","Ultra双效 -1.25/-0.50","Ultra双效","AB版 -2.00","B版 -0.75","A版 -1.25","A版 -1.50","Ultra双效 -1.50","Ultra -1.75","Ultra双效 -0.75","Ultra -2.00","A版 -2.25","A版 -0.50","A版 -1.75","Ultra双效 -2.00/-0.50","B版 -1.25","Ultra双效 -1.00/-0.75","Ultra双效 -1.75/-0.50","B版 -1.50","Ultra双效 -2.00","Ultra -0.50","Ultra双效 -1.00/-0.50","Ultra -0.50/-0.50","B版 -2.25","Ultra -1.00/-0.50","AB版 -1.50/-0.50","Ultra -2.50","B版 -1.75","B版 -0.50","Ultra双效 -3.00/-0.50","A版 -2.00","Ultra双效 -2.50","Ultra双效 -3.00","AB版 -0.75/-0.50","B版","Ultra双效 -3.25/-0.50","Ultra双效 -2.50/-0.50","Ultra双效 -1.75/-0.75","AB版 -2.25","Ultra -3.50","Ultra -2.00/-0.50","Ultra -2.75","Ultra双效 -2.25","Ultra双效 -0.50","AB版 -1.75/-0.50","Ultra -1.75/-0.50","A版 -2.25/-0.50","AB版 -2.50","B版 -2.00","Ultra双效 -2.25/-0.75","Ultra -1.50/-0.75","Ultra双效 -2.00/-0.75","D8 -0.75","AB版 -1.25/-0.50","B版 -2.25/-0.50","Ultra -2.50/-0.50","A版 -0.75/-0.50","Ultra -0.75/-0.75","Ultra +0.00/-0.50","A版 +0.00/-0.50","Ultra双效 -1.75/-1.00","Ultra双效 -1.50/-1.00","Ultra -1.25/-0.75","B版 -1.50/-0.50","Ultra双效 -2.00/-1.00","Ultra双效 -1.25/-0.75","Ultra -2.25/-0.50","Ultra -3.25/-0.50","Ultra双效 -3.25","A版 -1.00/-0.50","AB版 -1.75","Ultra双效 -2.75/-0.75","Ultra -3.25","AB版 -0.75"], axisLabel: { color: '#999', rotate: 30, fontSize: 11 } },
+  yAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
   series: [
-    { name: '当前库存', type: 'bar', stack: 'total', data: [8,3,0,2,0,0,0,0,8,14,2,8,1,9,0,8,4,12,11,9,13,0,6,11,13,7,0,6,7,6,1,3,5,5,1,3,8,7,1,8,6,0,5,1,9,4,11,4,5,11,4,7,9,2,4,5,15,33,10,8,0,5,10,9,11,5,3,0,13,6,4,17,6,10,9,0,5,9,8,4,4,7,7,6,4,1,10,1,0,4,4,5,7,4,16,7,10,6], itemStyle: { color: '#1e90ff' } },
-    { name: '在产量', type: 'bar', stack: 'total', data: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], itemStyle: { color: '#1e90ff44' } },
-    { name: '安全库存', type: 'line', data: [78,22,16,14,9,8,7,14,18,14,8,14,6,20,13,8,6,16,1,7,20,12,8,10,4,3,14,14,8,8,6,5,10,4,10,6,8,8,4,8,3,10,6,9,12,3,12,8,10,14,10,8,8,4,1,2,1,46,10,1,5,1,12,12,10,10,5,3,12,8,6,16,6,2,14,14,6,14,8,8,6,10,8,10,4,4,10,2,10,1,8,6,1,6,14,2,10,10], itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
+    { name: '当前库存', type: 'bar', stack: 'total', data: [5,3,0,1,0,0,0,0,8,14,2,8,1,9,0,8,4,12,11,9,13,0,6,10,13,7,0,6,7,6,1,3,5,5,1,3,8,7,1,8,6,0,5,1,9,4,11,4,5,11,4,7,9,2,4,5,15,33,9,8,0,5,10,9,11,5,3,0,13,6,4,17,6,10,9,0,5,9,8,4,4,7,7,6,4,1,10,1,0,4,4,5,7,4,16,7,10,6], itemStyle: { color: '#0066cc' } },
+    { name: '在产量', type: 'bar', stack: 'total', data: [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], itemStyle: { color: '#0066cc44' } },
+    { name: '安全库存', type: 'line', data: [78,22,16,14,9,8,7,14,18,14,8,14,6,20,13,8,6,16,1,7,20,12,8,10,4,3,14,14,8,8,6,5,10,4,10,6,8,8,4,8,3,10,6,9,12,3,12,8,10,14,10,8,8,4,1,2,1,46,10,1,5,1,12,12,10,10,5,3,12,8,6,16,6,2,14,14,6,14,8,8,6,10,8,10,4,4,10,2,10,1,8,6,1,6,14,2,10,10], itemStyle: { color: '#c62828' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
   ]
 });
 
@@ -496,25 +496,25 @@ echarts.init(document.getElementById('chart-inventory')).setOption({
 echarts.init(document.getElementById('chart-mold')).setOption({
   tooltip: { trigger: 'axis' },
   grid: { top: 10, bottom: 30, left: 70, right: 20 },
-  xAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
-  yAxis: { type: 'category', data: ["MC-001","MC-002","MC-003","MC-004","MC-005","MC-006","MC-007"], axisLabel: { color: '#888' } },
+  xAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
+  yAxis: { type: 'category', data: ["MC-001","MC-002","MC-003","MC-004","MC-005","MC-006","MC-007"], axisLabel: { color: '#999' } },
   series: [
-    { name: '已使用', type: 'bar', stack: 'life', data: [2100,3800,4600,3950,1500,2800,3200], itemStyle: { color: '#ff9800' } },
+    { name: '已使用', type: 'bar', stack: 'life', data: [2100,3800,4600,3950,1500,2800,3200], itemStyle: { color: '#e65100' } },
     { name: '剩余', type: 'bar', stack: 'life', data: [2900,1200,400,50,3500,2200,800],
-      itemStyle: { color: function(p) { return [2900,1200,400,50,3500,2200,800][p.dataIndex] < 500 ? '#f44336' : '#00c853'; } }
+      itemStyle: { color: function(p) { return [2900,1200,400,50,3500,2200,800][p.dataIndex] < 500 ? '#c62828' : '#2e7d32'; } }
     },
   ]
 });
 
 // 订单 by SKU
-const orderSkus = ["null","Ultra -1.00","Ultra双效 -1.50","AB版 -1.25","Ultra双效 -0.75/-0.50","A版 -1.00","Ultra -2.00","Ultra +1.50","Ultra双效 -2.25/-0.50","Ultra双效 -1.75/-0.50","D8","Ultra"];
-const orderQtys = [0,2,3,2,50,30,200,5,4,3,5,8];
+const orderSkus = ["null","Ultra -1.00","Ultra双效 -1.50","AB版 -1.25","Ultra双效 -0.75/-0.50","A版 -1.00","Ultra -2.00","Ultra +1.50","Ultra双效 -2.25/-0.50","Ultra双效 -1.75/-0.50","D8","Ultra","Ultra双效","A版","B版"];
+const orderQtys = [0,2,3,2,50,30,200,5,4,3,6,14,4,1,1];
 echarts.init(document.getElementById('chart-orders')).setOption({
   tooltip: { trigger: 'axis' },
   grid: { top: 10, bottom: 40, left: 50, right: 20 },
-  xAxis: { type: 'category', data: orderSkus, axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
-  yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
-  series: [{ type: 'bar', data: orderQtys, itemStyle: { color: '#7c4dff', borderRadius: [4, 4, 0, 0] } }]
+  xAxis: { type: 'category', data: orderSkus, axisLabel: { color: '#999', rotate: 30, fontSize: 11 } },
+  yAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
+  series: [{ type: 'bar', data: orderQtys, itemStyle: { color: '#6a1b9a', borderRadius: [4, 4, 0, 0] } }]
 });
 
 // Chart 5: Blank inventory bar chart
@@ -527,13 +527,13 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   if (names.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无毛坯库存数据</div>'; return; }
   echarts.init(el).setOption({
     tooltip: { trigger: 'axis' },
-    legend: { data: ['当前毛坯库存', '安全毛坯库存'], textStyle: { color: '#888' }, top: 0 },
+    legend: { data: ['当前毛坯库存', '安全毛坯库存'], textStyle: { color: '#999' }, top: 0 },
     grid: { top: 30, bottom: 30, left: 50, right: 20 },
-    xAxis: { type: 'category', data: names, axisLabel: { color: '#888', rotate: 30, fontSize: 11 } },
-    yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#999', rotate: 30, fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
     series: [
-      { name: '当前毛坯库存', type: 'bar', data: currents, itemStyle: { color: '#26a69a', borderRadius: [4,4,0,0] } },
-      { name: '安全毛坯库存', type: 'line', data: safeties, itemStyle: { color: '#f44336' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
+      { name: '当前毛坯库存', type: 'bar', data: currents, itemStyle: { color: '#00838f', borderRadius: [4,4,0,0] } },
+      { name: '安全毛坯库存', type: 'line', data: safeties, itemStyle: { color: '#c62828' }, lineStyle: { type: 'dashed' }, symbol: 'circle', symbolSize: 6 },
     ]
   });
 })();
@@ -557,11 +557,11 @@ echarts.init(document.getElementById('chart-orders')).setOption({
       return s;
     }},
     grid: { top: 10, bottom: 30, left: 80, right: 20 },
-    xAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
-    yAxis: { type: 'category', data: names, axisLabel: { color: '#888' } },
+    xAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
+    yAxis: { type: 'category', data: names, axisLabel: { color: '#999' } },
     series: [
-      { name: '当前排队量', type: 'bar', data: queues, itemStyle: { color: '#ff9800' } },
-      { name: '日产能', type: 'bar', data: caps, itemStyle: { color: '#00c85344' } },
+      { name: '当前排队量', type: 'bar', data: queues, itemStyle: { color: '#e65100' } },
+      { name: '日产能', type: 'bar', data: caps, itemStyle: { color: '#2e7d3244' } },
     ]
   });
 })();
@@ -572,12 +572,12 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   if (!el) return;
   const data = [];
   if (data.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无售后数据</div>'; return; }
-  const colors = ['#1e90ff', '#ff9800', '#f44336', '#00c853', '#7c4dff', '#e91e63', '#00bcd4', '#ffeb3b'];
+  const colors = ['#0066cc', '#e65100', '#c62828', '#2e7d32', '#6a1b9a', '#ad1457', '#00838f', '#f9a825'];
   echarts.init(el).setOption({
     tooltip: { trigger: 'item' },
     series: [{
       type: 'pie', radius: ['40%', '65%'], center: ['50%', '55%'],
-      label: { color: '#ccc', fontSize: 11 },
+      label: { color: '#999', fontSize: 11 },
       data: data.map(function(d, i) { return { value: d.value, name: d.name, itemStyle: { color: colors[i % colors.length] } }; })
     }]
   });
@@ -591,17 +591,17 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   const counts = [100];
   if (statuses.length === 0) { el.innerHTML = '<div style="text-align:center;color:#666;padding-top:80px">暂无采购数据</div>'; return; }
   const colors = statuses.map(function(s) {
-    if (s === '已到货') return '#00c853';
-    if (s === '已取消') return '#666';
-    if (s === '运输中') return '#1e90ff';
-    if (s === '待下单') return '#ff9800';
-    return '#7c4dff';
+    if (s === '已到货') return '#2e7d32';
+    if (s === '已取消') return '#999';
+    if (s === '运输中') return '#0066cc';
+    if (s === '待下单') return '#e65100';
+    return '#6a1b9a';
   });
   echarts.init(el).setOption({
     tooltip: { trigger: 'axis' },
     grid: { top: 10, bottom: 40, left: 50, right: 20 },
-    xAxis: { type: 'category', data: statuses, axisLabel: { color: '#888', fontSize: 11 } },
-    yAxis: { type: 'value', axisLabel: { color: '#888' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    xAxis: { type: 'category', data: statuses, axisLabel: { color: '#999', fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
     series: [{ type: 'bar', data: counts.map(function(v, i) { return { value: v, itemStyle: { color: colors[i], borderRadius: [4,4,0,0] } }; }) }]
   });
 })();
@@ -611,22 +611,22 @@ echarts.init(document.getElementById('chart-orders')).setOption({
   var el = document.getElementById('chart-simulation');
   if (!el) return;
   var names = ["当前状态","安全库存 +50%","+1周缓冲库存","+2周缓冲库存","安全+50% & +1周"];
-  var fills = [0,0,40,40,30];
+  var fills = [8,0,46,46,38];
   if (names.length === 0) return;
   echarts.init(el).setOption({
     tooltip: { trigger: 'axis', formatter: function(p) { return p[0].name + ': ' + p[0].value + '% fill rate'; } },
     grid: { top: 10, bottom: 60, left: 50, right: 20 },
-    xAxis: { type: 'category', data: names, axisLabel: { color: '#888', rotate: 25, fontSize: 11 } },
-    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { color: '#888', formatter: '{value}%' }, splitLine: { lineStyle: { color: '#2a3a4a' } } },
+    xAxis: { type: 'category', data: names, axisLabel: { color: '#999', rotate: 25, fontSize: 11 } },
+    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { color: '#999', formatter: '{value}%' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
     series: [{
       type: 'bar',
       data: fills.map(function(v, i) {
-        var color = i === 0 ? '#666' : v > fills[0] ? '#00c853' : '#ff9800';
+        var color = i === 0 ? '#999' : v > fills[0] ? '#2e7d32' : '#e65100';
         var maxFill = Math.max.apply(null, fills);
-        if (v === maxFill && i > 0) color = '#1e90ff';
+        if (v === maxFill && i > 0) color = '#0066cc';
         return { value: v, itemStyle: { color: color, borderRadius: [4,4,0,0] } };
       }),
-      label: { show: true, position: 'top', color: '#ccc', fontSize: 12, formatter: '{c}%' }
+      label: { show: true, position: 'top', color: '#999', fontSize: 12, formatter: '{c}%' }
     }]
   });
 })();

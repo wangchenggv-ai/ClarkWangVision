@@ -12,5 +12,40 @@
     "token": "AG-002-zxkmgoryb6nprmv6",
     "phone": "",
     "address": ""
+  },
+  {
+    "id": "AG-003",
+    "name": "北京明视眼镜",
+    "token": "AG-003-z3t0557ucthgfxep",
+    "phone": "",
+    "address": ""
+  },
+  {
+    "id": "AG-004",
+    "name": "上海优视光学",
+    "token": "AG-004-5otjdnmwxt34i7ws",
+    "phone": "",
+    "address": ""
+  },
+  {
+    "id": "AG-005",
+    "name": "广州明亮眼镜",
+    "token": "AG-005-4ypvi42cap18qm6y",
+    "phone": "",
+    "address": ""
+  },
+  {
+    "id": "AG-006",
+    "name": "成都清晰视界",
+    "token": "AG-006-u4b05l624nz9t5qt",
+    "phone": "",
+    "address": ""
+  },
+  {
+    "id": "AG-007",
+    "name": "杭州慧眼科技",
+    "token": "AG-007-v8su1wef590sndzk",
+    "phone": "",
+    "address": ""
   }
 ]
