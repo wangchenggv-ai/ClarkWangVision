@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高视星渠道利润测算系统 v4.0</title>
+    <style>
+        :root {
+            --primary-color: #0056b3; /* 商务蓝 */
+            --accent-color: #28a745; /* 利润绿 */
+            --bg-color: #f4f7f6;
+            --card-bg: #ffffff;
+            --highlight-bg: #e3f2fd;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            font-size: 24px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 5px solid var(--primary-color);
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--primary-color);
+            box-sizing: border-box; 
+        }
+        
+        /* 滑块区域 */
+        .slider-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 6px;
+            border: 1px solid #eee;
+        }
+        .slider-label {
+            width: 130px;
+            font-weight: bold;
+            color: #444;
+            font-size: 14px;
+        }
+        input[type="range"] {
+            flex-grow: 1;
+            margin: 0 15px;
+            cursor: pointer;
+        }
+        .slider-value {
+            width: 50px;
+            text-align: right;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+        .slider-locked {
+            background-color: #f2f2f2;
+            opacity: 0.8;
+        }
+
+        .level-badge {
+            display: block;
+            text-align: center;
+            padding: 10px;
+            margin-top: 15px;
+            background-color: var(--highlight-bg);
+            color: var(--primary-color);
+            border-radius: 6px;
+            font-weight: bold;
+        }
+
+        /* 核心结果卡片 */
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 25px;
+        }
+        .result-card {
+            background: #fff;
+            padding: 20px 15px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .result-card.main {
+            background: linear-gradient(to bottom, #ffffff, #f0fff4);
+            border-color: #c3e6cb;
+            transform: scale(1.02); /* 微微放大突出 */
+        }
+        .result-value {
+            font-size: 22px;
+            font-weight: bold;
+            color: #333;
+            margin: 8px 0;
+        }
+        .result-value.profit {
+            color: var(--accent-color);
+            font-size: 28px;
+        }
+        .result-label {
+            font-size: 13px;
+            color: #777;
+        }
+
+        /* 表格样式 */
+        .table-responsive {
+            overflow-x: auto;
+            margin-top: 30px;
+        }
+        .cost-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+        .cost-table th {
+            background-color: #f8f9fa;
+            padding: 12px 8px;
+            border: 1px solid #e9ecef;
+            color: #495057;
+        }
+        .cost-table td {
+            padding: 12px 8px;
+            border: 1px solid #e9ecef;
+            text-align: center;
+        }
+        /* 列高亮 */
+        .hl-price { background-color: #fffbf0; }
+        .hl-rebate { color: #0056b3; font-weight: bold; }
+        .hl-net { font-weight: bold; color: #333; }
+        .hl-profit { color: #d9534f; font-weight: bold; background-color: #fff5f5; }
+
+        @media (max-width: 600px) {
+            .result-grid { grid-template-columns: 1fr; }
+            .slider-row { flex-wrap: wrap; }
+            input[type="range"] { width: 100%; margin: 10px 0; }
+            h1 { font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>GaushClear 渠道利润测算器</h1>
+
+    <div class="input-group">
+        <label for="investment">请输入投入资金 (万元):</label>
+        <input type="number" id="investment" value="50" min="0" step="5">
+        <div id="levelDisplay" class="level-badge">加载中...</div>
+    </div>
+
+    <div class="input-group">
+        <label style="margin-bottom: 15px;">采购资金分配 (自动配平 = 100%)</label>
+        
+        <div class="slider-row">
+            <div class="slider-label">Ultra (旗舰)</div>
+            <input type="range" id="rangeUltra" min="0" max="100" value="50">
+            <div class="slider-value" id="valUltra">50%</div>
+        </div>
+        
+        <div class="slider-row">
+            <div class="slider-label">时空之眼 (主力)</div>
+            <input type="range" id="rangeTime" min="0" max="100" value="30">
+            <div class="slider-value" id="valTime">30%</div>
+        </div>
+
+        <div class="slider-row slider-locked">
+            <div class="slider-label">小旋风 (剩余)</div>
+            <input type="range" id="rangeWind" min="0" max="100" value="20" disabled>
+            <div class="slider-value" id="valWind">20%</div>
+        </div>
+    </div>
+
+    <div class="result-grid">
+        <div class="result-card">
+            <div class="result-label">预计销售总回款</div>
+            <div class="result-value" id="totalRevenue">¥0</div>
+        </div>
+        <div class="result-card">
+            <div class="result-label">获得返利券 (可抵下批)</div>
+            <div class="result-value" id="totalRebate" style="color:#0056b3">¥0</div>
+        </div>
+        <div class="result-card main">
+            <div class="result-label">净利润总额 (回款-成本+返利)</div>
+            <div class="result-value profit" id="netProfit">¥0</div>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="cost-table">
+            <thead>
+                <tr>
+                    <th>产品型号</th>
+                    <th class="hl-price">标准价<br><span style="font-weight:normal;color:#999">(散户)</span></th>
+                    <th class="hl-price" style="border-right:2px solid #ddd;font-weight:bold">批发价<br><span style="font-weight:normal;color:#999">(≥200副)</span></th>
+                    <th>单副<br>返利金</th>
+                    <th>折后<br>净成本</th>
+                    <th>代理商<br>出货价</th>
+                    <th class="hl-profit">单副<br>净赚</th>
+                </tr>
+            </thead>
+            <tbody id="costBody">
+                </tbody>
+        </table>
+    </div>
+
+    <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #999;">
+        高视星内部专用 · 2025商务政策标准版 · v4.0
+    </div>
+</div>
+
+<script>
+    // 确保DOM加载完成后再运行，防止“无法运行”
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // --- 1. 基础配置 ---
+        // list:标准价, wholesale:批发价, agentOut:代理商出货价
+        const PRICES = {
+            ultra: { list: 500, wholesale: 400, agentOut: 1000, name: "Ultra 旗舰" },
+            time:  { list: 400, wholesale: 300, agentOut: 750,  name: "时空之眼" },
+            wind:  { list: 260, wholesale: 200, agentOut: 450,  name: "小旋风" }
+        };
+
+        // --- 2. 级别判定逻辑 ---
+        function getLevel(amount) {
+            if (amount >= 1000000) return { name: "L4 首席合伙人", mainRate: 0.28, windRate: 0.15 };
+            if (amount >= 500000)  return { name: "L3 合伙人",     mainRate: 0.25, windRate: 0.15 };
+            if (amount >= 200000)  return { name: "L2 战略代理",   mainRate: 0.18, windRate: 0.10 };
+            if (amount >= 100000)  return { name: "L1 核心代理",   mainRate: 0.10, windRate: 0.05 };
+            return { name: "普通散户 (未达标)", mainRate: 0, windRate: 0 };
+        }
+
+        // --- 3. DOM 元素引用 ---
+        const els = {
+            invest: document.getElementById('investment'),
+            rangeUltra: document.getElementById('rangeUltra'),
+            rangeTime: document.getElementById('rangeTime'),
+            rangeWind: document.getElementById('rangeWind'),
+            valUltra: document.getElementById('valUltra'),
+            valTime: document.getElementById('valTime'),
+            valWind: document.getElementById('valWind'),
+            levelDisplay: document.getElementById('levelDisplay'),
+            totalRevenue: document.getElementById('totalRevenue'),
+            totalRebate: document.getElementById('totalRebate'),
+            netProfit: document.getElementById('netProfit'),
+            costBody: document.getElementById('costBody')
+        };
+
+        // --- 4. 滑块联动逻辑 ---
+        function updateSliders(source) {
+            let u = parseInt(els.rangeUltra.value);
+            let t = parseInt(els.rangeTime.value);
+            
+            // 互斥逻辑：总和不超过100
+            if (source === 'ultra') {
+                if (u + t > 100) t = 100 - u;
+            } else if (source === 'time') {
+                if (u + t > 100) u = 100 - t;
+            }
+            let w = 100 - u - t;
+
+            // 更新DOM
+            els.rangeUltra.value = u;
+            els.rangeTime.value = t;
+            els.rangeWind.value = w;
+            
+            // 更新文字
+            els.valUltra.innerText = u + "%";
+            els.valTime.innerText = t + "%";
+            els.valWind.innerText = w + "%";
+
+            // 触发计算
+            calculate();
+        }
+
+        // --- 5. 核心计算 ---
+        function calculate() {
+            // 获取资金输入 (防错处理)
+            let inputVal = parseFloat(els.invest.value);
+            if (isNaN(inputVal) || inputVal < 0) inputVal = 0;
+            let invest = inputVal * 10000; // 转换为元
+
+            // 判定级别
+            let level = getLevel(invest);
+            els.levelDisplay.innerText = `当前级别：${level.name} (旗舰返利 ${(level.mainRate*100).toFixed(0)}%)`;
+
+            // 获取分配比例
+            let uPct = parseInt(els.rangeUltra.value) / 100;
+            let tPct = parseInt(els.rangeTime.value) / 100;
+            let wPct = parseInt(els.rangeWind.value) / 100;
+
+            // 分配资金
+            let uInvest = invest * uPct;
+            let tInvest = invest * tPct;
+            let wInvest = invest * wPct;
+
+            // 计算采购数量 (向下取整)
+            let uQty = Math.floor(uInvest / PRICES.ultra.wholesale);
+            let tQty = Math.floor(tInvest / PRICES.time.wholesale);
+            let wQty = Math.floor(wInvest / PRICES.wind.wholesale);
+
+            // 计算返利 (按批发价基数)
+            let uRebateTotal = uInvest * level.mainRate;
+            let tRebateTotal = tInvest * level.mainRate;
+            let wRebateTotal = wInvest * level.windRate;
+            let totalRebate = uRebateTotal + tRebateTotal + wRebateTotal;
+
+            // 计算销售回款 (按代理商出货价)
+            let revenue = (uQty * PRICES.ultra.agentOut) + 
+                          (tQty * PRICES.time.agentOut) + 
+                          (wQty * PRICES.wind.agentOut);
+
+            // 计算净利润
+            let profit = revenue - invest + totalRebate;
+
+            // --- 6. 渲染结果 ---
+            els.totalRevenue.innerText = formatMoney(revenue);
+            els.totalRebate.innerText = formatMoney(totalRebate);
+            els.netProfit.innerText = formatMoney(profit);
+
+            // --- 7. 渲染表格 ---
+            renderTable(level);
+        }
+
+        function renderTable(level) {
+            let html = '';
+            
+            // 遍历产品生成行
+            const products = ['ultra', 'time', 'wind'];
+            products.forEach(key => {
+                let p = PRICES[key];
+                let rate = (key === 'wind') ? level.windRate : level.mainRate;
+                
+                // 计算单品详情
+                let rebateUnit = p.wholesale * rate;      // 单副返利
+                let netCost = p.wholesale - rebateUnit;   // 净成本
+                let unitProfit = p.agentOut - netCost;    // 单副净赚
+
+                html += `
+                    <tr>
+                        <td>${p.name}</td>
+                        <td class="hl-price">¥${p.list}</td>
+                        <td class="hl-price" style="border-right:2px solid #ddd;font-weight:bold">¥${p.wholesale}</td>
+                        <td class="hl-rebate">¥${rebateUnit.toFixed(0)}</td>
+                        <td class="hl-net">¥${netCost.toFixed(0)}</td>
+                        <td>¥${p.agentOut}</td>
+                        <td class="hl-profit">¥${unitProfit.toFixed(0)}</td>
+                    </tr>
+                `;
+            });
+            
+            els.costBody.innerHTML = html;
+        }
+
+        function formatMoney(num) {
+            return "¥" + num.toLocaleString('zh-CN', {maximumFractionDigits: 0});
+        }
+
+        // --- 8. 事件监听 ---
+        els.invest.addEventListener('input', calculate);
+        els.rangeUltra.addEventListener('input', () => updateSliders('ultra'));
+        els.rangeTime.addEventListener('input', () => updateSliders('time'));
+
+        // 初始化运行一次
+        calculate();
+    });
+</script>
+
+</body>
+</html>

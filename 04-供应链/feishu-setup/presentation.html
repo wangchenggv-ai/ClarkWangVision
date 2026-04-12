@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高视星供应链智能看板 - 项目演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
+        
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+        }
+        .title-font {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        .slide {
+            transition: all 0.6s cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        .tech-bg {
+            background: linear-gradient(135deg, #0a0f1c 0%, #1a2338 100%);
+        }
+        .accent {
+            color: #00f5ff;
+        }
+        .card {
+            background: rgba(255,255,255,0.06);
+            backdrop-filter: blur(20px);
+        }
+    </style>
+</head>
+<body class="tech-bg text-white overflow-hidden">
+    <div class="min-h-screen flex items-center justify-center relative" id="slides">
+        <!-- Slide 1 -->
+        <div class="slide absolute inset-0 flex items-center justify-center flex-col text-center px-12" id="slide-1">
+            <div class="text-6xl font-bold title-font tracking-tighter accent mb-6">高视星</div>
+            <div class="text-5xl font-semibold mb-8">供应链智能看板</div>
+            <div class="text-xl text-gray-400 max-w-md">实时监控 · AI预测 · 自动化决策</div>
+            <div class="mt-24 text-sm text-gray-500">2026 • 项目演示</div>
+            <div class="absolute bottom-12 text-xs opacity-30">← 左右箭头切换 →</div>
+        </div>
+
+        <!-- Slide 2 -->
+        <div class="slide absolute inset-0 hidden flex-col justify-center px-16" id="slide-2">
+            <div class="max-w-4xl mx-auto">
+                <div class="text-4xl font-semibold mb-12 accent">行业痛点</div>
+                <div class="grid grid-cols-2 gap-8">
+                    <div class="card p-8 rounded-3xl">
+                        <div class="text-6xl mb-4">📦</div>
+                        <div class="text-2xl font-medium">库存高企与缺货并存</div>
+                    </div>
+                    <div class="card p-8 rounded-3xl">
+                        <div class="text-6xl mb-4">🔧</div>
+                        <div class="text-2xl font-medium">模芯寿命不可控</div>
+                    </div>
+                    <div class="card p-8 rounded-3xl">
+                        <div class="text-6xl mb-4">📈</div>
+                        <div class="text-2xl font-medium">预测不准导致排产滞后</div>
+                    </div>
+                    <div class="card p-8 rounded-3xl">
+                        <div class="text-6xl mb-4">⏰</div>
+                        <div class="text-2xl font-medium">交付超期率居高不下</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 3 -->
+        <div class="slide absolute inset-0 hidden flex-col justify-center px-16" id="slide-3">
+            <div class="max-w-5xl mx-auto text-center">
+                <div class="text-4xl font-semibold mb-10 accent">系统架构</div>
+                <div class="grid grid-cols-3 gap-6">
+                    <div class="card p-8 rounded-3xl text-center">
+                        <div class="text-5xl mb-6">📊</div>
+                        <div class="font-medium">12张飞书多维表格</div>
+                    </div>
+                    <div class="card p-8 rounded-3xl text-center">
+                        <div class="text-5xl mb-6">⚡</div>
+                        <div class="font-medium">9大规则引擎</div>
+                    </div>
+                    <div class="card p-8 rounded-3xl text-center">
+                        <div class="text-5xl mb-6">🤖</div>
+                        <div class="font-medium">Coze AI + ECharts</div>
+                    </div>
+                </div>
+                <div class="mt-12 text-gray-400">实时联动 · 配置化规则 · 本地缓存加速</div>
+            </div>
+        </div>
+
+        <!-- Slide 4 -->
+        <div class="slide absolute inset-0 hidden flex-col justify-center px-16" id="slide-4">
+            <div class="max-w-4xl mx-auto">
+                <div class="text-4xl font-semibold mb-8 accent">9大智能规则</div>
+                <div class="grid grid-cols-3 gap-6 text-sm">
+                    <div class="bg-white/5 p-6 rounded-2xl">01 订单验证与交期判定</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">02 成品库存预警</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">03 模芯寿命预警</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">04 季节预测转排产</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">05 毛坯库存预警</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">06 订单超期预警</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">07 自动采购触发</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">08 智能车房路由</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">09 模芯使用自动记账</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 5 -->
+        <div class="slide absolute inset-0 hidden flex-col justify-center px-16" id="slide-5">
+            <div class="text-center">
+                <div class="text-4xl font-semibold mb-6 accent">实时智能看板</div>
+                <div class="text-2xl text-gray-400 mb-12">8大KPI + 8个可视化图表</div>
+                <div class="grid grid-cols-4 gap-6 max-w-5xl mx-auto">
+                    <div class="bg-emerald-500/10 border border-emerald-400 p-6 rounded-3xl text-center">
+                        <div class="text-4xl font-bold text-emerald-400">96.3%</div>
+                        <div class="text-xs mt-2">实际填充率</div>
+                    </div>
+                    <div class="bg-amber-500/10 border border-amber-400 p-6 rounded-3xl text-center">
+                        <div class="text-4xl font-bold text-amber-400">52</div>
+                        <div class="text-xs mt-2">低库存预警</div>
+                    </div>
+                    <div class="bg-red-500/10 border border-red-400 p-6 rounded-3xl text-center">
+                        <div class="text-4xl font-bold text-red-400">13</div>
+                        <div class="text-xs mt-2">缺货SKU</div>
+                    </div>
+                    <div class="bg-sky-500/10 border border-sky-400 p-6 rounded-3xl text-center">
+                        <div class="text-4xl font-bold text-sky-400">68%</div>
+                        <div class="text-xs mt-2">模芯平均使用率</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 6 -->
+        <div class="slide absolute inset-0 hidden flex-col justify-center px-16" id="slide-6">
+            <div class="max-w-3xl mx-auto text-center">
+                <div class="text-4xl font-semibold mb-6 accent">AI智能分析引擎</div>
+                <div class="card p-10 rounded-3xl text-left text-gray-300 leading-relaxed">
+                    每周自动生成结构化报告<br>
+                    • 库存预警优先级排序<br>
+                    • 模芯更换建议<br>
+                    • 排产优化Top行动项<br>
+                    • 交付自改进模拟（7种方案）
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 7 -->
+        <div class="slide absolute inset-0 hidden flex-col justify-center px-16" id="slide-7">
+            <div class="text-center">
+                <div class="text-4xl font-semibold mb-12 accent">实施效果</div>
+                <div class="flex justify-center gap-16">
+                    <div>
+                        <div class="text-7xl font-bold text-emerald-400">96.3%</div>
+                        <div class="text-sm mt-3">交付填充率</div>
+                    </div>
+                    <div>
+                        <div class="text-7xl font-bold text-sky-400">+42%</div>
+                        <div class="text-sm mt-3">库存周转率</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Slide 8 -->
+        <div class="slide absolute inset-0 hidden flex-col justify-center items-center text-center px-12" id="slide-8">
+            <div class="text-5xl font-bold title-font mb-6 accent">高视星供应链智能看板</div>
+            <div class="text-2xl mb-12">让供应链决策从经验驱动转向数据智能驱动</div>
+            <div class="text-xl text-gray-400 max-w-md">感谢观看</div>
+            <div class="mt-20 text-xs opacity-40">高视星 • 2026</div>
+        </div>
+    </div>
+
+    <div class="fixed bottom-8 right-8 flex gap-3 text-2xl">
+        <button onclick="prevSlide()" class="w-12 h-12 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center transition-colors"><i class="fas fa-chevron-left"></i></button>
+        <button onclick="nextSlide()" class="w-12 h-12 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center transition-colors"><i class="fas fa-chevron-right"></i></button>
+    </div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 8;
+
+        function showSlide(n) {
+            for (let i = 1; i <= totalSlides; i++) {
+                const slide = document.getElementById(`slide-${i}`);
+                if (slide) slide.classList.add('hidden');
+            }
+            const active = document.getElementById(`slide-${n}`);
+            if (active) active.classList.remove('hidden');
+            currentSlide = n;
+        }
+
+        function nextSlide() {
+            let next = currentSlide + 1;
+            if (next > totalSlides) next = 1;
+            showSlide(next);
+        }
+
+        function prevSlide() {
+            let prev = currentSlide - 1;
+            if (prev < 1) prev = totalSlides;
+            showSlide(prev);
+        }
+
+        // 键盘控制
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowRight') nextSlide();
+            if (e.key === 'ArrowLeft') prevSlide();
+        });
+
+        // 初始化显示第一页
+        showSlide(1);
+
+        // Tailwind script
+        function initTailwind() {
+            console.log('%c高视星供应链智能看板演示已加载', 'color:#00f5ff; font-size:13px');
+        }
+        window.onload = initTailwind;
+    </script>
+</body>
+</html>

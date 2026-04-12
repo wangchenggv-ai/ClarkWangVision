@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LTV 客户终身价值计算器 (周期开放版)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f5f7fa; display: flex; justify-content: center; padding: 40px; margin: 0; color: #333; }
+        .container { background: #fff; width: 950px; padding: 50px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.06); }
+        
+        h1 { text-align: center; color: #2c3e50; margin: 0 0 10px 0; font-size: 1.8em; }
+        .subtitle { text-align: center; color: #7f8c8d; margin-bottom: 40px; font-weight: normal; }
+
+        /* 公式栏 */
+        .formula-section { background: #eef2f7; padding: 15px 30px; border-radius: 8px; text-align: center; margin-bottom: 40px; border: 1px solid #dbeafe; }
+        .formula-text { font-family: 'Consolas', monospace; font-size: 1.1em; color: #2c3e50; }
+        .formula-note { display: block; margin-top: 5px; font-size: 0.85em; color: #666; }
+
+        /* 全局参数输入 */
+        .global-inputs { display: flex; justify-content: center; gap: 40px; margin-bottom: 40px; padding-bottom: 30px; border-bottom: 1px solid #eee; }
+        .input-box { text-align: center; }
+        .input-box label { display: block; font-size: 0.9em; font-weight: bold; color: #555; margin-bottom: 8px; }
+        .input-box input { font-size: 1.2em; padding: 8px 12px; width: 100px; text-align: center; border: 1px solid #ccc; border-radius: 6px; font-weight: bold; color: #2c3e50; background: #fff; transition: border 0.3s; }
+        .input-box input:focus { border-color: #3498db; outline: none; }
+
+        /* 核心对比区 */
+        .comparison-area { display: flex; gap: 30px; }
+
+        /* 产品卡片 */
+        .product-card { flex: 1; border: 1px solid #e0e0e0; border-radius: 10px; padding: 25px; transition: all 0.2s; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .prod-name { font-size: 1.3em; font-weight: bold; }
+        .prod-retention { font-size: 0.9em; font-weight: bold; background: #eee; padding: 4px 10px; border-radius: 20px; }
+
+        /* 离焦镜特定样式 */
+        .defocus { border-top: 5px solid #e67e22; }
+        .defocus .prod-name { color: #e67e22; }
+        .defocus .prod-retention { color: #d35400; background: #fdf2e9; }
+        .defocus input[type="range"] { accent-color: #e67e22; }
+
+        /* OK镜特定样式 */
+        .oklens { border-top: 5px solid #3498db; background: #f8fbff; border-color: #b3d7ff; }
+        .oklens .prod-name { color: #2980b9; }
+        .oklens .prod-retention { color: #1c598a; background: #e8f4fd; }
+        .oklens input[type="range"] { accent-color: #3498db; }
+
+        /* 滑块 */
+        .slider-container { margin-bottom: 20px; }
+        .slider-label { display: flex; justify-content: space-between; font-size: 0.85em; color: #777; margin-bottom: 5px; }
+        input[type="range"] { width: 100%; cursor: pointer; }
+
+        /* 现金流清单 */
+        .cashflow-list { margin-bottom: 20px; font-size: 0.9em; color: #555; border-top: 1px dashed #eee; padding-top: 15px; height: 200px; overflow-y: auto; }
+        .cf-row { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .cf-total { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 2px solid #eee; font-weight: bold; font-size: 1.2em; color: #333; }
+
+        /* 底部比值分析 */
+        .analysis-bar { margin-top: 30px; background: #2c3e50; color: #fff; padding: 20px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; }
+        .ratio-display { font-size: 2em; font-weight: bold; color: #f1c40f; }
+        .ratio-text { text-align: right; font-size: 0.95em; line-height: 1.4; opacity: 0.9; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>LTV 客户终身价值模型</h1>
+        <div class="subtitle">基于现金流叠加的长期价值测算</div>
+
+        <div class="formula-section">
+            <div class="formula-text" id="formula_display">LTV = 第1年净利 + 第2年净利 + ...</div>
+            <span class="formula-note">*第N年净利 = 首年利润 × (留存率)^(N-1)</span>
+        </div>
+
+        <div class="global-inputs">
+            <div class="input-box">
+                <label>单客年净利 (¥)</label>
+                <input type="number" id="base_profit" value="1000" oninput="calculate()">
+            </div>
+            <div class="input-box">
+                <label>测算周期 (年)</label>
+                <input type="number" id="calc_years" value="3" min="1" max="10" oninput="calculate()">
+            </div>
+        </div>
+
+        <div class="comparison-area">
+            
+            <div class="product-card defocus">
+                <div class="card-header">
+                    <span class="prod-name">离焦镜</span>
+                    <span class="prod-retention" id="lbl_ret_def">留存率: 50%</span>
+                </div>
+                
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>调整复购留存率</span>
+                        <span>0% - 100%</span>
+                    </div>
+                    <input type="range" id="ret_def" min="0" max="100" value="50" step="5" oninput="calculate()">
+                </div>
+
+                <div class="cashflow-list" id="list_def">
+                    </div>
+            </div>
+
+            <div class="product-card oklens">
+                <div class="card-header">
+                    <span class="prod-name">OK镜</span>
+                    <span class="prod-retention" id="lbl_ret_ok">留存率: 90%</span>
+                </div>
+
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>调整复购留存率</span>
+                        <span>0% - 100%</span>
+                    </div>
+                    <input type="range" id="ret_ok" min="0" max="100" value="90" step="5" oninput="calculate()">
+                </div>
+
+                <div class="cashflow-list" id="list_ok">
+                    </div>
+            </div>
+
+        </div>
+
+        <div class="analysis-bar">
+            <div>
+                LTV 价值比值 (Value Ratio)
+            </div>
+            <div style="display:flex; gap:20px; align-items:center;">
+                <div class="ratio-text" id="ratio_desc">
+                    OK镜的长期价值<br>是离焦镜的...
+                </div>
+                <div class="ratio-display" id="ratio_val">1.6X</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function calculate() {
+            // 1. 获取输入
+            const profit = parseFloat(document.getElementById('base_profit').value) || 0;
+            // 获取动态周期，限制在 1-20 年之间防止卡死，默认3年
+            let years = parseInt(document.getElementById('calc_years').value) || 3;
+            if (years < 1) years = 1;
+            if (years > 20) years = 20;
+            
+            const rateDef = parseInt(document.getElementById('ret_def').value) / 100;
+            const rateOk = parseInt(document.getElementById('ret_ok').value) / 100;
+
+            // 更新留存率标签
+            document.getElementById('lbl_ret_def').innerText = `留存率: ${(rateDef*100).toFixed(0)}%`;
+            document.getElementById('lbl_ret_ok').innerText = `留存率: ${(rateOk*100).toFixed(0)}%`;
+
+            // 更新公式显示文字
+            let formulaStr = `LTV (${years}年) = 第1年净利`;
+            if (years === 2) {
+                formulaStr += ` + 第2年净利`;
+            } else if (years >= 3) {
+                formulaStr += ` + 第2年净利 + ... + 第${years}年净利`;
+            }
+            document.getElementById('formula_display').innerText = formulaStr;
+
+            // 2. 计算函数 (生成财务列表)
+            function generateCashflow(rate, containerId) {
+                let totalLTV = 0;
+                let currentRate = 1.0;
+                let html = '';
+
+                for(let i=1; i<=years; i++) {
+                    // 当年预计净利 = 基础利润 * 当前留存概率
+                    let yearProfit = Math.round(profit * currentRate);
+                    totalLTV += yearProfit;
+                    
+                    html += `
+                        <div class="cf-row">
+                            <span>第 ${i} 年预期净利</span>
+                            <span>¥${yearProfit.toLocaleString()}</span>
+                        </div>
+                    `;
+                    
+                    // 为下一年计算衰减
+                    currentRate *= rate;
+                }
+
+                // 底部固定显示总计
+                let totalHtml = `
+                    <div class="cf-total">
+                        <span>LTV 总计</span>
+                        <span>¥${totalLTV.toLocaleString()}</span>
+                    </div>
+                `;
+
+                // 列表区域只放明细，最后追加总计
+                document.getElementById(containerId).innerHTML = html + totalHtml;
+                return totalLTV;
+            }
+
+            // 3. 执行计算
+            const ltvDef = generateCashflow(rateDef, 'list_def');
+            const ltvOk = generateCashflow(rateOk, 'list_ok');
+
+            // 4. 计算比值
+            let ratio = 0;
+            let ratioText = "";
+
+            if (ltvOk >= ltvDef) {
+                ratio = ltvDef > 0 ? (ltvOk / ltvDef).toFixed(1) : "∞";
+                ratioText = `OK镜的长期价值<br>是离焦镜的`;
+                document.getElementById('ratio_val').style.color = "#f1c40f"; // Gold
+            } else {
+                ratio = ltvOk > 0 ? (ltvDef / ltvOk).toFixed(1) : "∞";
+                ratioText = `离焦镜的长期价值<br>是OK镜的`;
+                document.getElementById('ratio_val').style.color = "#e67e22"; // Orange
+            }
+
+            document.getElementById('ratio_val').innerText = ratio + " X";
+            document.getElementById('ratio_desc').innerHTML = ratioText;
+        }
+
+        // 初始化
+        calculate();
+    </script>
+</body>
+</html>

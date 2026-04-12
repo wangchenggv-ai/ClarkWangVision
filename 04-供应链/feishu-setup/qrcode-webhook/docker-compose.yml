@@ -1,0 +1,11 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+      - ./static/qrcodes:/app/static/qrcodes
+    env_file:
+      - .env
+    restart: unless-stopped

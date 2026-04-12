@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高视星诊所业绩增长推演器</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; color: #333; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #7f8c8d; margin-bottom: 30px; }
+        
+        .main-grid { display: grid; grid-template-columns: 1fr 100px 1fr; gap: 20px; align-items: start; }
+        
+        /* 通用卡片样式 */
+        .panel { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 5px solid #ccc; }
+        .panel h2 { margin-top: 0; font-size: 1.2em; text-align: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        
+        /* 现状 (左) */
+        .panel-old { border-top-color: #7f8c8d; }
+        .panel-old h2 { color: #7f8c8d; }
+        
+        /* 高视星 (右) */
+        .panel-new { border-top-color: #27ae60; background: #f0fdf9; }
+        .panel-new h2 { color: #27ae60; }
+        
+        /* 中间对比区 */
+        .vs-column { display: flex; flex-direction: column; justify-content: center; align-items: center; padding-top: 100px; }
+        .arrow-right { font-size: 2em; color: #ccc; margin: 20px 0; }
+
+        /* 输入组 */
+        .input-group { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .input-group label { font-size: 0.9em; color: #555; font-weight: bold; }
+        .input-wrapper { position: relative; width: 90px; }
+        .input-wrapper input { width: 100%; padding: 6px; text-align: right; border: 1px solid #ddd; border-radius: 4px; font-weight: bold; }
+        .input-wrapper.pct::after { content: '%'; position: absolute; right: 5px; top: 7px; color: #999; font-size: 0.8em; }
+        
+        /* 结构滑块 */
+        .structure-box { background: #f9f9f9; padding: 10px; border-radius: 8px; margin-bottom: 15px; }
+        .structure-label { font-size: 0.85em; margin-bottom: 5px; display: flex; justify-content: space-between; color: #666; }
+        input[type="range"] { width: 100%; cursor: pointer; }
+
+        /* 结果展示 */
+        .result-box { margin-top: 20px; padding-top: 20px; border-top: 2px dashed #eee; text-align: center; }
+        .result-label { font-size: 0.9em; color: #7f8c8d; display: block; margin-bottom: 5px; }
+        .result-val { font-size: 1.8em; font-weight: bold; color: #333; }
+        
+        /* 增长高亮 */
+        .growth-box { background: #2c3e50; color: #fff; padding: 20px; border-radius: 10px; text-align: center; margin-top: 30px; box-shadow: 0 5px 15px rgba(44, 62, 80, 0.3); }
+        .growth-val { font-size: 3em; font-weight: bold; color: #f1c40f; line-height: 1; margin: 10px 0; }
+        .growth-label { font-size: 1.1em; opacity: 0.9; }
+
+        .btn-calc { grid-column: 1 / -1; background: #3498db; color: #fff; border: none; padding: 15px; font-size: 1.2em; border-radius: 8px; cursor: pointer; margin-top: 20px; font-weight: bold; transition: background 0.3s; }
+        .btn-calc:hover { background: #2980b9; }
+
+        /* 标签 */
+        .tag { font-size: 0.7em; padding: 2px 5px; border-radius: 4px; margin-left: 5px; }
+        .tag-svc { background: #e67e22; color: #fff; }
+    </style>
+</head>
+<body>
+
+    <div style="max-width: 1000px; margin: 0 auto;">
+        <h1>高视星诊所业绩增长推演器</h1>
+        <div class="subtitle">现状 VS 高视星方案 (基于271模型 + 服务增值)</div>
+
+        <div style="background:#fff; padding:15px; border-radius:8px; margin-bottom:20px; display:flex; justify-content:center; gap:30px; align-items:center;">
+            <div>
+                <label>诊所年门诊成交量 (人): </label>
+                <input type="number" id="total_patients" value="3000" style="padding:5px; width:80px; font-weight:bold; text-align:center;">
+            </div>
+            <div>
+                <label>运营成本率 (OpEx): </label>
+                <input type="number" id="opex_rate" value="50" style="padding:5px; width:50px; font-weight:bold; text-align:center;"> %
+            </div>
+        </div>
+
+        <div class="main-grid">
+            
+            <div class="panel panel-old">
+                <h2>📉 现状 (传统模式)</h2>
+                
+                <div class="structure-box">
+                    <div class="structure-label"><span>高端占比 (通常较低)</span> <span id="txt_old_high">10%</span></div>
+                    <input type="range" id="ratio_old_high" min="0" max="50" value="10" oninput="updateRatios('old')">
+                    
+                    <div class="structure-label" style="margin-top:5px;"><span>中端占比</span> <span id="txt_old_mid">50%</span></div>
+                    <input type="range" id="ratio_old_mid" min="0" max="100" value="50" oninput="updateRatios('old')">
+                    
+                    <div class="structure-label" style="margin-top:5px; color:#999;"><span>低端占比 (自动补齐)</span> <span id="txt_old_low">40%</span></div>
+                </div>
+
+                <div class="input-group">
+                    <label>高端单价</label>
+                    <div class="input-wrapper"><input type="number" id="p_old_high" value="3980"></div>
+                </div>
+                <div class="input-group">
+                    <label>中端单价</label>
+                    <div class="input-wrapper"><input type="number" id="p_old_mid" value="2680"></div>
+                </div>
+                <div class="input-group">
+                    <label>低端单价</label>
+                    <div class="input-wrapper"><input type="number" id="p_old_low" value="1680"></div>
+                </div>
+                
+                <div style="text-align:center; font-size:0.8em; color:#999; margin:10px 0;">(无服务包，毛利较低)</div>
+
+                <div class="result-box">
+                    <span class="result-label">现状预估年净利</span>
+                    <div class="result-val" id="res_old_profit" style="color:#7f8c8d;">¥0</div>
+                    <div style="font-size:0.8em; color:#999; margin-top:5px;">净利率: <span id="res_old_margin">0%</span></div>
+                </div>
+            </div>
+
+            <div class="vs-column">
+                <div class="arrow-right">➡</div>
+                <div style="font-weight:bold; color:#2c3e50;">优化</div>
+                <div class="arrow-right">➡</div>
+            </div>
+
+            <div class="panel panel-new">
+                <h2>🚀 高视星方案 (271模型)</h2>
+                
+                <div class="structure-box" style="border:1px solid #27ae60;">
+                    <div class="structure-label"><span>高端占比 (目标)</span> <span id="txt_new_high" style="color:#27ae60; font-weight:bold;">20%</span></div>
+                    <input type="range" id="ratio_new_high" min="10" max="50" value="20" oninput="updateRatios('new')">
+                    
+                    <div class="structure-label" style="margin-top:5px;"><span>中端占比 (主力)</span> <span id="txt_new_mid" style="color:#27ae60; font-weight:bold;">70%</span></div>
+                    <input type="range" id="ratio_new_mid" min="30" max="90" value="70" oninput="updateRatios('new')">
+                    
+                    <div class="structure-label" style="margin-top:5px; color:#999;"><span>低端占比 (仅引流)</span> <span id="txt_new_low">10%</span></div>
+                </div>
+
+                <div class="input-group">
+                    <label>高端 + <span class="tag tag-svc">¥1000包</span></label>
+                    <div style="font-weight:bold; color:#27ae60;">¥4980/5980</div>
+                </div>
+                <div class="input-group">
+                    <label>中端 + <span class="tag tag-svc">¥300包</span></label>
+                    <div style="font-weight:bold; color:#27ae60;">¥2980</div>
+                </div>
+                 <div class="input-group">
+                    <label>低端 (纯产品)</label>
+                    <div style="font-weight:bold; color:#7f8c8d;">¥1680</div>
+                </div>
+
+                <div style="text-align:center; font-size:0.8em; color:#27ae60; margin:10px 0;">(含高毛利服务包)</div>
+
+                <div class="result-box">
+                    <span class="result-label">高视星方案年净利</span>
+                    <div class="result-val" id="res_new_profit" style="color:#27ae60;">¥0</div>
+                    <div style="font-size:0.8em; color:#999; margin-top:5px;">净利率: <span id="res_new_margin">0%</span></div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="growth-box">
+            <div class="growth-label">通过 结构优化 + 服务增值，预计每年为您增加净利润</div>
+            <div class="growth-val" id="res_growth">¥0</div>
+            <div style="font-size:1em; opacity:0.8;">净利增长率: <span id="res_growth_pct">0%</span></div>
+        </div>
+
+    </div>
+
+    <script>
+        function updateRatios(type) {
+            const highInput = document.getElementById(`ratio_${type}_high`);
+            const midInput = document.getElementById(`ratio_${type}_mid`);
+            
+            let high = parseInt(highInput.value);
+            let mid = parseInt(midInput.value);
+            
+            // 简单限制：和不能超过100
+            if (high + mid > 100) {
+                mid = 100 - high;
+                midInput.value = mid;
+            }
+            let low = 100 - high - mid;
+            
+            document.getElementById(`txt_${type}_high`).innerText = high + '%';
+            document.getElementById(`txt_${type}_mid`).innerText = mid + '%';
+            document.getElementById(`txt_${type}_low`).innerText = low + '%';
+            
+            calculate();
+        }
+
+        function calculate() {
+            // 全局
+            const patients = parseInt(document.getElementById('total_patients').value) || 0;
+            const opexRate = parseInt(document.getElementById('opex_rate').value) / 100;
+
+            // --- 现状 (Old) ---
+            const rOldHigh = parseInt(document.getElementById('ratio_old_high').value) / 100;
+            const rOldMid = parseInt(document.getElementById('ratio_old_mid').value) / 100;
+            const rOldLow = 1 - rOldHigh - rOldMid;
+
+            const pOldHigh = parseInt(document.getElementById('p_old_high').value);
+            const pOldMid = parseInt(document.getElementById('p_old_mid').value);
+            const pOldLow = parseInt(document.getElementById('p_old_low').value);
+
+            // 假设现状毛利较低 (因为没有服务溢价，且可能有折扣)
+            // 高端60%, 中端50%, 低端40% (典型传统诊所数据)
+            const mOldHigh = 0.60; 
+            const mOldMid = 0.50; 
+            const mOldLow = 0.40;
+
+            // 计算现状
+            const cntOldHigh = patients * rOldHigh;
+            const cntOldMid = patients * rOldMid;
+            const cntOldLow = patients * rOldLow;
+
+            const revOld = (cntOldHigh * pOldHigh) + (cntOldMid * pOldMid) + (cntOldLow * pOldLow);
+            const costOld = (cntOldHigh * pOldHigh * (1-mOldHigh)) + (cntOldMid * pOldMid * (1-mOldMid)) + (cntOldLow * pOldLow * (1-mOldLow));
+            const gpOld = revOld - costOld;
+            
+            // 传统模式下，OpEx 通常占营收大头
+            const netOld = gpOld - (revOld * opexRate);
+            const marginOld = revOld > 0 ? (netOld / revOld) : 0;
+
+
+            // --- 高视星 (New) ---
+            const rNewHigh = parseInt(document.getElementById('ratio_new_high').value) / 100;
+            const rNewMid = parseInt(document.getElementById('ratio_new_mid').value) / 100;
+            const rNewLow = 1 - rNewHigh - rNewMid;
+
+            // 高视星定价与毛利
+            // 高端: 产品3980(毛利80%) + 服务1000(毛利90%) -> 均价4980
+            // 中端: 产品2680(毛利70%) + 服务300(毛利90%) -> 均价2980
+            // 低端: 产品1680(毛利60%)
+            
+            const pNewHighProd = 3980; const mNewHighProd = 0.80;
+            const pNewHighSvc = 1000; const mNewHighSvc = 0.90;
+            
+            const pNewMidProd = 2680; const mNewMidProd = 0.70;
+            const pNewMidSvc = 300; const mNewMidSvc = 0.90;
+
+            const pNewLow = 1680; const mNewLow = 0.60;
+
+            // 计算高视星
+            const cntNewHigh = patients * rNewHigh;
+            const cntNewMid = patients * rNewMid;
+            const cntNewLow = patients * rNewLow;
+
+            // 高端板块
+            const revNewHigh = cntNewHigh * (pNewHighProd + pNewHighSvc);
+            const costNewHigh = cntNewHigh * (pNewHighProd*(1-mNewHighProd) + pNewHighSvc*(1-mNewHighSvc));
+            
+            // 中端板块
+            const revNewMid = cntNewMid * (pNewMidProd + pNewMidSvc);
+            const costNewMid = cntNewMid * (pNewMidProd*(1-mNewMidProd) + pNewMidSvc*(1-mNewMidSvc));
+
+            // 低端板块
+            const revNewLow = cntNewLow * pNewLow;
+            const costNewLow = cntNewLow * pNewLow * (1-mNewLow);
+
+            const revNew = revNewHigh + revNewMid + revNewLow;
+            const costNew = costNewHigh + costNewMid + costNewLow;
+            const gpNew = revNew - costNew;
+
+            const netNew = gpNew - (revNew * opexRate);
+            const marginNew = revNew > 0 ? (netNew / revNew) : 0;
+
+            // --- 更新UI ---
+            
+            // 现状
+            document.getElementById('res_old_profit').innerText = '¥' + Math.round(netOld).toLocaleString();
+            document.getElementById('res_old_margin').innerText = (marginOld * 100).toFixed(1) + '%';
+
+            // 高视星
+            document.getElementById('res_new_profit').innerText = '¥' + Math.round(netNew).toLocaleString();
+            document.getElementById('res_new_margin').innerText = (marginNew * 100).toFixed(1) + '%';
+
+            // 增长
+            const growth = netNew - netOld;
+            const growthPct = netOld > 0 ? (growth / netOld) : 1;
+
+            document.getElementById('res_growth').innerText = '+ ¥' + Math.round(growth).toLocaleString();
+            document.getElementById('res_growth_pct').innerText = (growthPct * 100).toFixed(0) + '%';
+        }
+
+        // Init
+        updateRatios('old');
+        updateRatios('new');
+        calculate();
+    </script>
+</body>
+</html>

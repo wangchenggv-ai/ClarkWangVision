@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高视星 2026 学术交流会 - CEO演讲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@700&display=swap');
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .title { font-family: 'Playfair Display', serif; }
+        .slide { transition: opacity 0.5s ease; }
+        .brand-blue { color: #1A5276; }
+    </style>
+</head>
+<body class="bg-zinc-950 text-white">
+    <div class="min-h-screen flex flex-col">
+        <!-- 导航 -->
+        <div class="fixed top-0 left-0 right-0 bg-black/80 backdrop-blur-md z-50 border-b border-white/10">
+            <div class="max-w-5xl mx-auto px-8 py-3 flex justify-between items-center text-sm">
+                <div class="font-medium brand-blue">高视星 2026 学术交流会</div>
+                <div class="flex gap-6 text-xs text-zinc-400">
+                    <button onclick="prev()" class="hover:text-white transition-colors">← 上一页</button>
+                    <span id="page-info" class="tabular-nums">1 / 14</span>
+                    <button onclick="next()" class="hover:text-white transition-colors">下一页 →</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-1 flex items-center justify-center p-8 pt-20" id="slides-container">
+            <!-- 动态加载幻灯片 -->
+        </div>
+    </div>
+
+    <script>
+        const slides = [
+            // 第1页 开场金句
+            `<div class="max-w-4xl mx-auto text-center h-full flex flex-col justify-center">
+                <div class="text-6xl leading-tight font-medium text-white max-w-2xl mx-auto">
+                    “我们这个行业不缺产品，<br>缺的是把临床证据、产品设计<br>和患者管理串起来的人。”
+                </div>
+                <div class="mt-24 text-zinc-500 text-sm">2026 高视星学术交流会</div>
+            </div>`,
+
+            // 第2页 三个话题
+            `<div class="max-w-5xl mx-auto">
+                <div class="text-center mb-16">
+                    <div class="inline-block px-6 py-2 bg-white/10 rounded-full text-sm mb-6">今天的三个话题</div>
+                </div>
+                <div class="grid grid-cols-3 gap-8">
+                    <div class="text-center">
+                        <div class="w-20 h-20 mx-auto bg-blue-900/30 rounded-2xl flex items-center justify-center text-4xl mb-6">📊</div>
+                        <div class="text-2xl font-medium">临床验证</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-20 h-20 mx-auto bg-amber-900/30 rounded-2xl flex items-center justify-center text-4xl mb-6">💡</div>
+                        <div class="text-2xl font-medium">产品创新</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-20 h-20 mx-auto bg-emerald-900/30 rounded-2xl flex items-center justify-center text-4xl mb-6">📈</div>
+                        <div class="text-2xl font-medium">数据驱动决策</div>
+                    </div>
+                </div>
+            </div>`,
+
+            // 第3页 临床验证 - Ultra数据
+            `<div class="max-w-5xl mx-auto text-center">
+                <div class="text-3xl font-medium mb-12 brand-blue">离焦镜 Ultra 6个月随访数据</div>
+                <div class="bg-white/5 rounded-3xl p-12 inline-block">
+                    <div class="text-8xl font-bold text-emerald-400 mb-4">72.5%</div>
+                    <div class="text-xl text-zinc-400">相对减缓率</div>
+                    <div class="h-px bg-white/20 my-8 w-64 mx-auto"></div>
+                    <div class="text-6xl font-medium">0.138mm/年</div>
+                    <div class="text-sm text-zinc-500 mt-2">年化眼轴增长（53人/106眼）</div>
+                </div>
+            </div>`,
+
+            // 第4页 临床案例（可选）
+            `<div class="max-w-4xl mx-auto text-center">
+                <div class="text-3xl font-medium mb-10">典型患者随访轨迹</div>
+                <div class="bg-zinc-900 border border-white/10 rounded-3xl p-12 text-zinc-400">
+                    （此处放置脱敏后的患者眼轴变化时间线图）
+                </div>
+            </div>`,
+
+            // 第5页 过渡页
+            `<div class="max-w-3xl mx-auto text-center h-full flex items-center justify-center">
+                <div class="text-4xl font-light leading-snug brand-blue">
+                    从临床反馈<br>到产品迭代
+                </div>
+            </div>`,
+
+            // 第6页 产品创新全景
+            `<div class="max-w-6xl mx-auto">
+                <div class="text-center text-3xl font-medium mb-12 brand-blue">基于临床反馈的产品迭代</div>
+                <div class="grid grid-cols-4 gap-6 text-sm">
+                    <div class="bg-white/5 p-6 rounded-2xl">双付交替</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">离焦+点扩散</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">超非球面设计</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">远储正度数</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">7弧OK镜</div>
+                    <div class="bg-white/5 p-6 rounded-2xl">老花RGP</div>
+                </div>
+            </div>`,
+
+            // 第7页 成人接触镜
+            `<div class="max-w-4xl mx-auto">
+                <div class="grid grid-cols-2 gap-12 items-center">
+                    <div>
+                        <div class="text-2xl font-medium mb-6">38-55岁早期老视人群</div>
+                        <div class="text-zinc-400 leading-relaxed">视功能管理新方案</div>
+                    </div>
+                    <div class="bg-white/5 p-10 rounded-3xl text-center text-5xl font-light brand-blue">
+                        成人接触镜解决方案
+                    </div>
+                </div>
+            </div>`,
+
+            // 第8页 抗疲劳OK镜 - 重头戏
+            `<div class="max-w-4xl mx-auto text-center">
+                <div class="text-5xl font-medium mb-6">抗疲劳OK镜</div>
+                <div class="text-2xl text-emerald-300 mb-12">临床新思路</div>
+                <div class="bg-white/10 p-8 rounded-3xl text-left max-w-lg mx-auto">
+                    据我们所知，这是首次将<br>
+                    <span class="text-emerald-400">"抗疲劳"</span> 概念引入<br>
+                    角膜塑形镜设计
+                </div>
+            </div>`,
+
+            // 第9页 过渡
+            `<div class="max-w-3xl mx-auto text-center h-full flex items-center justify-center">
+                <div class="text-4xl font-light brand-blue">从产品创新<br>到临床决策支持</div>
+            </div>`,
+
+            // 第10页 CDSA临床数据战略联盟
+            `<div class="max-w-5xl mx-auto">
+                <div class="text-3xl font-medium mb-12 text-center brand-blue">CDSA 临床数据战略联盟</div>
+                <div class="flex justify-center gap-8 text-sm">
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto bg-white/10 rounded-2xl mb-4 flex items-center justify-center text-3xl">1</div>
+                        <div>初诊评估</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto bg-white/10 rounded-2xl mb-4 flex items-center justify-center text-3xl">2</div>
+                        <div>方案匹配</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-16 h-16 mx-auto bg-white/10 rounded-2xl mb-4 flex items-center justify-center text-3xl">3</div>
+                        <div>随访管理</div>
+                    </div>
+                </div>
+            </div>`,
+
+            // 第11页 AI应用
+            `<div class="max-w-3xl mx-auto text-center">
+                <div class="text-4xl font-medium mb-12">AI辅助临床决策</div>
+                <div class="bg-white/5 p-12 rounded-3xl text-xl">输入患者数据 → 系统输出参考方案<br><span class="text-xs text-zinc-500 mt-6 block">AI是辅助工具，不替代临床判断</span></div>
+            </div>`,
+
+            // 第12页 合作模式
+            `<div class="max-w-4xl mx-auto text-center">
+                <div class="text-3xl mb-8">首批20家合作机构</div>
+                <div class="inline-block bg-white/10 px-12 py-6 rounded-3xl text-xl">免费部署CDSS系统</div>
+                <div class="mt-12 text-sm text-zinc-400">共同积累5000例临床数据</div>
+            </div>`,
+
+            // 第13页 总结
+            `<div class="max-w-4xl mx-auto text-center">
+                <div class="text-4xl font-medium mb-12">临床证据·产品创新·数据决策</div>
+                <div class="text-zinc-400">真正的突破，来自每一位临床医生的实践</div>
+            </div>`,
+
+            // 第14页 收尾金句
+            `<div class="max-w-4xl mx-auto text-center h-full flex items-center justify-center">
+                <div class="text-5xl leading-tight font-light max-w-2xl">
+                    临床证据指引方向，<br>技术创新提供工具，<br>真正的突破，来自在座每一位的临床实践。
+                </div>
+            </div>`
+        ];
+
+        let current = 0;
+
+        function render() {
+            document.getElementById('slides-container').innerHTML = slides[current];
+            document.getElementById('page-info').textContent = `${current + 1} / ${slides.length}`;
+        }
+
+        function next() {
+            current = (current + 1) % slides.length;
+            render();
+        }
+
+        function prev() {
+            current = (current - 1 + slides.length) % slides.length;
+            render();
+        }
+
+        // 初始化
+        render();
+
+        // 键盘支持
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowRight') next();
+            if (e.key === 'ArrowLeft') prev();
+        });
+
+        console.log('%c高视星学术交流会PPT加载完成 - 学术专业版', 'color:#1A5276;font-size:13px');
+    </script>
+</body>
+</html>

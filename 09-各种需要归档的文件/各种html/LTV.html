@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高视星 LTV 终极沙盘 (时间维度开放版)</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f0f2f5; color: #333; max-width: 1300px; margin: 0 auto; padding: 20px; }
+        h1 { text-align: center; color: #2c3e50; margin-bottom: 5px; }
+        .subtitle { text-align: center; color: #7f8c8d; font-size: 0.9em; margin-bottom: 25px; }
+        
+        .container { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+        
+        /* 左侧：输入区 */
+        .input-panel { flex: 1; min-width: 400px; display: flex; flex-direction: column; gap: 15px; }
+        
+        /* 右侧：结果区 */
+        .result-panel { flex: 1.4; min-width: 500px; background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); position: sticky; top: 20px; }
+        
+        .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border-left: 5px solid transparent; }
+        .card h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; font-size: 1.1em; color: #34495e; display: flex; justify-content: space-between; align-items: center; }
+        
+        .row { display: flex; gap: 15px; align-items: center; margin-bottom: 12px; }
+        .col { flex: 1; }
+        
+        label { font-size: 0.85em; color: #666; font-weight: 600; display: block; margin-bottom: 5px; }
+        
+        .input-wrapper { position: relative; }
+        .input-wrapper input { width: 100%; padding: 8px 10px 8px 25px; border: 1px solid #ddd; border-radius: 4px; text-align: right; font-family: monospace; font-size: 1em; font-weight: bold; color: #2c3e50; box-sizing: border-box; transition: border 0.2s; }
+        .input-wrapper input:focus { border-color: #3498db; outline: none; }
+        .input-wrapper::before { content: '¥'; position: absolute; left: 10px; top: 9px; color: #ccc; font-size: 0.8em; }
+        
+        .input-wrapper.pct input { padding-right: 25px; padding-left: 10px; }
+        .input-wrapper.pct::before { content: ''; }
+        .input-wrapper.pct::after { content: '%'; position: absolute; right: 10px; top: 9px; color: #999; font-size: 0.8em; pointer-events: none; }
+        
+        .input-wrapper.num input { padding-left: 10px; }
+        .input-wrapper.num::before { content: ''; }
+
+        input[type="range"] { width: 100%; cursor: pointer; margin-top: 5px; }
+        
+        .slider-val { float: right; font-weight: bold; color: #3498db; font-size: 0.9em; }
+
+        /* 结果样式 */
+        .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .metric-card { background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #eee; }
+        .metric-card h4 { margin: 0; font-size: 0.85em; color: #7f8c8d; text-transform: uppercase; }
+        .metric-card .val { font-size: 1.6em; font-weight: bold; margin-top: 5px; color: #2c3e50; }
+        .metric-card .sub { font-size: 0.75em; color: #999; margin-top: 3px; }
+
+        .chart-row { display: flex; align-items: center; margin-bottom: 12px; }
+        .chart-label { width: 100px; font-weight: bold; font-size: 0.9em; color: #555; }
+        .chart-track { flex: 1; background: #eee; height: 30px; border-radius: 4px; overflow: hidden; position: relative; }
+        .chart-bar { height: 100%; display: flex; align-items: center; padding-left: 10px; color: #fff; font-size: 0.85em; transition: width 0.5s ease; font-weight: bold; }
+        
+        .ok-color { background-color: #3498db; }
+        .defocus-color { background-color: #e67e22; }
+        .text-ok { color: #3498db; }
+        .text-defocus { color: #e67e22; }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.9em; margin-top: 15px; }
+        th { text-align: left; background: #f8f9fa; padding: 10px; color: #7f8c8d; font-weight: normal; border-bottom: 2px solid #eee; }
+        td { padding: 12px 10px; border-bottom: 1px solid #f0f0f0; }
+        .total-row td { font-weight: bold; background: #fafafa; border-top: 2px solid #ddd; }
+
+        .btn-reset { width: 100%; padding: 12px; background: #fff; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; color: #666; font-weight: bold; margin-top: 10px; transition: all 0.2s; }
+        .btn-reset:hover { background: #f1f1f1; color: #333; }
+    </style>
+</head>
+<body>
+
+    <h1>高视星 LTV 终极沙盘 (时间开放版)</h1>
+    <div class="subtitle">Designed by Clark | 全参数自定义推演</div>
+
+    <div class="container">
+        
+        <div class="input-panel">
+            
+            <div class="card" style="border-left-color: #2c3e50;">
+                <h3>⏳ 测算周期 & 成本</h3>
+                <div class="row">
+                    <div class="col">
+                        <label>LTV 测算时长 (年)</label>
+                        <input type="range" id="years" min="1" max="10" step="1" value="3" oninput="calculate()">
+                        <div style="text-align:right; font-weight:bold; color:#8e44ad;" id="val_years">3年</div>
+                    </div>
+                    <div class="col">
+                        <label>运营成本率 (OpEx)</label>
+                        <div class="input-wrapper pct"><input type="number" id="opex" value="50" onchange="calculate()"></div>
+                    </div>
+                </div>
+                <div style="font-size:0.75em; color:#999; margin-top:5px; background:#f9f9f9; padding:5px; border-radius:4px;">
+                    * 假设换镜/复购周期为 1.5 年
+                </div>
+            </div>
+
+            <div class="card" style="border-left-color: #3498db;">
+                <h3>🔵 OK镜模型 (高复购)</h3>
+                <div class="row">
+                    <div class="col"><label>产品售价</label><div class="input-wrapper"><input type="number" id="p_ok" value="10000" onchange="calculate()"></div></div>
+                    <div class="col"><label>毛利率</label><div class="input-wrapper pct"><input type="number" id="m_ok" value="60" onchange="calculate()"></div></div>
+                </div>
+                
+                <div class="row">
+                    <div class="col"><label>营收占比目标</label><div class="input-wrapper pct"><input type="number" id="share_ok" value="30" onchange="calcPatientsByShare('ok')"></div></div>
+                    <div class="col"><label>推算病人量</label><div class="input-wrapper num"><input type="number" id="cnt_ok" value="30" onchange="calcShareByPatients('ok')"></div></div>
+                </div>
+                
+                <div style="margin-top:10px;">
+                    <label>复购留存率 (次年续费率) <span class="slider-val" id="val_ret_ok">90%</span></label>
+                    <input type="range" id="ret_ok" min="0" max="100" step="5" value="90" oninput="calculate()">
+                </div>
+            </div>
+
+            <div class="card" style="border-left-color: #e67e22;">
+                <h3>🟠 离焦镜模型 (易流失)</h3>
+                <div class="row">
+                    <div class="col"><label>产品售价</label><div class="input-wrapper"><input type="number" id="p_def" value="5000" onchange="calculate()"></div></div>
+                    <div class="col"><label>毛利率</label><div class="input-wrapper pct"><input type="number" id="m_def" value="70" onchange="calculate()"></div></div>
+                </div>
+                
+                <div style="background:#fff8e1; padding:10px; border-radius:6px; margin-bottom:10px; border:1px dashed #e67e22;">
+                    <div class="row" style="margin-bottom:0;">
+                        <div class="col"><label>➕ 服务包价</label><div class="input-wrapper"><input type="number" id="p_svc" value="0" onchange="calculate()"></div></div>
+                        <div class="col"><label>转化率</label><div class="input-wrapper pct"><input type="number" id="cr_svc" value="80" onchange="calculate()"></div></div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col"><label>营收占比目标</label><div class="input-wrapper pct"><input type="number" id="share_def" value="40" onchange="calcPatientsByShare('def')"></div></div>
+                    <div class="col"><label>推算病人量</label><div class="input-wrapper num"><input type="number" id="cnt_def" value="80" onchange="calcShareByPatients('def')"></div></div>
+                </div>
+                
+                <div style="margin-top:10px;">
+                    <label>复购留存率 <span class="slider-val" id="val_ret_def">10%</span></label>
+                    <input type="range" id="ret_def" min="0" max="100" step="5" value="10" oninput="calculate()">
+                </div>
+            </div>
+
+            <button class="btn-reset" onclick="resetDefaults()">🔄 重置默认数据</button>
+        </div>
+
+        <div class="result-panel">
+            <h3 style="margin-bottom:5px;">📊 盈利推演报告</h3>
+            <div style="font-size:0.9em; color:#8e44ad; font-weight:bold; margin-bottom:20px;">
+                测算周期: <span id="report_years">3</span> 年 (约 <span id="report_cycles">3</span> 次购买机会)
+            </div>
+
+            <div>
+                <h4 style="color:#7f8c8d; margin-bottom:15px;">1. 单客终身净利润 (<span id="txt_years_1">3</span>年累计)</h4>
+                
+                <div class="chart-row">
+                    <div class="chart-label text-ok">OK镜</div>
+                    <div class="chart-track">
+                        <div class="chart-bar ok-color" id="bar_ok" style="width:0%">¥0</div>
+                    </div>
+                </div>
+                
+                <div class="chart-row">
+                    <div class="chart-label text-defocus">离焦镜</div>
+                    <div class="chart-track">
+                        <div class="chart-bar defocus-color" id="bar_def" style="width:0%">¥0</div>
+                    </div>
+                </div>
+                
+                <div style="text-align:right; font-weight:bold; font-size:1.1em; color:#2c3e50; margin-top:10px;" id="ltv_multiplier">
+                    ...
+                </div>
+            </div>
+
+            <div style="margin-top:30px;">
+                <h4 style="color:#7f8c8d;">2. 诊所总盘子预测 (Total P&L)</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>产品线</th>
+                            <th>客户数</th>
+                            <th>首年总净利</th>
+                            <th><span id="txt_years_2">3</span>年累计总净利</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table_body">
+                        </tbody>
+                </table>
+            </div>
+            
+            <div style="margin-top:20px; padding:15px; background:#f0f4f8; border-radius:8px; font-size:0.9em; color:#555; line-height:1.6;">
+                <strong>💡 CEO 智能点评：</strong><br>
+                <span id="insight_text">...</span>
+            </div>
+
+            <div style="margin-top:20px; border-top:1px dashed #eee; padding-top:15px; font-size:0.8em; color:#999;">
+                * 留存模型假设：每次购买周期(1.5年)后，客户按留存率衰减。<br>
+                * OK镜留存率通常较高(>80%)，离焦镜如无服务强绑定，留存率极低(<20%)。
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        const TOTAL_REV_BASE = 1000000;
+
+        function resetDefaults() {
+            document.getElementById('years').value = 3;
+            document.getElementById('opex').value = 50;
+            
+            document.getElementById('p_ok').value = 10000;
+            document.getElementById('m_ok').value = 60;
+            document.getElementById('share_ok').value = 30;
+            document.getElementById('ret_ok').value = 90;
+            
+            document.getElementById('p_def').value = 5000;
+            document.getElementById('m_def').value = 70;
+            document.getElementById('share_def').value = 40;
+            document.getElementById('ret_def').value = 10;
+            document.getElementById('p_svc').value = 0;
+            document.getElementById('cr_svc').value = 80;
+
+            calcPatientsByShare('ok');
+            calcPatientsByShare('def');
+            calculate();
+        }
+
+        function calcPatientsByShare(type) {
+            const share = parseFloat(document.getElementById('share_' + type).value) / 100;
+            const price = parseFloat(document.getElementById('p_' + type).value);
+            if (price > 0) {
+                const revenue = TOTAL_REV_BASE * share;
+                const count = Math.round(revenue / price);
+                document.getElementById('cnt_' + type).value = count;
+            }
+            calculate();
+        }
+
+        function calcShareByPatients(type) {
+            const count = parseFloat(document.getElementById('cnt_' + type).value);
+            const price = parseFloat(document.getElementById('p_' + type).value);
+            const revenue = count * price;
+            const share = (revenue / TOTAL_REV_BASE) * 100;
+            document.getElementById('share_' + type).value = share.toFixed(1);
+            calculate();
+        }
+
+        function calculate() {
+            // 1. 获取全局参数
+            const years = parseInt(document.getElementById('years').value);
+            const opex = parseFloat(document.getElementById('opex').value) / 100;
+            
+            document.getElementById('val_years').innerText = years + '年';
+            document.getElementById('report_years').innerText = years;
+            document.getElementById('txt_years_1').innerText = years;
+            document.getElementById('txt_years_2').innerText = years;
+
+            // 购买周期计算
+            const cycleInterval = 1.5; 
+            // 逻辑：0年算第1次，1.5年算第2次，3.0年算第3次
+            // 比如选1年，只有第0年。选1.5年，有0和1.5。
+            // 算法：在 years 时间内能发生几次购买？
+            let cycles = 0;
+            for(let t=0; t<=years; t+=cycleInterval) {
+                cycles++;
+            }
+            document.getElementById('report_cycles').innerText = cycles;
+
+            // 2. OK镜参数
+            const pOk = parseFloat(document.getElementById('p_ok').value);
+            const mOk = parseFloat(document.getElementById('m_ok').value) / 100;
+            const retOk = parseFloat(document.getElementById('ret_ok').value) / 100;
+            const cntOk = parseFloat(document.getElementById('cnt_ok').value);
+            document.getElementById('val_ret_ok').innerText = (retOk*100).toFixed(0) + '%';
+
+            // 3. 离焦镜参数
+            const pDef = parseFloat(document.getElementById('p_def').value);
+            const mDef = parseFloat(document.getElementById('m_def').value) / 100;
+            const retDef = parseFloat(document.getElementById('ret_def').value) / 100;
+            const cntDef = parseFloat(document.getElementById('cnt_def').value);
+            document.getElementById('val_ret_def').innerText = (retDef*100).toFixed(0) + '%';
+            
+            const pSvc = parseFloat(document.getElementById('p_svc').value);
+            const crSvc = parseFloat(document.getElementById('cr_svc').value) / 100;
+            const mSvc = 0.90;
+
+            // 4. 单次净利 (Unit Net)
+            const netOkUnit = pOk * (mOk - opex);
+            
+            // Defocus Unit Net (Weighted by Service Conversion)
+            const revDefUnit = pDef + (pSvc * crSvc);
+            const costDefUnit = (pDef * (1 - mDef)) + (pSvc * (1 - mSvc) * crSvc);
+            const gpDefUnit = revDefUnit - costDefUnit;
+            const netDefUnit = gpDefUnit - (revDefUnit * opex);
+
+            // 5. LTV 循环累加
+            let ltvOkUnit = 0;
+            let ltvDefUnit = 0;
+            
+            let currentRetentionOk = 1.0;
+            let currentRetentionDef = 1.0;
+
+            for(let i=0; i<cycles; i++) {
+                ltvOkUnit += netOkUnit * currentRetentionOk;
+                ltvDefUnit += netDefUnit * currentRetentionDef;
+                
+                // 衰减
+                currentRetentionOk *= retOk;
+                currentRetentionDef *= retDef;
+            }
+
+            // 6. UI Update (Charts)
+            const maxLTV = Math.max(ltvOkUnit, ltvDefUnit) * 1.1;
+            
+            const wOk = maxLTV > 0 ? (ltvOkUnit / maxLTV) * 100 : 0;
+            document.getElementById('bar_ok').style.width = wOk + '%';
+            document.getElementById('bar_ok').innerText = '¥' + Math.round(ltvOkUnit).toLocaleString();
+            
+            const wDef = maxLTV > 0 ? (ltvDefUnit / maxLTV) * 100 : 0;
+            document.getElementById('bar_def').style.width = wDef + '%';
+            document.getElementById('bar_def').innerText = '¥' + Math.round(ltvDefUnit).toLocaleString();
+
+            const multiplier = ltvDefUnit > 0 ? ltvOkUnit / ltvDefUnit : 999;
+            const multiplierText = multiplier >= 1 
+                ? `OK镜单客价值是离焦镜的 ${multiplier.toFixed(1)} 倍` 
+                : `离焦镜单客价值是OK镜的 ${(1/multiplier).toFixed(1)} 倍`;
+            document.getElementById('ltv_multiplier').innerText = multiplierText;
+
+            // 7. Table Update
+            const profitOkYear1 = cntOk * netOkUnit;
+            const profitOkLTV = cntOk * ltvOkUnit;
+            const profitDefYear1 = cntDef * netDefUnit;
+            const profitDefLTV = cntDef * ltvDefUnit;
+            
+            const tbody = document.getElementById('table_body');
+            tbody.innerHTML = `
+                <tr>
+                    <td><span class="text-ok" style="font-weight:bold;">OK镜</span></td>
+                    <td>${cntOk}人</td>
+                    <td>¥${(profitOkYear1/10000).toFixed(1)}万</td>
+                    <td style="font-weight:bold; color:#3498db;">¥${(profitOkLTV/10000).toFixed(1)}万</td>
+                </tr>
+                <tr>
+                    <td><span class="text-defocus" style="font-weight:bold;">离焦镜</span></td>
+                    <td>${cntDef}人</td>
+                    <td>¥${(profitDefYear1/10000).toFixed(1)}万</td>
+                    <td style="font-weight:bold; color:#e67e22;">¥${(profitDefLTV/10000).toFixed(1)}万</td>
+                </tr>
+                <tr class="total-row">
+                    <td>总计</td>
+                    <td>${cntOk + cntDef}人</td>
+                    <td>¥${((profitOkYear1 + profitDefYear1)/10000).toFixed(1)}万</td>
+                    <td>¥${((profitOkLTV + profitDefLTV)/10000).toFixed(1)}万</td>
+                </tr>
+            `;
+
+            // 8. Insights
+            let insight = "";
+            if (years <= 1.5) {
+                insight = "<strong>短期视角误区：</strong> 在 " + years + " 年的短周期内，由于离焦镜人数众多，您可能会觉得离焦镜是主力。但请拉长时间轴看看？";
+            } else {
+                if (retDef < 0.3 && pSvc === 0) {
+                    insight = "<strong>警报：</strong> 时间拉长后，OK镜凭借高留存，成为了利润支柱。而离焦镜因为流失率高，越往后贡献越小。您正在浪费离焦镜的庞大客流。<strong>建议：加入服务包或提升留存率。</strong>";
+                } else if (retDef >= 0.5 || pSvc > 300) {
+                    insight = "<strong>优秀结构：</strong> 通过提升离焦镜的留存/服务费，您成功缩小了两者 LTV 的差距。现在离焦镜和 OK 镜都是您的长期现金牛。";
+                } else {
+                    insight = "<strong>趋势分析：</strong> 随着时间推移，OK镜的复利效应显现。离焦镜想要追赶，必须依靠“服务包”来弥补复购率的天然劣势。";
+                }
+            }
+            document.getElementById('insight_text').innerHTML = insight;
+        }
+
+        // Init
+        calcPatientsByShare('ok');
+        calcPatientsByShare('def');
+    </script>
+</body>
+</html>

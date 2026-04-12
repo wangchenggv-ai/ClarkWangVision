@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>近视防控AI基础设施平台 - 商业计划</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+            line-height: 1.7;
+            color: #0f172a;
+            background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 40px auto;
+            background: white;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+            border-radius: 24px;
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 50%, #6366f1 100%);
+            color: white;
+            padding: 80px 60px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><circle cx="50" cy="50" r="2" fill="white" opacity="0.1"/></svg>');
+            background-size: 50px 50px;
+        }
+
+        h1 {
+            font-size: 52px;
+            font-weight: 800;
+            margin-bottom: 24px;
+            letter-spacing: -1px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .subtitle {
+            font-size: 22px;
+            opacity: 0.95;
+            font-weight: 400;
+            line-height: 1.6;
+            max-width: 900px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .section {
+            padding: 70px 60px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .section:last-child {
+            border-bottom: none;
+        }
+
+        .section:nth-child(even) {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        }
+
+        h2 {
+            font-size: 38px;
+            background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 36px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        h3 {
+            font-size: 24px;
+            color: #1e293b;
+            margin: 30px 0 18px 0;
+            font-weight: 700;
+        }
+
+        p {
+            font-size: 18px;
+            color: #475569;
+            margin-bottom: 18px;
+            line-height: 1.8;
+        }
+
+        strong {
+            color: #0f172a;
+            font-weight: 600;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+            border: none;
+            padding: 32px 40px;
+            margin: 32px 0;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .highlight-box::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            background: linear-gradient(180deg, #0ea5e9 0%, #3b82f6 100%);
+        }
+
+        .highlight-box p {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+            color: #1e293b;
+            line-height: 1.7;
+            position: relative;
+        }
+
+        .three-layers {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            margin: 40px 0;
+        }
+
+        .layer-card {
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 40px 32px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .layer-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: linear-gradient(90deg, #0ea5e9 0%, #3b82f6 50%, #6366f1 100%);
+            transform: scaleX(0);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .layer-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .layer-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 20px 40px rgba(59, 130, 246, 0.2);
+            transform: translateY(-8px);
+        }
+
+        .layer-card h3 {
+            background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-top: 0;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .layer-card p {
+            font-size: 17px;
+            color: #64748b;
+            line-height: 1.7;
+        }
+
+        .problems-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 28px;
+            margin: 32px 0;
+        }
+
+        .problem-item {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-radius: 16px;
+            padding: 28px;
+            border: 2px solid #fbbf24;
+            transition: all 0.3s ease;
+        }
+
+        .problem-item:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 28px rgba(251, 191, 36, 0.3);
+        }
+
+        .problem-item h4 {
+            color: #92400e;
+            font-size: 20px;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        .problem-item p {
+            color: #78350f;
+            font-size: 16px;
+            margin: 0;
+            line-height: 1.6;
+        }
+
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            margin: 40px 0;
+        }
+
+        .agent-card {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%);
+            border-radius: 20px;
+            padding: 32px;
+            border: 2px solid rgba(59, 130, 246, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .agent-card:hover {
+            border-color: rgba(59, 130, 246, 0.5);
+            box-shadow: 0 16px 32px rgba(59, 130, 246, 0.15);
+            transform: translateY(-4px);
+        }
+
+        .agent-card h4 {
+            background: linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 21px;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .agent-card ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .agent-card li {
+            font-size: 17px;
+            color: #475569;
+            padding: 8px 0;
+            padding-left: 28px;
+            position: relative;
+            line-height: 1.6;
+        }
+
+        .agent-card li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #3b82f6;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .timeline {
+            margin: 40px 0;
+        }
+
+        .timeline-item {
+            background: white;
+            border-left: 5px solid #3b82f6;
+            padding: 32px 36px;
+            margin-bottom: 24px;
+            border-radius: 0 16px 16px 0;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+
+        .timeline-item:hover {
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.2);
+            transform: translateX(4px);
+        }
+
+        .timeline-item h4 {
+            background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 22px;
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
+
+        .timeline-item p {
+            font-size: 17px;
+            margin: 8px 0;
+            color: #475569;
+        }
+
+        .flywheel {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%);
+            border-radius: 20px;
+            padding: 40px;
+            margin: 32px 0;
+            border: 2px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .flywheel-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .flywheel-step {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 16px;
+            background: white;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .flywheel-step:hover {
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.15);
+            transform: translateX(8px);
+        }
+
+        .step-number {
+            background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%);
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            flex-shrink: 0;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        .step-text {
+            font-size: 18px;
+            color: #1e293b;
+            font-weight: 600;
+        }
+
+        ul {
+            margin: 20px 0;
+            padding-left: 28px;
+        }
+
+        li {
+            font-size: 18px;
+            color: #475569;
+            margin: 12px 0;
+            line-height: 1.7;
+        }
+
+        .key-points {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border-radius: 16px;
+            padding: 32px 36px;
+            margin: 32px 0;
+            border: 2px solid #34d399;
+        }
+
+        .key-points h4 {
+            color: #065f46;
+            font-size: 21px;
+            margin-bottom: 18px;
+            font-weight: 700;
+        }
+
+        .key-points ul {
+            margin: 0;
+        }
+
+        .key-points li {
+            color: #047857;
+            font-weight: 500;
+        }
+
+        footer {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            color: white;
+            text-align: center;
+            padding: 40px;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 768px) {
+            .three-layers,
+            .problems-grid,
+            .agents-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .section {
+                padding: 40px 30px;
+            }
+
+            header {
+                padding: 60px 30px;
+            }
+            
+            h1 {
+                font-size: 36px;
+            }
+            
+            h2 {
+                font-size: 28px;
+            }
+
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>近视防控行业的 AI 基础设施平台</h1>
+            <p class="subtitle">通过垂直整合产品 × AI 决策系统 × 医生联盟<br>为行业提供可持续进化的基础设施</p>
+        </header>
+
+        <div class="section">
+            <h2>核心定位</h2>
+            <div class="highlight-box">
+                <p>我们不是单纯的镜片公司或软件公司,而是通过把原本割裂的产品、医生经验与疗效数据整合为一个可持续进化的系统,为中国专业视光机构提供长期基础设施。</p>
+            </div>
+            <p>行业真正的问题不在于"缺乏好产品",而在于<strong>缺乏把产品能力与医生能力转化为可规模复制能力的基础设施</strong>。</p>
+        </div>
+
+        <div class="section">
+            <h2>行业核心问题</h2>
+            <div class="problems-grid">
+                <div class="problem-item">
+                    <h4>机构分散</h4>
+                    <p>500-1000家专业视光机构高度分散,医生个人能力强但经验无法系统化共享</p>
+                </div>
+                <div class="problem-item">
+                    <h4>产品同质化</h4>
+                    <p>离焦镜与OK镜差异难以量化验证,竞争走向价格战</p>
+                </div>
+                <div class="problem-item">
+                    <h4>数据割裂</h4>
+                    <p>医生、厂商、软件系统之间数据割裂,研发与决策缺乏证据支撑</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>解决方案:三层AI基础设施</h2>
+            <div class="three-layers">
+                <div class="layer-card">
+                    <h3>第一层<br>产品层</h3>
+                    <p>自主研发离焦镜与OK镜,垂直整合掌握产品定义权与真实疗效数据入口</p>
+                </div>
+                <div class="layer-card">
+                    <h3>第二层<br>AI决策层</h3>
+                    <p>多模态AI Agent嵌入医生工作流,实现临床决策、销售转化、运营供应的智能化</p>
+                </div>
+                <div class="layer-card">
+                    <h3>第三层<br>医生联盟</h3>
+                    <p>基于信任与规则的协作网络,通过规模化降本与能力共享实现价值</p>
+                </div>
+            </div>
+            <div class="highlight-box">
+                <p>产品产生真实数据 → AI形成可复制决策 → 联盟实现规模与复利</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>AI Agent体系</h2>
+            <p>AI不是工具,而是嵌入医生工作流的决策与流程系统</p>
+            <div class="agents-grid">
+                <div class="agent-card">
+                    <h4>临床决策 Agent</h4>
+                    <ul>
+                        <li>镜片参数推荐</li>
+                        <li>疗效趋势预测</li>
+                        <li>复查与调整方案生成</li>
+                    </ul>
+                </div>
+                <div class="agent-card">
+                    <h4>销售转化 Agent</h4>
+                    <ul>
+                        <li>个性化方案生成</li>
+                        <li>方案对比与风险解释</li>
+                        <li>辅助定价与沟通</li>
+                    </ul>
+                </div>
+                <div class="agent-card">
+                    <h4>运营供应 Agent</h4>
+                    <ul>
+                        <li>区域需求预测</li>
+                        <li>生产与备货建议</li>
+                        <li>库存与断货风险控制</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>系统级飞轮</h2>
+            <div class="flywheel">
+                <div class="flywheel-steps">
+                    <div class="flywheel-step">
+                        <div class="step-number">1</div>
+                        <div class="step-text">医生加入联盟</div>
+                    </div>
+                    <div class="flywheel-step">
+                        <div class="step-number">2</div>
+                        <div class="step-text">真实疗效数据增加</div>
+                    </div>
+                    <div class="flywheel-step">
+                        <div class="step-number">3</div>
+                        <div class="step-text">AI决策能力提升</div>
+                    </div>
+                    <div class="flywheel-step">
+                        <div class="step-number">4</div>
+                        <div class="step-text">医生效率与疗效稳定性提升</div>
+                    </div>
+                    <div class="flywheel-step">
+                        <div class="step-number">5</div>
+                        <div class="step-text">联盟吸引力增强</div>
+                    </div>
+                </div>
+            </div>
+            <p style="text-align: center; background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-weight: 700; margin-top: 24px; font-size: 20px;">这是一个不依赖补贴、依赖能力进化的飞轮</p>
+        </div>
+
+        <div class="section">
+            <h2>商业模式</h2>
+            <h3>核心现金流</h3>
+            <p>离焦镜与OK镜销售,毛利率随规模持续提升</p>
+            
+            <h3>锁定机制</h3>
+            <p>AI平台初期免费,与产品、流程、数据深度绑定</p>
+            
+            <h3>长期平台价值</h3>
+            <ul>
+                <li>临床研究合作</li>
+                <li>算法与方法论授权</li>
+                <li>行业标准与白皮书</li>
+            </ul>
+        </div>
+
+        <div class="section">
+            <h2>竞争壁垒</h2>
+            <div class="key-points">
+                <h4>不可复制性来自三点同时成立:</h4>
+                <ul>
+                    <li>自主研发的近视防控产品</li>
+                    <li>AI原生的工作流设计</li>
+                    <li>基于信任与规则的医生联盟</li>
+                </ul>
+            </div>
+            <p><strong>大型连锁:</strong> 重资产模式,不适合服务独立机构</p>
+            <p><strong>纯镜片厂:</strong> 无医生工作流与数据闭环</p>
+            <p><strong>纯软件公司:</strong> 无真实数据入口</p>
+        </div>
+
+        <div class="section">
+            <h2>执行计划</h2>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <h4>阶段一 | 0-3个月 | 模型验证</h4>
+                    <p>• AI MVP(多模态) + 5家头部机构试点</p>
+                    <p>• 目标: 转化率≥15%, 采购量≥30%</p>
+                </div>
+                <div class="timeline-item">
+                    <h4>阶段二 | 3-9个月 | 区域复制</h4>
+                    <p>• 临床Agent v1.0 + 销售Agent v1.0</p>
+                    <p>• 目标: 覆盖200家机构</p>
+                </div>
+                <div class="timeline-item">
+                    <h4>阶段三 | 9-18个月 | 平台化</h4>
+                    <p>• 多Agent协同系统</p>
+                    <p>• 目标: 覆盖500家机构, 完成A轮融资</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>核心结论</h2>
+            <div class="highlight-box">
+                <p>我们构建的是一套完整系统: 自主研发的近视防控产品 × AI决策系统 × 医生协作网络</p>
+            </div>
+            <p style="text-align: center; font-size: 21px; color: #1e293b; margin-top: 36px; font-weight: 600; line-height: 1.8;">
+                当这套系统成立,近视防控将第一次从<strong style="background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">个人经验驱动</strong>走向<strong style="background: linear-gradient(135deg, #0ea5e9 0%, #3b82f6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">系统能力驱动</strong>
+            </p>
+        </div>
+
+        <footer>
+            人是主驾,AI是副驾。
+        </footer>
+    </div>
+</body>
+</html>

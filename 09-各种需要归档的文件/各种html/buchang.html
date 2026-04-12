@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>镜片补偿系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, sans-serif;
+            background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+            padding: 12px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .title {
+            font-size: 26px;
+            font-weight: bold;
+            text-align: center;
+            background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+        .subtitle { text-align: center; color: #666; font-size: 13px; margin-bottom: 16px; }
+        .tabs {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+            overflow-x: auto;
+        }
+        .tab {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            border: none;
+            background: white;
+            color: #333;
+            font-size: 13px;
+        }
+        .tab.active {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+        }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        .content { display: none; }
+        .content.active { display: block; }
+        h2 { font-size: 20px; margin-bottom: 12px; }
+        .grid { display: grid; gap: 10px; margin: 10px 0; }
+        @media (min-width: 768px) { .grid-2 { grid-template-columns: repeat(2, 1fr); } }
+        .problem {
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid;
+        }
+        .problem h3 { font-size: 15px; margin-bottom: 6px; }
+        .problem p { font-size: 12px; margin-bottom: 6px; }
+        .red { border-color: #ef4444; background: #fee2e2; }
+        .orange { border-color: #f97316; background: #ffedd5; }
+        .yellow { border-color: #eab308; background: #fef9c3; }
+        .stat {
+            text-align: center;
+            padding: 12px;
+            border-radius: 8px;
+        }
+        .stat-num { font-size: 28px; font-weight: bold; }
+        .stat-label { font-size: 11px; color: #666; margin-top: 2px; }
+        .type-btns { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+        .type-btn {
+            padding: 8px 14px;
+            border-radius: 20px;
+            border: none;
+            background: #f3f4f6;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        .type-btn.active {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 12px;
+        }
+        thead {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            color: white;
+        }
+        th, td { padding: 8px 6px; text-align: left; }
+        tbody tr:nth-child(even) { background: #f9fafb; }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .badge-blue { background: #dbeafe; color: #1e40af; }
+        .badge-purple { background: #e9d5ff; color: #6b21a8; }
+        .form-group { margin: 8px 0; }
+        label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 12px; }
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .hint { font-size: 11px; color: #6b7280; margin-top: 2px; }
+        .result {
+            padding: 14px;
+            border-radius: 8px;
+            margin: 8px 0;
+        }
+        .result-big { font-size: 36px; font-weight: bold; margin: 4px 0; }
+        .result-label { font-size: 12px; color: #6b7280; }
+        .quality {
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            display: flex;
+            gap: 10px;
+        }
+        .quality-icon { font-size: 24px; }
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid;
+            margin: 10px 0;
+        }
+        .footer { text-align: center; margin-top: 16px; color: #6b7280; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">镜片程序补偿系统</h1>
+        <p class="subtitle">智能工作台 · 实时查询 · 数据分析</p>
+
+        <div class="tabs">
+            <button class="tab" onclick="show(0)">📊 诊断</button>
+            <button class="tab active" onclick="show(1)">📐 规则</button>
+            <button class="tab" onclick="show(2)">🧮 计算</button>
+            <button class="tab" onclick="show(3)">🏆 标准</button>
+        </div>
+
+        <div class="card">
+            <div class="content" id="t0">
+                <h2>📊 问题诊断</h2>
+                <div class="grid grid-2">
+                    <div class="problem red">
+                        <h3>DFT程序不稳定</h3>
+                        <p>占大偏差78.6%</p>
+                        <strong style="color:#dc2626; font-size:12px;">影响：严重</strong>
+                    </div>
+                    <div class="problem orange">
+                        <h3>双基弧波动大</h3>
+                        <p>标准差0.41 vs 0.15</p>
+                        <strong style="color:#ea580c; font-size:12px;">影响：较严重</strong>
+                    </div>
+                    <div class="problem red">
+                        <h3>2025年精度下降</h3>
+                        <p>72%标注为"大"</p>
+                        <strong style="color:#dc2626; font-size:12px;">影响：严重</strong>
+                    </div>
+                    <div class="problem yellow">
+                        <h3>规则不完善</h3>
+                        <p>缺乏标准</p>
+                        <strong style="color:#ea580c; font-size:12px;">影响：中等</strong>
+                    </div>
+                </div>
+                <div class="alert orange">
+                    <strong style="display:block; margin-bottom:4px; font-size:13px;">⚡ 改进重点</strong>
+                    <p style="font-size:12px;">优先解决<strong style="color:#dc2626;"> DFT和双基弧问题</strong>，可使大偏差率从18%降至5%以下！</p>
+                </div>
+                <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="stat" style="background:#dbeafe;">
+                        <div class="stat-num" style="color:#2563eb;">18.4%</div>
+                        <div class="stat-label">差异>±0.25</div>
+                    </div>
+                    <div class="stat" style="background:#e9d5ff;">
+                        <div class="stat-num" style="color:#7c3aed;">78.6%</div>
+                        <div class="stat-label">DFT占比</div>
+                    </div>
+                    <div class="stat" style="background:#fed7aa;">
+                        <div class="stat-num" style="color:#ea580c;">0.48</div>
+                        <div class="stat-label">DFT标准差</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content active" id="t1">
+                <h2>📐 补偿规则表</h2>
+                <div class="type-btns">
+                    <button class="type-btn" onclick="rules('A')">A</button>
+                    <button class="type-btn" onclick="rules('AF')">AF</button>
+                    <button class="type-btn" onclick="rules('MF')">MF</button>
+                    <button class="type-btn" onclick="rules('AT')">AT</button>
+                    <button class="type-btn" onclick="rules('DF')">DF</button>
+                    <button class="type-btn active" onclick="rules('DFT')">DFT</button>
+                    <button class="type-btn" onclick="rules('AFT')">AFT</button>
+                </div>
+                <div id="rt"></div>
+                <div class="alert red" id="da">
+                    <strong style="display:block; margin-bottom:4px; font-size:13px;">⚠️ DFT特别提示</strong>
+                    <ul style="list-style:none; font-size:12px; line-height:1.6; padding:0;">
+                        <li>• 波动最大，占大偏差78.6%</li>
+                        <li>• 双基弧额外+0.05补偿</li>
+                        <li>• 每批次必须测量</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="content" id="t2">
+                <h2>🧮 智能计算器</h2>
+                <div class="grid grid-2">
+                    <div>
+                        <h3 style="font-size:15px; margin-bottom:8px;">输入参数</h3>
+                        <div class="form-group">
+                            <label>程序类型</label>
+                            <select id="ct" onchange="c()">
+                                <option>A</option><option>AF</option><option>MF</option>
+                                <option>AT</option><option>DF</option><option selected>DFT</option><option>AFT</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>基弧</label>
+                            <input type="text" id="cc" value="7.9/7.5" onchange="c()">
+                            <div class="hint">单基弧如"7.5"，双基弧如"7.9/7.5"</div>
+                        </div>
+                        <div class="form-group">
+                            <label>需求焦度</label>
+                            <input type="number" id="cp" value="-5.0" step="0.25" onchange="c()">
+                        </div>
+                        <div class="form-group">
+                            <label>实际加工焦度</label>
+                            <input type="number" id="ca" value="-4.85" step="0.01" onchange="c()">
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="font-size:15px; margin-bottom:8px;">计算结果</h3>
+                        <div class="result" style="background:#dbeafe; border:2px solid #3b82f6;">
+                            <div class="result-label">推荐补偿值</div>
+                            <div class="result-big" style="color:#2563eb;" id="rv">-0.25</div>
+                            <div class="hint" id="ct2">双基弧镜片</div>
+                        </div>
+                        <div class="result" style="background:#f3f4f6; border:2px solid #9ca3af;">
+                            <div class="result-label">补偿差异</div>
+                            <div class="result-big" id="dv" style="color:#16a34a;">-0.15</div>
+                        </div>
+                        <div class="result" id="qb" style="background:#d1fae5; border:2px solid #16a34a;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <div class="result-label">质量等级</div>
+                                    <div style="font-size:22px; font-weight:bold;" id="lt">优秀</div>
+                                </div>
+                                <div style="font-size:36px;" id="li">✓</div>
+                            </div>
+                        </div>
+                        <div style="padding:10px; background:#f9fafb; border-radius:6px; margin-top:8px;">
+                            <strong style="font-size:12px; display:block; margin-bottom:4px;">处理建议：</strong>
+                            <p id="ad" style="font-size:12px;">✓ 无需处理，继续保持</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content" id="t3">
+                <h2>🏆 质量标准</h2>
+                <div class="grid grid-2">
+                    <div class="quality" style="background:#d1fae5; border-color:#16a34a;">
+                        <div class="quality-icon">✓</div>
+                        <div style="flex:1;">
+                            <strong style="font-size:13px;">优秀</strong>
+                            <div style="font-size:16px; font-weight:bold; margin:2px 0;">±0.15以内</div>
+                            <div style="font-size:11px;">无需处理 · >60%</div>
+                        </div>
+                    </div>
+                    <div class="quality" style="background:#dbeafe; border-color:#3b82f6;">
+                        <div class="quality-icon">○</div>
+                        <div style="flex:1;">
+                            <strong style="font-size:13px;">合格</strong>
+                            <div style="font-size:16px; font-weight:bold; margin:2px 0;">±0.15~±0.25</div>
+                            <div style="font-size:11px;">继续观察 · 20-30%</div>
+                        </div>
+                    </div>
+                    <div class="quality" style="background:#fed7aa; border-color:#ea580c;">
+                        <div class="quality-icon">⚠</div>
+                        <div style="flex:1;">
+                            <strong style="font-size:13px;">警告</strong>
+                            <div style="font-size:16px; font-weight:bold; margin:2px 0;">±0.25~±0.35</div>
+                            <div style="font-size:11px;">3次后校准 · <10%</div>
+                        </div>
+                    </div>
+                    <div class="quality" style="background:#fee2e2; border-color:#dc2626;">
+                        <div class="quality-icon">✗</div>
+                        <div style="flex:1;">
+                            <strong style="font-size:13px;">不合格</strong>
+                            <div style="font-size:16px; font-weight:bold; margin:2px 0;">>±0.35</div>
+                            <div style="font-size:11px;">立即停用 · <5%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="alert red">
+                    <strong style="display:block; margin-bottom:6px; font-size:13px;">🚨 紧急处理（差异 > ±0.5）</strong>
+                    <ol style="font-size:12px; line-height:1.6; padding-left:16px;">
+                        <li>立即停止使用程序</li>
+                        <li>通知质量主管（5分钟内）</li>
+                        <li>填写异常报告（15分钟内）</li>
+                        <li>重新校准程序（2小时内）</li>
+                        <li>测试3个样品确认</li>
+                        <li>批准后恢复使用</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>镜片程序补偿系统 v1.0 | BZ-2025-001</p>
+            <p style="margin-top:2px;">持续改进，追求卓越 🎯</p>
+        </div>
+    </div>
+
+    <script>
+        const d = {
+            A: [{r:'0 到 -4',s:-0.25,d:-0.25,n:'稳定'},{r:'-4 到 -8',s:-0.25,d:-0.25,n:''},{r:'-8 到 -10',s:-0.25,d:-0.25,n:''},{r:'-10 到 -15',s:-0.25,d:-0.25,n:''}],
+            AF: [{r:'> -3',s:-0.15,d:-0.15,n:'轻度'},{r:'-3 到 -8',s:-0.20,d:-0.20,n:'中度'},{r:'< -8',s:-0.25,d:-0.25,n:'高度'}],
+            MF: [{r:'所有焦度',s:-0.30,d:-0.30,n:'需加强'}],
+            AT: [{r:'所有焦度',s:-0.25,d:-0.25,n:'稳定'}],
+            DF: [{r:'0 到 -6',s:-0.25,d:-0.30,n:''},{r:'-6 到 -10',s:-0.30,d:-0.35,n:'加强'},{r:'< -10',s:-0.35,d:-0.40,n:'监控'}],
+            DFT: [{r:'0 到 -4',s:-0.15,d:-0.20,n:'⚠️'},{r:'-4 到 -8',s:-0.20,d:-0.25,n:'重点'},{r:'-8 到 -12',s:-0.25,d:-0.30,n:'监控'},{r:'< -12',s:-0.30,d:-0.35,n:'高度'}],
+            AFT: [{r:'0 到 -6',s:-0.20,d:-0.25,n:''},{r:'-6 到 -12',s:-0.25,d:-0.30,n:''},{r:'< -12',s:-0.30,d:-0.35,n:''}]
+        };
+
+        function show(n) {
+            document.querySelectorAll('.content').forEach(e => e.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(e => e.classList.remove('active'));
+            document.getElementById('t'+n).classList.add('active');
+            document.querySelectorAll('.tab')[n].classList.add('active');
+        }
+
+        function rules(t) {
+            document.querySelectorAll('.type-btn').forEach(e => e.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById('rt').innerHTML = '<table><thead><tr><th>焦度范围</th><th>单基弧</th><th>双基弧</th><th>说明</th></tr></thead><tbody>' +
+                d[t].map(r => `<tr><td>${r.r}</td><td><span class="badge badge-blue">${r.s}</span></td><td><span class="badge badge-purple">${r.d}</span></td><td>${r.n}</td></tr>`).join('') + '</tbody></table>';
+            document.getElementById('da').style.display = t==='DFT'?'block':'none';
+        }
+
+        function c() {
+            const t = document.getElementById('ct').value;
+            const cv = document.getElementById('cc').value;
+            const p = parseFloat(document.getElementById('cp').value);
+            const a = parseFloat(document.getElementById('ca').value);
+            const db = cv.includes('/');
+            const df = p - a;
+            
+            let rc = null;
+            for(let r of d[t]) {
+                if(r.r==='所有焦度') {rc=db?r.d:r.s; break;}
+                if(r.r.includes('>')&&p>parseFloat(r.r.match(/-?\d+\.?\d*/)[0])) {rc=db?r.d:r.s; break;}
+                if(r.r.includes('<')&&p<parseFloat(r.r.match(/-?\d+\.?\d*/)[0])) {rc=db?r.d:r.s; break;}
+                const m=r.r.match(/-?\d+\.?\d*/g);
+                if(m&&m.length===2&&p>=parseFloat(m[1])&&p<parseFloat(m[0])) {rc=db?r.d:r.s; break;}
+            }
+            
+            let lv,cl,bg,br,ic,av;
+            if(Math.abs(df)<=0.15) {
+                lv='优秀';cl='#16a34a';bg='#d1fae5';br='#16a34a';ic='✓';av='✓ 无需处理，继续保持';
+            } else if(Math.abs(df)<=0.25) {
+                lv='合格';cl='#2563eb';bg='#dbeafe';br='#3b82f6';ic='○';av='○ 继续观察，正常使用';
+            } else if(Math.abs(df)<=0.35) {
+                lv='警告';cl='#ea580c';bg='#fed7aa';br='#ea580c';ic='⚠';av='⚠ 加强监控，连续3次后校准';
+            } else {
+                lv='不合格';cl='#dc2626';bg='#fee2e2';br='#dc2626';ic='✗';av='✗ 立即停用并通知主管';
+            }
+            
+            document.getElementById('rv').textContent = rc||'N/A';
+            document.getElementById('ct2').textContent = db?'双基弧镜片':'单基弧镜片';
+            document.getElementById('dv').textContent = df.toFixed(2);
+            document.getElementById('dv').style.color = cl;
+            document.getElementById('lt').textContent = lv;
+            document.getElementById('lt').style.color = cl;
+            document.getElementById('li').textContent = ic;
+            document.getElementById('qb').style.background = bg;
+            document.getElementById('qb').style.borderColor = br;
+            document.getElementById('ad').textContent = av;
+        }
+
+        rules('DFT');
+        c();
+    </script>
+</body>
+</html>

@@ -4,37 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "4f7beeadac48b5d9",
+        "id": "e604275ed41b0e4f",
         "type": "tabs",
         "children": [
           {
-            "id": "31bf50eb5e67efcf",
+            "id": "4d4f2fb165940941",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "04-供应链/供应链100天改进矩阵_流程×实践.md",
+                "file": "00-CEO驾驶舱/Q2_2026_季度目标看板.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "供应链100天改进矩阵_流程×实践"
-            }
-          }
-        ]
-      },
-      {
-        "id": "689be7da42ba0626",
-        "type": "tabs",
-        "children": [
-          {
-            "id": "5640424aae13da68",
-            "type": "leaf",
-            "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "关系图谱"
+              "title": "Q2_2026_季度目标看板"
             }
           }
         ]
@@ -69,7 +53,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "g",
+                "query": "",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -90,12 +74,11 @@
               "title": "书签"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 450.5
   },
   "right": {
     "id": "2e20f37112f03c46",
@@ -111,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "欢迎.md",
+                "file": "02-医学市场/4月9日产品发布会逐字稿_20260409.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -121,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "欢迎 的反向链接列表"
+              "title": "4月9日产品发布会逐字稿_20260409 的反向链接列表"
             }
           },
           {
@@ -173,20 +156,20 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "欢迎.md",
+                "file": "大客户与RGP开发奖政策_2026.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "欢迎 的大纲"
+              "title": "大客户与RGP开发奖政策_2026 的大纲"
             }
           }
         ]
       }
     ],
     "direction": "horizontal",
-    "width": 300,
+    "width": 200,
     "collapsed": true
   },
   "left-ribbon": {
@@ -197,32 +180,56 @@
       "daily-notes:打开/创建今天的日记": false,
       "templates:插入模板": false,
       "command-palette:打开命令面板": false,
-      "bases:新建数据库": false,
-      "obsidian-git:Open Git source control": false
+      "bases:新建数据库": false
     }
   },
-  "active": "18973e942eedb540",
+  "active": "4d4f2fb165940941",
   "lastOpenFiles": [
-    "欢迎.md",
-    "00-CEO驾驶舱/README.md",
-    "00-CEO驾驶舱",
-    "01-销售/README.md",
-    "01-销售",
-    "02-医学市场/README.md",
-    "02-医学市场",
-    "03-研发/README.md",
-    "03-研发",
-    "05-人力/README.md",
-    "05-人力",
-    "06-财务/README.md",
-    "06-财务",
-    "99-模板/决策记录模板.md",
-    "99-模板/Claude对话沉淀模板.md",
-    "99-模板",
-    "04-供应链/供应链AI_Native改造项目_项目章程.md",
+    "AI配置/README.md",
+    "AI配置/openclaw.json",
+    "AI配置",
+    "04-供应链/feishu-setup/docs/qrcodes-demo/7F9324009AAAF976.png",
+    "04-供应链/feishu-setup/docs/qrcodes-demo/947617BA067D0D92.png",
+    "04-供应链/feishu-setup/docs/qrcodes-demo",
+    "04-供应链/feishu-setup/docs/qrcodes-demo-v2/A3C99FA3AF3D2BDD.png",
+    "04-供应链/feishu-setup/docs/qrcodes-demo-v2/A27EE7DF49520728.png",
+    "04-供应链/feishu-setup/docs/qrcodes-demo-v2",
+    "04-供应链/feishu-setup/docs/qr-demo-report.md",
+    "04-供应链/feishu-setup/docs/full-e2e-report.md",
+    "04-供应链/feishu-setup/docs/QR溯源验真系统-端到端报告.pdf",
+    "04-供应链/feishu-setup/agent-portal/public/qrcodes/947617BA067D0D92.png",
+    "04-供应链/feishu-setup/agent-portal/public/qrcodes/A3C99FA3AF3D2BDD.png",
+    "04-供应链/feishu-setup/agent-portal/public/qrcodes/A27EE7DF49520728.png",
+    "04-供应链/feishu-setup/agent-portal/public/qrcodes/1DEBF758945C2858.png",
+    "04-供应链/feishu-setup/agent-portal/public/qrcodes/7F9324009AAAF976.png",
+    "04-供应链/feishu-setup/agent-portal/public/qrcodes/0BE8A73C0FF491B0.png",
+    "04-供应链/feishu-setup/agent-portal/public/qrcodes",
+    "04-供应链/feishu-setup/agent-portal/public/css/common.css",
+    "04-供应链/feishu-setup/agent-portal/public/css",
+    "Q2_2026_十周执行分解.md",
+    "本周总结与下周计划_20250412.md",
+    "00-CEO驾驶舱/Q2_2026_CEO看板.md",
+    "00-CEO驾驶舱/Q2_2026_季度目标看板.md",
+    "00-CEO驾驶舱/CEO季度销售会议报告_Q1总结与Q2规划_v2.md",
+    "00-CEO驾驶舱/各部门任务分配表.md",
+    "00-CEO驾驶舱/2026-04-11-openclaw-setup.md",
+    "04-供应链/feishu-setup/docs/2026-04-11-sync-implementation-plan.md",
+    "04-供应链/feishu-setup/docs/2026-04-11-three-system-architecture-design.md",
+    "04-供应链/feishu-setup/docs/2026-04-12-三系统架构评估与升级方案.md",
+    "04-供应链/feishu-setup/CHANGELOG.md",
+    "04-供应链/车房备库行动指南-db2bbe9983.md",
     "04-供应链/供应链100天改进矩阵_流程×实践.md",
-    "04-供应链/xiaomi供应链项目.md",
-    "04-供应链/README.md",
-    "04-供应链"
+    "04-供应链/供应链飞轮三天冲刺计划_0414-16.md",
+    "04-供应链/混合架构1.0_飞书原生+脚本方案.md",
+    "04-供应链/供应链AI_Native改造项目_项目章程.md",
+    "04-供应链/供应链系统迁移计划_0410-0630.md",
+    "04-供应链/Grok建议的供应链.md",
+    "04-供应链/feishu-setup-summary.md",
+    "文件索引.md",
+    "09-各种需要归档的文件",
+    "01-销售/CEO季度销售会议报告_Q1总结与Q2规划_v4.md",
+    "下载路径测试.md",
+    "销售飞轮项目/飞书销售数据飞轮项目（Sales Data Flywheel Project）.md",
+    "老花OK镜"
   ]
 }
