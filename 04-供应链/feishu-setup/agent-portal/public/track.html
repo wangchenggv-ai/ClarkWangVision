@@ -3,155 +3,348 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>高视高清 · 订单查询</title>
+<title>高视高清 · 订单追踪</title>
+<link rel="stylesheet" href="/css/common.css">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f2f5; color: #1a1a1a; }
-
-  .header { background: #1677ff; color: #fff; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
-  .header h1 { font-size: 18px; font-weight: 600; }
-  .header .agent-name { font-size: 13px; opacity: 0.85; margin-left: auto; }
-
-  .container { max-width: 800px; margin: 0 auto; padding: 16px; }
-
-  .nav { display: flex; gap: 8px; margin-bottom: 16px; }
-  .nav a { padding: 8px 16px; border-radius: 6px; font-size: 14px; text-decoration: none; background: #fff; color: #666; border: 1px solid #d9d9d9; }
-  .nav a.active { background: #1677ff; color: #fff; border-color: #1677ff; }
-
-  .card { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; padding: 10px 12px; background: #fafafa; color: #666; font-weight: 500; border-bottom: 1px solid #f0f0f0; }
-  td { padding: 10px 12px; border-bottom: 1px solid #f5f5f5; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #fafafa; }
-
-  .status-badge { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 500; }
-  .status-待审核 { background: #fff7e6; color: #d46b08; }
-  .status-已确认 { background: #e6f4ff; color: #0958d9; }
-  .status-生产中 { background: #f0f5ff; color: #2f54eb; }
-  .status-已发货 { background: #f6ffed; color: #389e0d; }
-  .status-已签收 { background: #d9f7be; color: #237804; }
-
-  .loading { text-align: center; padding: 40px; color: #999; }
-  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #d9d9d9; border-top-color: #1677ff; border-radius: 50%; animation: spin 0.6s linear infinite; vertical-align: middle; margin-right: 8px; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .empty { text-align: center; padding: 40px; color: #bbb; font-size: 14px; }
-
-  .filter { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
-  .filter select { padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; outline: none; }
-
-  @media (max-width: 600px) {
-    .hide-mobile { display: none; }
-    td, th { padding: 8px 8px; }
-  }
+@media (max-width: 600px) {
+  .hide-mobile { display: none; }
+}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <div>
-    <h1>高视高清 · 订单查询</h1>
-  </div>
+  <h1>高视高清 · 订单追踪</h1>
   <div class="agent-name" id="agentName">加载中...</div>
 </div>
 
-<div class="container">
-  <div class="nav">
-    <a href="#" id="navOrder">下单</a>
-    <a href="#" class="active">订单查询</a>
+<div class="nav">
+  <a href="#" id="navOrder">下单</a>
+  <a href="#" class="active">订单追踪</a>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 统计栏 -->
+<div class="stats-bar" id="statsBar">
+  <div class="stat-item"><div class="stat-value" id="statTotal">-</div><div class="stat-label">总订单</div></div>
+  <div class="stat-item"><div class="stat-value" id="statPending">-</div><div class="stat-label">待处理</div></div>
+  <div class="stat-item"><div class="stat-value" id="statInstock">-</div><div class="stat-label">有货</div></div>
+  <div class="stat-item"><div class="stat-value" id="statCustom">-</div><div class="stat-label">定制</div></div>
+  <div class="stat-item"><div class="stat-value" id="statShipped">-</div><div class="stat-label">已发货</div></div>
+</div>
+
+<!-- 筛选栏 -->
+<div class="filter-bar">
+  <select id="filterStatus">
+    <option value="">全部状态</option>
+    <option value="待处理">待处理</option>
+    <option value="待人工审核">待人工审核</option>
+    <option value="生产中">生产中</option>
+    <option value="已发货">已发货</option>
+    <option value="已签收">已签收</option>
+    <option value="完成">完成</option>
+  </select>
+  <select id="filterSku">
+    <option value="">全部SKU</option>
+  </select>
+  <input type="date" id="filterFrom" placeholder="开始日期">
+  <input type="date" id="filterTo" placeholder="结束日期">
+  <button class="btn btn-outline" onclick="loadOrders()" style="padding:6px 12px;font-size:13px;min-height:auto">查询</button>
+  <button class="btn btn-text" onclick="exportCsv()" style="margin-left:auto">📥 导出CSV</button>
+</div>
+
+<div class="container" style="padding-top:0">
+  <div class="loading" id="loading"><span class="spinner"></span>加载中...</div>
+  <div class="empty" id="empty" style="display:none">暂无订单记录</div>
+  <div id="orderList"></div>
+
+  <!-- 分页 -->
+  <div class="pagination" id="pagination" style="display:none">
+    <button id="prevBtn" onclick="changePage(-1)">上一页</button>
+    <span class="page-info" id="pageInfo"></span>
+    <button id="nextBtn" onclick="changePage(1)">下一页</button>
   </div>
+</div>
 
-  <div class="card">
-    <div class="filter">
-      <select id="filterStatus" onchange="applyFilter()">
-        <option value="">全部状态</option>
-        <option value="待审核">待审核</option>
-        <option value="已确认">已确认</option>
-        <option value="生产中">生产中</option>
-        <option value="已发货">已发货</option>
-        <option value="已签收">已签收</option>
-      </select>
+<!-- 详情弹窗 -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="detailTitle">订单详情</h2>
+      <button class="modal-close" onclick="closeDetail()">&times;</button>
     </div>
-
-    <div id="loading" class="loading"><span class="spinner"></span>加载中...</div>
-    <div id="empty" class="empty" style="display:none">暂无订单记录</div>
-
-    <div id="tableWrap" style="display:none; overflow-x:auto">
-      <table>
-        <thead>
-          <tr>
-            <th>订单编号</th>
-            <th>顾客</th>
-            <th class="hide-mobile">产品</th>
-            <th class="hide-mobile">眼别</th>
-            <th>状态</th>
-            <th class="hide-mobile">下单日期</th>
-          </tr>
-        </thead>
-        <tbody id="tableBody"></tbody>
-      </table>
-    </div>
+    <div id="detailContent"></div>
   </div>
 </div>
 
 <script>
 const token = new URLSearchParams(location.search).get("t") || "";
-let allOrders = [];
+let currentPage = 1;
+const pageSize = 20;
 
-document.getElementById("navOrder").href = `/order?t=${token}`;
+// ─── 状态 Badge 映射 ────────────────────────────────────────────────────────
+function statusBadge(status) {
+  const map = {
+    "待处理": "badge-pending",
+    "待人工审核": "badge-review",
+    "生产中": "badge-producing",
+    "已发货": "badge-shipped",
+    "已签收": "badge-received",
+    "完成": "badge-done",
+  };
+  return `<span class="badge ${map[status] || 'badge-pending'}">${status || '未知'}</span>`;
+}
 
+function deliveryBadge(dt) {
+  if (!dt) return "";
+  const cls = dt.startsWith("有货") ? "badge-instock-delivery" : "badge-custom-delivery";
+  return `<span class="badge ${cls}">${dt}</span>`;
+}
+
+function formatDate(ts) {
+  if (!ts) return "-";
+  return new Date(ts).toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+// ─── 初始化 ──────────────────────────────────────────────────────────────────
 async function init() {
   if (!token) {
-    document.getElementById("agentName").textContent = "无效链接";
-    document.getElementById("loading").textContent = "链接无效，请联系销售人员";
+    document.getElementById("agentName").textContent = "无效访问";
     return;
   }
 
-  // 获取代理商信息
+  document.getElementById("navOrder").href = `/order?t=${token}`;
+
   try {
     const res = await fetch(`/api/agent?t=${token}`);
+    if (!res.ok) throw new Error();
     const info = await res.json();
     document.getElementById("agentName").textContent = info.name;
-  } catch { document.getElementById("agentName").textContent = ""; }
-
-  // 加载订单
-  try {
-    const res = await fetch(`/api/orders?t=${token}`);
-    allOrders = await res.json();
-    renderTable(allOrders);
   } catch {
-    document.getElementById("loading").textContent = "加载失败，请刷新重试";
-  }
-}
-
-function renderTable(orders) {
-  document.getElementById("loading").style.display = "none";
-  if (orders.length === 0) {
-    document.getElementById("empty").style.display = "block";
+    document.getElementById("agentName").textContent = "验证失败";
     return;
   }
-  document.getElementById("tableWrap").style.display = "block";
-  const tbody = document.getElementById("tableBody");
-  tbody.innerHTML = orders.map(o => `
-    <tr>
-      <td style="font-family:monospace;font-size:12px">${o.orderNo}</td>
-      <td>${o.patient}</td>
-      <td class="hide-mobile">${o.sku}</td>
-      <td class="hide-mobile">${o.eye}</td>
-      <td><span class="status-badge status-${o.status}">${o.status}</span></td>
-      <td class="hide-mobile" style="color:#999">${o.date}</td>
-    </tr>
-  `).join("");
+
+  // 加载 SKU 列表到筛选器
+  try {
+    const res = await fetch(`/api/skus?t=${token}`);
+    if (res.ok) {
+      const skus = await res.json();
+      const sel = document.getElementById("filterSku");
+      for (const s of skus) {
+        const opt = document.createElement("option");
+        opt.value = s.sku;
+        opt.textContent = `${s.sku} ${s.name}`;
+        sel.appendChild(opt);
+      }
+    }
+  } catch {}
+
+  loadOrders();
 }
 
-function applyFilter() {
+// ─── 加载订单 ──────────────────────────────────────────────────────────────
+async function loadOrders() {
+  const loading = document.getElementById("loading");
+  const empty = document.getElementById("empty");
+  const orderList = document.getElementById("orderList");
+
+  loading.style.display = "block";
+  empty.style.display = "none";
+  orderList.innerHTML = "";
+
+  const params = new URLSearchParams({ t: token, page: currentPage, pageSize });
   const status = document.getElementById("filterStatus").value;
-  const filtered = status ? allOrders.filter(o => o.status === status) : allOrders;
-  document.getElementById("empty").style.display = "none";
-  document.getElementById("tableWrap").style.display = "none";
-  renderTable(filtered);
+  const sku = document.getElementById("filterSku").value;
+  const from = document.getElementById("filterFrom").value;
+  const to = document.getElementById("filterTo").value;
+  if (status) params.set("status", status);
+  if (sku) params.set("sku", sku);
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+
+  try {
+    const res = await fetch(`/api/orders?${params}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    loading.style.display = "none";
+
+    // 更新统计
+    document.getElementById("statTotal").textContent = data.stats.total;
+    document.getElementById("statPending").textContent = data.stats.pending;
+    document.getElementById("statInstock").textContent = data.stats.instock;
+    document.getElementById("statCustom").textContent = data.stats.custom;
+    document.getElementById("statShipped").textContent = data.stats.shipped;
+
+    if (!data.orders || data.orders.length === 0) {
+      empty.style.display = "block";
+      document.getElementById("pagination").style.display = "none";
+      return;
+    }
+
+    // 按来源订单号分组
+    const groups = {};
+    for (const o of data.orders) {
+      const key = o.orderNo || "unknown";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(o);
+    }
+
+    let html = "";
+    for (const [orderNo, items] of Object.entries(groups)) {
+      const date = formatDate(items[0].date);
+      html += `<div class="order-group" onclick="showDetail('${orderNo}')">
+        <div class="order-group-header">
+          <span class="order-no">${orderNo}</span>
+          <span class="meta">${date} · ${items.length}片</span>
+        </div>
+        <div class="order-group-body">`;
+
+      for (const item of items) {
+        html += `<div class="order-item">
+          <div class="left">
+            <span class="customer">${item.customerName || '-'}</span>
+            <span class="sku-info">${item.sku} × ${item.quantity}</span>
+          </div>
+          <div class="right">
+            ${deliveryBadge(item.deliveryType)}
+            ${statusBadge(item.status)}
+          </div>
+        </div>`;
+      }
+
+      html += `</div></div>`;
+    }
+
+    orderList.innerHTML = html;
+
+    // 分页
+    const pagination = document.getElementById("pagination");
+    if (data.totalPages > 1) {
+      pagination.style.display = "flex";
+      document.getElementById("pageInfo").textContent = `${data.page} / ${data.totalPages}（共${data.totalFiltered}条）`;
+      document.getElementById("prevBtn").disabled = data.page <= 1;
+      document.getElementById("nextBtn").disabled = data.page >= data.totalPages;
+    } else {
+      pagination.style.display = "none";
+    }
+
+  } catch (e) {
+    loading.style.display = "none";
+    empty.style.display = "block";
+    empty.textContent = "加载失败，请刷新重试";
+    console.error(e);
+  }
+}
+
+// ─── 分页 ──────────────────────────────────────────────────────────────────
+function changePage(delta) {
+  currentPage += delta;
+  if (currentPage < 1) currentPage = 1;
+  loadOrders();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ─── 订单详情 ──────────────────────────────────────────────────────────────
+async function showDetail(orderNo) {
+  const modal = document.getElementById("detailModal");
+  const content = document.getElementById("detailContent");
+
+  content.innerHTML = '<div class="loading"><span class="spinner"></span>加载中...</div>';
+  modal.classList.add("show");
+
+  try {
+    const res = await fetch(`/api/order/${encodeURIComponent(orderNo)}?t=${token}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    document.getElementById("detailTitle").textContent = `订单 ${data.orderNo}`;
+
+    let html = `<div style="margin-bottom:16px;font-size:14px">`;
+    html += `<div style="margin-bottom:6px"><strong>下单时间：</strong>${formatDate(data.date)}</div>`;
+    html += `<div style="margin-bottom:6px"><strong>收货地址：</strong>${data.address || '-'}</div>`;
+    html += `<div style="margin-bottom:6px"><strong>交期类型：</strong>${deliveryBadge(data.deliveryType)} ${data.promiseDate ? '（承诺 ' + formatDate(data.promiseDate) + '）' : ''}</div>`;
+    html += `<div style="margin-bottom:6px"><strong>订单状态：</strong>${statusBadge(data.status)}</div>`;
+    if (data.remark) html += `<div style="margin-bottom:6px"><strong>备注：</strong>${data.remark}</div>`;
+    html += `</div>`;
+
+    html += `<table class="detail-table">
+      <thead><tr>
+        <th>顾客</th><th>SKU</th><th>眼别</th>
+        <th>SPH</th><th>CYL</th><th>AXIS</th>
+        <th class="hide-mobile">PD</th><th class="hide-mobile">PH</th>
+        <th class="hide-mobile">镜框</th>
+      </tr></thead><tbody>`;
+
+    for (const item of data.items) {
+      html += `<tr>
+        <td>${item.customerName || '-'}</td>
+        <td>${item.sku}</td>
+        <td>${item.eye}</td>
+        <td>${item.sph ?? '-'}</td>
+        <td>${item.cyl ?? '-'}</td>
+        <td>${item.axis ?? '-'}</td>
+        <td class="hide-mobile">${item.pd ?? '-'}</td>
+        <td class="hide-mobile">${item.ph ?? '-'}</td>
+        <td class="hide-mobile">${item.frame || '-'}</td>
+      </tr>`;
+    }
+
+    html += `</tbody></table>`;
+    content.innerHTML = html;
+
+  } catch {
+    content.innerHTML = '<div class="empty">加载失败</div>';
+  }
+}
+
+function closeDetail() {
+  document.getElementById("detailModal").classList.remove("show");
+}
+
+// 点击遮罩关闭
+document.getElementById("detailModal").addEventListener("click", function(e) {
+  if (e.target === this) closeDetail();
+});
+
+// ─── CSV 导出 ──────────────────────────────────────────────────────────────
+function exportCsv() {
+  const params = new URLSearchParams({ t: token });
+  const status = document.getElementById("filterStatus").value;
+  const sku = document.getElementById("filterSku").value;
+  const from = document.getElementById("filterFrom").value;
+  const to = document.getElementById("filterTo").value;
+  if (status) params.set("status", status);
+  if (sku) params.set("sku", sku);
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+
+  showToast("正在导出...", "info");
+
+  fetch(`/api/orders/export?${params}`)
+    .then(res => res.blob())
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `orders-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("导出成功", "success");
+    })
+    .catch(() => showToast("导出失败", "error"));
+}
+
+// ─── Toast ──────────────────────────────────────────────────────────────────
+function showToast(msg, type = "success") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className = `toast ${type}`;
+  el.style.display = "block";
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.style.display = "none", 3000);
 }
 
 init();
