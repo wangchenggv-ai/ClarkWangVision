@@ -506,3 +506,13 @@ select.error + .error-tip { display: block; }
 .mb-8 { margin-bottom: 8px; }
 .mb-16 { margin-bottom: 16px; }
 .hidden { display: none !important; }
+
+/* ─── Print ─────────────────────────────────────────── */
+@media print {
+  body { background: #fff; }
+  .header, .nav, .filter-bar, .pagination, .admin-filter,
+  .admin-actions, .no-print { display: none !important; }
+  .stats-bar, .admin-stats { page-break-after: avoid; }
+  .order-group, .admin-table { break-inside: avoid; }
+  .modal-overlay { display: none !important; }
+}

@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 · 标签打印管理</title>
+<link rel="stylesheet" href="/css/common.css">
+<style>
+body { background: #f5f6fa; }
+.admin-header {
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  color: #fff;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.admin-header h1 { font-size: 18px; font-weight: 600; }
+.admin-header .badge { background: #e74c3c; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+
+.admin-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+
+/* 筛选栏 */
+.admin-filter {
+  background: #fff;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.admin-filter input,
+.admin-filter select {
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.admin-filter input:focus,
+.admin-filter select:focus { border-color: #1677ff; }
+.admin-filter input[type="text"] { width: 180px; }
+.admin-filter .btn { padding: 8px 16px; font-size: 13px; }
+
+/* 统计栏 */
+.admin-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.admin-stat {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px 20px;
+  flex: 1;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.admin-stat .val { font-size: 22px; font-weight: 700; color: #1677ff; }
+.admin-stat .lbl { font-size: 12px; color: #888; margin-top: 2px; }
+
+/* 操作栏 */
+.admin-actions {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.admin-actions .count { color: #888; font-size: 13px; margin-left: auto; }
+
+/* 订单表格 */
+.admin-table {
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.admin-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-table th {
+  background: #fafafa;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #666;
+  border-bottom: 1px solid #f0f0f0;
+  position: sticky;
+  top: 0;
+}
+.admin-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f5f5f5;
+}
+.admin-table tr:hover { background: #f8faff; }
+.admin-table input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+
+/* 标签预览区 */
+.preview-section {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  display: none;
+}
+.preview-section h3 { font-size: 15px; margin-bottom: 16px; color: #333; }
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+.preview-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 10px;
+  background: #fafafa;
+}
+.preview-card .label-title {
+  font-size: 12px;
+  color: #888;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+.preview-card iframe {
+  width: 100%;
+  height: 120px;
+  border: none;
+  border-radius: 4px;
+  background: #fff;
+}
+
+/* 打印时的样式 */
+@media print {
+  body { background: #fff !important; }
+  .admin-header, .admin-filter, .admin-stats, .admin-actions,
+  .admin-table, .preview-section h3, .no-print { display: none !important; }
+  .preview-section {
+    display: block !important;
+    box-shadow: none;
+    padding: 0;
+    margin: 0;
+  }
+  .preview-grid {
+    display: block;
+    columns: 3;
+    column-gap: 4mm;
+  }
+  .preview-card {
+    break-inside: avoid;
+    border: none;
+    padding: 0;
+    margin-bottom: 3mm;
+    background: none;
+  }
+  .preview-card .label-title { display: none; }
+  .preview-card iframe {
+    width: 6cm;
+    height: 3cm;
+    border: none;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="admin-header">
+  <h1>标签打印管理</h1>
+  <span class="badge">内部运营</span>
+</div>
+
+<div class="admin-container">
+  <!-- 筛选栏 -->
+  <div class="admin-filter">
+    <input type="text" id="filterQ" placeholder="订单号 / 顾客名">
+    <select id="filterAgent"><option value="">全部代理商</option></select>
+    <select id="filterStatus">
+      <option value="">全部状态</option>
+      <option value="待处理">待处理</option>
+      <option value="生产中">生产中</option>
+      <option value="已发货">已发货</option>
+      <option value="已签收">已签收</option>
+      <option value="完成">完成</option>
+    </select>
+    <input type="date" id="filterFrom">
+    <input type="date" id="filterTo">
+    <button class="btn btn-primary" onclick="loadOrders()">查询</button>
+    <button class="btn btn-outline" onclick="resetFilter()">重置</button>
+  </div>
+
+  <!-- 统计栏 -->
+  <div class="admin-stats" id="statsBar">
+    <div class="admin-stat"><div class="val" id="statTotal">-</div><div class="lbl">总订单</div></div>
+    <div class="admin-stat"><div class="val" id="statPending">-</div><div class="lbl">待处理</div></div>
+    <div class="admin-stat"><div class="val" id="statProducing">-</div><div class="lbl">生产中</div></div>
+    <div class="admin-stat"><div class="val" id="statShipped">-</div><div class="lbl">已发货</div></div>
+    <div class="admin-stat"><div class="val" id="statReceived">-</div><div class="lbl">已签收</div></div>
+  </div>
+
+  <!-- 操作栏 -->
+  <div class="admin-actions no-print">
+    <label><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> 全选</label>
+    <button class="btn btn-primary" onclick="previewSelected()">预览标签</button>
+    <button class="btn btn-outline" onclick="printLabels()">打印</button>
+    <button class="btn btn-outline" onclick="downloadZip()">导出ZIP</button>
+    <span class="count" id="selectedCount">已选 0 个订单</span>
+  </div>
+
+  <!-- 订单表格 -->
+  <div class="admin-table">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px"></th>
+          <th>订单号</th>
+          <th>顾客</th>
+          <th>代理商</th>
+          <th>SKU</th>
+          <th>数量</th>
+          <th>状态</th>
+          <th>下单日期</th>
+          <th>镜片码</th>
+        </tr>
+      </thead>
+      <tbody id="orderBody"></tbody>
+    </table>
+  </div>
+
+  <!-- 分页 -->
+  <div class="pagination" id="pagination" style="display:none;margin-top:12px">
+    <button class="btn btn-outline" id="prevBtn" onclick="changePage(-1)">上一页</button>
+    <span class="page-info" id="pageInfo"></span>
+    <button class="btn btn-outline" id="nextBtn" onclick="changePage(1)">下一页</button>
+  </div>
+
+  <!-- 标签预览区 -->
+  <div class="preview-section" id="previewSection">
+    <h3>标签预览 <button class="btn btn-text no-print" onclick="clearPreview()" style="font-size:12px;margin-left:8px">清除</button></h3>
+    <div class="preview-grid" id="previewGrid"></div>
+  </div>
+</div>
+
+<script>
+const adminToken = new URLSearchParams(location.search).get("admin") || "";
+let currentPage = 1;
+let allOrders = [];
+let selectedOrders = new Set();
+
+function api(path) {
+  const sep = path.includes("?") ? "&" : "?";
+  return fetch(`${path}${sep}admin=${adminToken}`).then(r => r.json());
+}
+
+function statusBadge(s) {
+  const m = { "待处理":"badge-pending","生产中":"badge-producing","已发货":"badge-shipped","已签收":"badge-received","完成":"badge-done" };
+  return `<span class="badge ${m[s]||'badge-pending'}">${s||'未知'}</span>`;
+}
+
+function fmtDate(ts) {
+  if (!ts) return "-";
+  return new Date(ts).toLocaleDateString("zh-CN", { month:"2-digit", day:"2-digit" });
+}
+
+async function loadOrders() {
+  const params = new URLSearchParams();
+  const q = document.getElementById("filterQ").value.trim();
+  const agent = document.getElementById("filterAgent").value;
+  const status = document.getElementById("filterStatus").value;
+  const from = document.getElementById("filterFrom").value;
+  const to = document.getElementById("filterTo").value;
+  if (q) params.set("q", q);
+  if (agent) params.set("agent", agent);
+  if (status) params.set("status", status);
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  params.set("page", currentPage);
+  params.set("pageSize", 50);
+
+  const data = await api(`/api/admin/orders?${params}`);
+  allOrders = data.orders || [];
+
+  // 更新统计
+  const s = data.stats || {};
+  document.getElementById("statTotal").textContent = s.total || 0;
+  document.getElementById("statPending").textContent = s.pending || 0;
+  document.getElementById("statProducing").textContent = s.producing || 0;
+  document.getElementById("statShipped").textContent = s.shipped || 0;
+  document.getElementById("statReceived").textContent = s.received || 0;
+
+  // 更新代理商筛选下拉
+  const agentSelect = document.getElementById("filterAgent");
+  const currentVal = agentSelect.value;
+  const agents = data.agents || [];
+  agentSelect.innerHTML = '<option value="">全部代理商</option>' + agents.map(a => `<option value="${a}" ${a===currentVal?'selected':''}>${a}</option>`).join("");
+
+  renderOrders();
+  renderPagination(data.page, data.totalPages);
+}
+
+function renderOrders() {
+  const tbody = document.getElementById("orderBody");
+  tbody.innerHTML = allOrders.map(o => `
+    <tr>
+      <td><input type="checkbox" data-order="${o.orderNo}" ${selectedOrders.has(o.orderNo)?'checked':''} onchange="toggleOrder('${o.orderNo}')"></td>
+      <td style="font-family:monospace;font-size:12px">${o.orderNo}</td>
+      <td>${o.customerName}</td>
+      <td>${o.agentName}</td>
+      <td>${o.sku}</td>
+      <td>${o.quantity}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td>${fmtDate(o.date)}</td>
+      <td style="font-family:monospace;font-size:11px;color:#888">${o.lensCode ? o.lensCode.substring(0,16)+'…' : '-'}</td>
+    </tr>
+  `).join("");
+  updateSelectedCount();
+}
+
+function toggleOrder(orderNo) {
+  if (selectedOrders.has(orderNo)) selectedOrders.delete(orderNo);
+  else selectedOrders.add(orderNo);
+  updateSelectedCount();
+}
+
+function toggleSelectAll() {
+  const checked = document.getElementById("selectAll").checked;
+  if (checked) allOrders.forEach(o => selectedOrders.add(o.orderNo));
+  else allOrders.forEach(o => selectedOrders.delete(o.orderNo));
+  renderOrders();
+}
+
+function updateSelectedCount() {
+  document.getElementById("selectedCount").textContent = `已选 ${selectedOrders.size} 个订单`;
+}
+
+function renderPagination(page, totalPages) {
+  const el = document.getElementById("pagination");
+  if (totalPages <= 1) { el.style.display = "none"; return; }
+  el.style.display = "flex";
+  document.getElementById("pageInfo").textContent = `${page} / ${totalPages}`;
+  document.getElementById("prevBtn").disabled = page <= 1;
+  document.getElementById("nextBtn").disabled = page >= totalPages;
+}
+
+function changePage(delta) {
+  currentPage += delta;
+  loadOrders();
+}
+
+function resetFilter() {
+  document.getElementById("filterQ").value = "";
+  document.getElementById("filterAgent").value = "";
+  document.getElementById("filterStatus").value = "";
+  document.getElementById("filterFrom").value = "";
+  document.getElementById("filterTo").value = "";
+  currentPage = 1;
+  loadOrders();
+}
+
+// ─── 标签预览 ────────────────────────────────────────────────────────
+
+async function previewSelected() {
+  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
+
+  const orderNos = [...selectedOrders].join(",");
+  const data = await api(`/api/admin/labels/batch?orderNos=${encodeURIComponent(orderNos)}`);
+
+  const section = document.getElementById("previewSection");
+  const grid = document.getElementById("previewGrid");
+  section.style.display = "block";
+  grid.innerHTML = "";
+
+  if (!data.labels || data.labels.length === 0) {
+    grid.innerHTML = '<p style="color:#888;padding:20px">所选订单尚未生成镜片码，请先确认订单</p>';
+    return;
+  }
+
+  for (const label of data.labels) {
+    const card = document.createElement("div");
+    card.className = "preview-card";
+    card.innerHTML = `
+      <div class="label-title">
+        <span>${label.orderNo}</span>
+        <span>${label.customer} ${label.eye}</span>
+      </div>
+      <iframe id="frame-${label.lensCode}"></iframe>
+    `;
+    grid.appendChild(card);
+
+    // 写入 iframe
+    const frame = card.querySelector("iframe");
+    frame.onload = () => {
+      frame.style.height = frame.contentDocument.body.scrollHeight + "px";
+    };
+    const blob = new Blob([label.html], { type: "text/html" });
+    frame.src = URL.createObjectURL(blob);
+  }
+
+  section.scrollIntoView({ behavior: "smooth" });
+}
+
+function clearPreview() {
+  document.getElementById("previewSection").style.display = "none";
+  document.getElementById("previewGrid").innerHTML = "";
+}
+
+function printLabels() {
+  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
+  // 先预览再打印
+  previewSelected().then(() => {
+    setTimeout(() => window.print(), 500);
+  });
+}
+
+function downloadZip() {
+  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
+  // 逐个下载 ZIP（每个订单一个）
+  for (const orderNo of selectedOrders) {
+    const url = `/api/order/${encodeURIComponent(orderNo)}/factory-zip?t=${adminToken}`;
+    window.open(url, "_blank");
+  }
+}
+
+// ─── 初始化 ──────────────────────────────────────────────────────────
+
+if (!adminToken) {
+  document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#e74c3c">缺少管理权限参数，请使用 ?admin=xxx 访问</div>';
+} else {
+  loadOrders();
+}
+</script>
+</body>
+</html>

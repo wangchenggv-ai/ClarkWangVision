@@ -38,6 +38,7 @@ const TABLES = {
   finished_inventory: "tblUF49B6i53MV2O",
   order: "tblk9Ch4gk2uQ1zG",
   customer: "tbltXNNhF65EBl17",
+  lens_detail: "tblC7pve7ObFgIOl",
 };
 
 // ─── 配置 ──────────────────────────────────────────────────────────────────
@@ -362,6 +363,34 @@ function csvEscape(val) {
   return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+function isAdmin(req) {
+  const url = new URL(req.url, `http://localhost:${PORT}`);
+  const adminToken = url.searchParams.get("admin") || "";
+  const envToken = ENV.ADMIN_TOKEN || "";
+  return envToken && adminToken === envToken;
+}
+
+// ─── 镜片明细 CRUD ──────────────────────────────────────────────────────
+
+async function createLensDetail(orderNo, fields) {
+  return createRecord(TABLES.lens_detail, {
+    "来源订单号": orderNo,
+    ...fields,
+  });
+}
+
+async function batchCreateLensDetails(records) {
+  return batchCreateRecords(TABLES.lens_detail, records);
+}
+
+async function getLensDetailsByOrder(orderNo) {
+  const encoded = encodeURIComponent(`"${orderNo}"`);
+  const data = await feishuApi("GET",
+    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.lens_detail}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encoded}`
+  );
+  return data?.items || [];
+}
+
 // ─── QR 溯源码 ──────────────────────────────────────────────────────────────
 
 function genLensCode() {
@@ -464,6 +493,53 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;paddin
 </div></div></body></html>`;
 
   return { name: `labels/${orderNo}_${customer}_${eye}.html`, data: Buffer.from(html, "utf-8") };
+}
+
+// 从字段直接生成标签 HTML（兼容镜片明细表）
+async function buildLabelHtmlFromFields(f, orderNo) {
+  const lensCode = f["镜片码"];
+  if (!lensCode) return null;
+
+  const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
+  const eye = f["眼别"] || "";
+  const sku = f["SKU"] || "";
+  const sph = f["球镜SPH"] ?? "";
+  const cyl = f["柱镜CYL"] ?? "";
+  const axis = f["轴位AXIS"] ?? "";
+
+  const qrDataUrl = await QRCode.toDataURL(
+    `${getServerBaseUrl()}/verify/${lensCode}`,
+    { errorCorrectionLevel: "H", width: 200, margin: 2 }
+  );
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<title>${orderNo} ${customer} ${eye}</title>
+<style>
+@page{size:6cm 3cm;margin:0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:3mm;height:100%}
+.label{display:flex;gap:2mm;align-items:center;height:100%}
+.qr img{width:18mm;height:18mm;display:block}
+.info{flex:1;min-width:0}
+.order{font-size:6pt;color:#999;margin-bottom:1mm}
+.customer{font-weight:700;font-size:9pt;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rx{font-family:"SF Mono",Menlo,monospace;font-size:7pt;line-height:1.4;color:#333}
+.code{font-size:6pt;color:#888;margin-top:1mm;font-family:monospace;word-break:break-all}
+.brand{font-size:5pt;color:#bbb;text-align:right;margin-top:1mm}
+@media print{body{padding:2mm}}
+</style></head><body>
+<div class="label">
+<div class="qr"><img src="${qrDataUrl}"></div>
+<div class="info">
+<div class="order">${orderNo}</div>
+<div class="customer">${f["顾客姓名"]||""} ${eye}</div>
+<div class="rx">${sku} SPH ${sph} CYL ${cyl} ${axis ? "AXIS " + axis : ""}</div>
+<div class="code">${lensCode}</div>
+<div class="brand">GAUSH | CLEAR</div>
+</div></div></body></html>`;
+
+  return { orderNo, customer, eye, lensCode, html };
 }
 
 // 构建工厂导出 ZIP
@@ -661,6 +737,10 @@ const server = createServer(async (req, res) => {
       serveStatic(res, resolve(__dirname, "public/track.html"));
       return logReq(req, 200, start);
     }
+    if (pathname === "/labels" || pathname === "/labels.html") {
+      serveStatic(res, resolve(__dirname, "public/labels.html"));
+      return logReq(req, 200, start);
+    }
 
     // ── 静态资源 ──
     if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/qrcodes/")) {
@@ -744,7 +824,8 @@ const server = createServer(async (req, res) => {
       const customerId = await getOrCreateCustomer(agent.name);
       const orderNo = genOrderNo();
       const now = Date.now();
-      const batchRecords = [];
+      const orderRecords = [];    // 订单主表记录
+      const lensRecords = [];     // 镜片明细表记录
       const items = [];
       let totalLenses = 0;
 
@@ -757,19 +838,34 @@ const server = createServer(async (req, res) => {
         if (!skuInfo) continue;
 
         const est = estimateDelivery(skuInfo, quantity);
+        const lensCount = eyes.length;
 
+        // 写入订单主表（每笔患者 = 1 行）
+        orderRecords.push({
+          fields: {
+            "来源订单号": orderNo,
+            "SKU": sku,
+            "数量": quantity * lensCount,
+            "订单状态": "待处理",
+            "交期类型": est.deliveryType,
+            "预计交期": est.promiseDate,
+            "下单日期": now,
+            "同步时间": now,
+            "顾客姓名": customerName.trim(),
+            "代理商名称": agent.name,
+            "代理商ID": agent.id,
+            "收货地址": address.trim(),
+            "订单来源": "代理商门户",
+            "客户ID": customerId,
+            ...(remark?.trim() ? { "备注": remark.trim() } : {}),
+          },
+        });
+
+        // 写入镜片明细表（每眼 = 1 行）
         for (const eye of eyes) {
-          batchRecords.push({
+          lensRecords.push({
             fields: {
               "来源订单号": orderNo,
-              "SKU": sku,
-              "数量": quantity,
-              "订单状态": "待处理",
-              "交期类型": est.deliveryType,
-              "预计交期": est.promiseDate,
-              "下单日期": now,
-              "同步时间": now,
-              "顾客姓名": customerName.trim(),
               "眼别": eye.side || "",
               "球镜SPH": Number(eye.sph) || 0,
               "柱镜CYL": Number(eye.cyl) || 0,
@@ -777,12 +873,11 @@ const server = createServer(async (req, res) => {
               "瞳距": Number(eye.pd) || 0,
               "瞳高": Number(eye.ph) || 0,
               "镜框型号": eye.frame?.trim() || "",
+              "SKU": sku,
+              "顾客姓名": customerName.trim(),
               "代理商名称": agent.name,
               "代理商ID": agent.id,
-              "收货地址": address.trim(),
-              "订单来源": "代理商门户",
-              "客户ID": customerId,
-              ...(remark?.trim() ? { "备注": remark.trim() } : {}),
+              "订单状态": "待处理",
             },
           });
           totalLenses++;
@@ -810,15 +905,24 @@ const server = createServer(async (req, res) => {
         });
       }
 
-      if (batchRecords.length === 0) {
+      if (orderRecords.length === 0) {
         jsonRes(res, 400, { error: "没有有效的订单数据" });
         return logReq(req, 400, start);
       }
 
-      const ok = await batchCreateRecords(TABLES.order, batchRecords);
-      if (!ok) {
-        jsonRes(res, 500, { error: "写入飞书失败，请重试" });
+      // 写入订单主表
+      const okOrder = await batchCreateRecords(TABLES.order, orderRecords);
+      if (!okOrder) {
+        jsonRes(res, 500, { error: "写入飞书失败（订单主表），请重试" });
         return logReq(req, 500, start);
+      }
+
+      // 写入镜片明细表
+      if (lensRecords.length > 0) {
+        const okLens = await batchCreateRecords(TABLES.lens_detail, lensRecords);
+        if (!okLens) {
+          console.error(`  ⚠️ 镜片明细写入失败，订单 ${orderNo} 主表已写入`);
+        }
       }
 
       // 通知
@@ -955,6 +1059,16 @@ const server = createServer(async (req, res) => {
           customerName: f["顾客姓名"] || "",
           sku: f["SKU"] || "",
           quantity: Number(f["数量"]) || 1,
+          deliveryType: f["交期类型"] || "",
+          status: f["订单状态"] || "",
+        };
+      });
+
+      // 从镜片明细表获取处方数据
+      const lensDetails = await getLensDetailsByOrder(orderNo);
+      const lenses = lensDetails.map(r => {
+        const f = r.fields;
+        return {
           eye: f["眼别"] || "",
           sph: f["球镜SPH"],
           cyl: f["柱镜CYL"],
@@ -962,7 +1076,7 @@ const server = createServer(async (req, res) => {
           pd: f["瞳距"],
           ph: f["瞳高"],
           frame: f["镜框型号"] || "",
-          deliveryType: f["交期类型"] || "",
+          lensCode: f["镜片码"] || "",
           status: f["订单状态"] || "",
         };
       });
@@ -976,6 +1090,7 @@ const server = createServer(async (req, res) => {
         promiseDate: firstItem.fields["预计交期"] || null,
         status: firstItem.fields["订单状态"] || "",
         items,
+        lenses,
       });
       return logReq(req, 200, start);
     }
@@ -1099,19 +1214,49 @@ const server = createServer(async (req, res) => {
       // 确保镜片码字段存在
       await ensureLensCodeField();
 
-      const lensCodes = [];
-      for (const rec of data2.items) {
-        const existingCode = rec.fields["镜片码"];
-        if (existingCode) { lensCodes.push(existingCode); continue; }
+      // 从镜片明细表获取该订单所有镜片
+      const lensDetails = await getLensDetailsByOrder(orderNo);
 
-        const lensCode = genLensCode();
-        await updateRecord(TABLES.order, rec.record_id, {
-          "镜片码": lensCode,
+      const lensCodes = [];
+
+      if (lensDetails.length > 0) {
+        // 新模式：写入明细表
+        for (const rec of lensDetails) {
+          const existingCode = rec.fields["镜片码"];
+          if (existingCode) { lensCodes.push(existingCode); continue; }
+
+          const lensCode = genLensCode();
+          await updateRecord(TABLES.lens_detail, rec.record_id, {
+            "镜片码": lensCode,
+            "订单状态": "生产中",
+          });
+          await generateQRPng(lensCode);
+          lensCodes.push(lensCode);
+          console.log(`  镜片码生成: ${orderNo} → ${lensCode}`);
+        }
+      } else {
+        // 兼容旧模式：直接写主表
+        for (const rec of data2.items) {
+          const existingCode = rec.fields["镜片码"];
+          if (existingCode) { lensCodes.push(existingCode); continue; }
+
+          const lensCode = genLensCode();
+          await updateRecord(TABLES.order, rec.record_id, {
+            "镜片码": lensCode,
+            "订单状态": "生产中",
+          });
+          await generateQRPng(lensCode);
+          lensCodes.push(lensCode);
+          console.log(`  镜片码生成: ${orderNo} → ${lensCode}`);
+        }
+      }
+
+      // 更新主表镜片码汇总
+      if (lensCodes.length > 0 && data2.items.length > 0) {
+        await updateRecord(TABLES.order, data2.items[0].record_id, {
+          "镜片码": lensCodes.join(","),
           "订单状态": "生产中",
         });
-        await generateQRPng(lensCode);
-        lensCodes.push(lensCode);
-        console.log(`  镜片码生成: ${orderNo} → ${lensCode}`);
       }
 
       jsonRes(res, 200, { success: true, orderNo, lensCodes });
@@ -1221,6 +1366,121 @@ const server = createServer(async (req, res) => {
       res.writeHead(found ? 200 : 404, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
       return logReq(req, found ? 200 : 404, start);
+    }
+
+    // ── 管理端 API（简单密码鉴权） ──────────────────────────────────────
+
+    // GET /api/admin/orders — 全部订单列表（管理端，无代理商过滤）
+    if (pathname === "/api/admin/orders") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const filterStatus = url.searchParams.get("status") || "";
+      const filterAgent = url.searchParams.get("agent") || "";
+      const filterQ = url.searchParams.get("q") || "";
+      const filterFrom = url.searchParams.get("from") || "";
+      const filterTo = url.searchParams.get("to") || "";
+      const page = Math.max(1, parseInt(url.searchParams.get("page")) || 1);
+      const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize")) || 50));
+
+      const allRecords = await listRecords(TABLES.order);
+
+      let orders = allRecords.map(r => {
+        const f = r.fields;
+        return {
+          orderNo: f["来源订单号"] || "",
+          customerName: f["顾客姓名"] || "",
+          agentName: f["代理商名称"] || "",
+          agentId: f["代理商ID"] || "",
+          sku: f["SKU"] || "",
+          quantity: Number(f["数量"]) || 1,
+          status: f["订单状态"] || "",
+          deliveryType: f["交期类型"] || "",
+          date: f["下单日期"] || f["同步时间"] || null,
+          lensCode: f["镜片码"] || "",
+        };
+      });
+
+      // 统计
+      const agents = [...new Set(orders.map(o => o.agentName).filter(Boolean))].sort();
+      const stats = {
+        total: orders.length,
+        pending: orders.filter(o => o.status === "待处理").length,
+        producing: orders.filter(o => o.status === "生产中").length,
+        shipped: orders.filter(o => o.status === "已发货").length,
+        received: orders.filter(o => o.status === "已签收").length,
+      };
+
+      // 筛选
+      if (filterStatus) orders = orders.filter(o => o.status === filterStatus);
+      if (filterAgent) orders = orders.filter(o => o.agentName === filterAgent);
+      if (filterQ) orders = orders.filter(o => o.orderNo.includes(filterQ) || o.customerName.includes(filterQ));
+      if (filterFrom) {
+        const fromTs = new Date(filterFrom).getTime();
+        if (!isNaN(fromTs)) orders = orders.filter(o => o.date && o.date >= fromTs);
+      }
+      if (filterTo) {
+        const toTs = new Date(filterTo + "T23:59:59").getTime();
+        if (!isNaN(toTs)) orders = orders.filter(o => o.date && o.date <= toTs);
+      }
+
+      orders.sort((a, b) => (b.date || 0) - (a.date || 0));
+      const totalPages = Math.ceil(orders.length / pageSize) || 1;
+      const paged = orders.slice((page - 1) * pageSize, page * pageSize);
+
+      jsonRes(res, 200, { orders: paged, stats, agents, page, pageSize, totalPages, totalFiltered: orders.length });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/order/:orderNo/lens-details — 获取某订单镜片明细
+    const adminLensMatch = pathname.match(/^\/api\/admin\/order\/([^/]+)\/lens-details$/);
+    if (adminLensMatch) {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const orderNo = decodeURIComponent(adminLensMatch[1]);
+      const details = await getLensDetailsByOrder(orderNo);
+      const lenses = details.map(r => {
+        const f = r.fields;
+        return {
+          eye: f["眼别"] || "",
+          sph: f["球镜SPH"] ?? "",
+          cyl: f["柱镜CYL"] ?? "",
+          axis: f["轴位AXIS"] ?? "",
+          pd: f["瞳距"] ?? "",
+          ph: f["瞳高"] ?? "",
+          frame: f["镜框型号"] || "",
+          lensCode: f["镜片码"] || "",
+          sku: f["SKU"] || "",
+          customerName: f["顾客姓名"] || "",
+          status: f["订单状态"] || "",
+        };
+      });
+      jsonRes(res, 200, { orderNo, lenses });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/labels/batch — 批量生成标签 HTML
+    const adminLabelsMatch = pathname.match(/^\/api\/admin\/labels\/batch$/);
+    if (adminLabelsMatch) {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const orderNosParam = url.searchParams.get("orderNos") || "";
+      if (!orderNosParam) { jsonRes(res, 400, { error: "请提供 orderNos 参数" }); return logReq(req, 400, start); }
+
+      const orderNos = orderNosParam.split(",").map(s => s.trim()).filter(Boolean);
+      const allLabels = [];
+
+      for (const orderNo of orderNos) {
+        const details = await getLensDetailsByOrder(orderNo);
+        for (const rec of details) {
+          const f = rec.fields;
+          if (!f["镜片码"]) continue;
+          const html = await buildLabelHtmlFromFields(f, orderNo);
+          if (html) allLabels.push(html);
+        }
+      }
+
+      jsonRes(res, 200, { labels: allLabels, count: allLabels.length });
+      return logReq(req, 200, start);
     }
 
     // ── 404 ──
