@@ -83,31 +83,62 @@ async function apiPost(path, body) {
 // ─── 读旧表（只读）────────────────────────────────────────────────────────────
 
 async function fetchOldOrders(mapping, sinceDate) {
-  const { OLD_APP_TOKEN, OLD_TABLE_ID, fields } = mapping;
+  const { OLD_APP_TOKEN, OLD_TABLE_ID } = mapping;
   if (!OLD_APP_TOKEN || OLD_APP_TOKEN === "待填") {
     console.log("  ⚠️  field_mapping.json 中 OLD_APP_TOKEN 尚未填写，跳过读取旧表");
     return [];
   }
 
-  const dateField = fields["旧_下单日期"];
-  const records = [];
+  let records = [];
   let pageToken = "";
 
   while (true) {
     let qs = "?page_size=100";
     if (pageToken) qs += `&page_token=${pageToken}`;
-    if (sinceDate && dateField) {
-      // 飞书 filter: 下单日期 >= sinceDate (毫秒时间戳)
-      const ts = new Date(sinceDate).getTime();
-      qs += `&filter=AND(CurrentValue.[${dateField}]>=${ts})`;
-    }
+    // 注意：不使用filter，读取后在本地按日期过滤
+    // （飞书filter对日期字段的语法需要field_id，且行为不可靠）
     const res = await apiGet(`/bitable/v1/apps/${OLD_APP_TOKEN}/tables/${OLD_TABLE_ID}/records${qs}`);
     if (res.code !== 0) { console.error("  ❌ 读旧表失败:", res.msg); break; }
     if (res.data.items) records.push(...res.data.items);
     if (!res.data.has_more) break;
     pageToken = res.data.page_token;
   }
+
+  // 本地按日期过滤
+  if (sinceDate) {
+    const dateFieldName = mapping.fields["旧_下单日期"];
+    const sinceTs = new Date(sinceDate).getTime();
+    const before = records.length;
+    records = records.filter(r => {
+      const dt = r.fields[dateFieldName];
+      if (!dt) return false;
+      // 飞书日期字段可能是毫秒时间戳
+      const ts = typeof dt === "number" ? dt : new Date(dt).getTime();
+      return ts >= sinceTs;
+    });
+    console.log(`    日期过滤: ${before} → ${records.length} 条 (>= ${sinceDate})`);
+  }
+
   return records;
+}
+
+// ─── Link字段文本提取 ─────────────────────────────────────────────────────────
+// 飞书Link字段返回格式: [{text:"...", record_ids:["rec..."], table_id:"tbl..."}]
+// text属性已经包含可读文本，无需额外查询关联表
+
+function extractLinkText(fieldValue) {
+  if (!fieldValue) return "";
+  if (typeof fieldValue === "string") return fieldValue;
+  const arr = Array.isArray(fieldValue) ? fieldValue : [fieldValue];
+  return arr.map(item => item.text || item.name || "").filter(Boolean).join(", ");
+}
+
+// 从飞书字段值中提取纯文本
+function val(v) {
+  if (!v) return "";
+  if (Array.isArray(v)) return v.map(i => i.text || i.name || String(i)).join("");
+  if (typeof v === "object") return v.text || v.name || "";
+  return String(v);
 }
 
 // ─── 客户表：按名称查找或新建 ──────────────────────────────────────────────────
@@ -193,22 +224,26 @@ async function cleanupOldOrders(dryRun) {
 
 // ─── 字段映射：旧记录 → 新记录 ────────────────────────────────────────────────
 
-function mapRecord(oldFields, mapping, customerId) {
+function mapRecord(oldFields, mapping, customerId, resolvedFields) {
   const f = mapping.fields;
-  const now = new Date().toISOString();
 
   // 日期转毫秒时间戳（飞书日期字段要求）
   function toTs(raw) {
     if (!raw) return null;
-    const d = new Date(typeof raw === "number" ? (raw - 25569) * 86400000 : raw);
+    if (typeof raw === "number") {
+      // 可能是毫秒时间戳或Excel日期序列号
+      if (raw > 1e12) return raw;  // 已经是毫秒时间戳
+      return (raw - 25569) * 86400000;  // Excel序列号转毫秒
+    }
+    const d = new Date(raw);
     return isNaN(d.getTime()) ? null : d.getTime();
   }
 
   return {
-    "SKU":        oldFields[f["旧_SKU"]] || "",
+    "SKU":        resolvedFields.sku || oldFields[f["旧_SKU"]] || "",
     "数量":       Number(oldFields[f["旧_数量"]]) || 0,
     "下单日期":   toTs(oldFields[f["旧_下单日期"]]),
-    "状态":       oldFields[f["旧_状态"]] || "待处理",
+    "订单状态":   oldFields[f["旧_状态"]] || "待处理",
     "客户ID":     customerId || "",
     "来源订单号": String(oldFields[f["旧_订单号"]] || ""),
     "同步时间":   Date.now(),
@@ -263,8 +298,8 @@ async function main() {
 
   // 查客户表 ID
   const listRes = await apiGet(`/bitable/v1/apps/${NEW_APP_TOKEN}/tables`);
-  const customerTable = (listRes.data?.items || []).find(t => t.name === "终端客户")?.table_id;
-  if (!customerTable) { console.error("❌ 未找到终端客户表，请先运行 node migrate_tables.js"); return; }
+  const customerTable = (listRes.data?.items || []).find(t => t.name.includes("终端客户"))?.table_id;
+  if (!customerTable) { console.error("❌ 未找到终端客户表"); return; }
 
   // 同步
   console.log("\n[3] 同步中...");
@@ -275,15 +310,22 @@ async function main() {
     const orderNo = String(rec.fields[mapping.fields["旧_订单号"]] || rec.record_id);
     if (existingNos.has(orderNo)) { skipped++; continue; }
 
-    const customerName = rec.fields[mapping.fields["旧_客户名"]] || null;
+    // 提取Link字段文本（Link字段的text属性已包含可读文本）
+    const customerName = extractLinkText(rec.fields[mapping.fields["旧_客户名"]]);
+    const sku = extractLinkText(rec.fields[mapping.fields["旧_SKU"]]);
+
     const customerId = await getOrCreateCustomer(customerTable, customerName, dryRun);
-    const newFields = mapRecord(rec.fields, mapping, customerId);
+    const newFields = mapRecord(rec.fields, mapping, customerId, { sku });
 
     if (dryRun) {
-      console.log(`  [DRY] 订单 ${orderNo}: SKU=${newFields.SKU} 数量=${newFields.数量} 客户=${customerId}`);
+      console.log(`  [DRY] 订单 ${orderNo}: SKU=${newFields.SKU} 数量=${newFields.数量} 客户=${customerName}(${customerId})`);
     } else {
       const r = await apiPost(`/bitable/v1/apps/${NEW_APP_TOKEN}/tables/${NEW_ORDER_TABLE}/records`, { fields: newFields });
-      if (r.code !== 0) { console.error(`  ❌ 写入失败 ${orderNo}:`, r.msg); continue; }
+      if (r.code !== 0) {
+        console.error(`  ❌ 写入失败 ${orderNo}:`, r.msg);
+        if (inserted === 0) console.error('    调试 fields:', JSON.stringify(newFields));
+        continue;
+      }
     }
     inserted++;
     existingNos.add(orderNo);

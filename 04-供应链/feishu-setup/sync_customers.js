@@ -1,11 +1,14 @@
 /**
- * sync_customers.js — 增量同步 CRM 客户表 → 供应链终端客户表
+ * sync_customers.js — 同步 CRM 客户表 → 供应链终端客户表
  *
- * CRM 客户表只读，不做任何写操作。
+ * 数据源: CRM "02_终端开发和管理" (RlfTb6gykaEb3gsR1lwcGnShnAA / tblQidjfbGA8DDkJ)
+ * 目标: 供应链终端客户表 (B3xQbbqicaome1sKdZbcwdk8nWg / tbltXNNhF65EBl17)
+ *
+ * CRM 表只读，不做任何写操作。
  * 用客户名称匹配，存在则跳过，不存在则新建（自动生成客户ID）。
  *
  * Usage:
- *   node sync_customers.js            # 全量同步（客户数量少，直接全量）
+ *   node sync_customers.js            # 全量同步
  *   node sync_customers.js --dry-run  # 只打印，不写入
  */
 
@@ -30,7 +33,9 @@ function loadEnv() {
   return env;
 }
 
-let TOKEN = "";
+let TOKEN = "";        // 供应链App token（用于写入）
+let CRM_TOKEN = "";    // CRM App token（用于读取CRM）
+
 async function getToken(env) {
   const res = await fetch(`${BASE}/auth/v3/tenant_access_token/internal`, {
     method: "POST",
@@ -40,9 +45,27 @@ async function getToken(env) {
   TOKEN = (await res.json()).tenant_access_token;
 }
 
+async function getCrmToken(env) {
+  const appId = env.CRM_APP_ID || env.FEISHU_APP_ID;
+  const appSecret = env.CRM_APP_SECRET || env.FEISHU_APP_SECRET;
+  const res = await fetch(`${BASE}/auth/v3/tenant_access_token/internal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
+  });
+  CRM_TOKEN = (await res.json()).tenant_access_token;
+}
+
 async function apiGet(path) {
   const res = await fetch(`${BASE}${path}`, {
     headers: { Authorization: `Bearer ${TOKEN}` },
+  });
+  return res.json();
+}
+
+async function crmApiGet(path) {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { Authorization: `Bearer ${CRM_TOKEN}` },
   });
   return res.json();
 }
@@ -70,6 +93,20 @@ async function listAllRecords(appToken, tableId) {
   return records;
 }
 
+async function listCrmRecords(appToken, tableId) {
+  const records = [];
+  let pageToken = "";
+  while (true) {
+    const qs = pageToken ? `?page_size=100&page_token=${pageToken}` : "?page_size=100";
+    const res = await crmApiGet(`/bitable/v1/apps/${appToken}/tables/${tableId}/records${qs}`);
+    if (res.code !== 0) { console.error("  ❌ 读取CRM失败:", res.msg); break; }
+    if (res.data.items) records.push(...res.data.items);
+    if (!res.data.has_more) break;
+    pageToken = res.data.page_token;
+  }
+  return records;
+}
+
 function genCustomerId() {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const r = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -89,17 +126,16 @@ async function main() {
   console.log(`=== CRM客户同步 ${dryRun ? "[DRY-RUN]" : ""} ===\n`);
 
   const env = loadEnv();
-  if (!env.CRM_APP_TOKEN || env.CRM_APP_TOKEN === "待填") {
-    console.log("⚠️  .env 中 CRM_APP_TOKEN 尚未填写，退出");
-    process.exit(1);
-  }
+  const CRM_APP_TOKEN = env.CRM_APP_TOKEN || "RlfTb6gykaEb3gsR1lwcGnShnAA";
+  const CRM_CUSTOMER_TABLE = env.CRM_CUSTOMER_TABLE || "tblQidjfbGA8DDkJ";
 
   await getToken(env);
-  console.log("✅ 飞书 token 获取成功\n");
+  await getCrmToken(env);
+  console.log("✅ 飞书 tokens 获取成功（供应链 + CRM）\n");
 
-  // 读 CRM 客户表
+  // 读 CRM 客户表（用CRM token）
   console.log("[1] 读取 CRM 客户表...");
-  const crmCustomers = await listAllRecords(env.CRM_APP_TOKEN, env.CRM_CUSTOMER_TABLE);
+  const crmCustomers = await listCrmRecords(CRM_APP_TOKEN, CRM_CUSTOMER_TABLE);
   console.log(`    读到 ${crmCustomers.length} 条`);
 
   if (crmCustomers.length === 0) {
@@ -118,7 +154,7 @@ async function main() {
   let created = 0, skipped = 0;
 
   for (const rec of crmCustomers) {
-    const name = val(rec.fields["客户名称"]) || val(rec.fields["名称"]) || val(rec.fields["customer_name"]);
+    const name = val(rec.fields["客户名称"]);
     if (!name) { skipped++; continue; }
     if (existingNames.has(name)) { skipped++; continue; }
 
@@ -126,14 +162,16 @@ async function main() {
     const fields = {
       客户ID: newId,
       客户名称: name,
-      来源系统: "CRM手动",
+      来源系统: "CRM同步",
     };
 
-    // 可选字段（如果 CRM 有这些字段）
-    const type = val(rec.fields["客户类型"]);
-    const city = val(rec.fields["所在城市"]) || val(rec.fields["城市"]);
-    if (type) fields["客户类型"] = type;
-    if (city) fields["所在城市"] = city;
+    // 客户性质 → 客户类型映射
+    const nature = val(rec.fields["客户性质"]);
+    if (nature) {
+      if (nature.includes("医院")) fields["客户类型"] = "眼科医院";
+      else if (nature.includes("门诊") || nature.includes("门店")) fields["客户类型"] = "眼镜门店";
+      else fields["客户类型"] = "其他";
+    }
 
     if (dryRun) {
       console.log(`  [DRY] 新建客户: ${name} → ${newId}`);

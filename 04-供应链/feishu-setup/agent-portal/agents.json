@@ -1,51 +1,330 @@
 [
   {
-    "id": "AG-001",
-    "name": "示例代理商（待替换）",
-    "token": "AG001-replace-this-token",
-    "phone": "",
-    "address": ""
-  },
-  {
     "id": "AG-002",
     "name": "测试代理商",
     "token": "AG-002-zxkmgoryb6nprmv6",
     "phone": "",
-    "address": ""
+    "address": "",
+    "crm_id": "TEST"
+  },
+  {
+    "id": "AG-001",
+    "name": "北京澳美雅博医疗器械有限公司",
+    "token": "AG-001-e662c4a12861fbf8",
+    "phone": "",
+    "address": "北京市",
+    "crm_id": "D001"
+  },
+  {
+    "id": "AG-002a",
+    "name": "北京东方拓普伟业科技有限公司",
+    "token": "AG-002a-f749def786e71b3a",
+    "phone": "",
+    "address": "北京市",
+    "crm_id": "D002"
   },
   {
     "id": "AG-003",
-    "name": "北京明视眼镜",
-    "token": "AG-003-z3t0557ucthgfxep",
+    "name": "北京高屋医疗",
+    "token": "AG-003-886e58610acc5957",
     "phone": "",
-    "address": ""
+    "address": "北京市",
+    "crm_id": "D003"
   },
   {
     "id": "AG-004",
-    "name": "上海优视光学",
-    "token": "AG-004-5otjdnmwxt34i7ws",
+    "name": "北京捷瑞康成（铂林眼科）",
+    "token": "AG-004-f12f5438058fac37",
     "phone": "",
-    "address": ""
+    "address": "北京市",
+    "crm_id": "D004"
   },
   {
     "id": "AG-005",
-    "name": "广州明亮眼镜",
-    "token": "AG-005-4ypvi42cap18qm6y",
+    "name": "尧视共创（北京）科技有限公司",
+    "token": "AG-005-fab4f4f676813bbf",
     "phone": "",
-    "address": ""
+    "address": "北京市",
+    "crm_id": "D005"
   },
   {
     "id": "AG-006",
-    "name": "成都清晰视界",
-    "token": "AG-006-u4b05l624nz9t5qt",
+    "name": "药希望（天津）科技有限公司",
+    "token": "AG-006-26ad899af407b0bd",
     "phone": "",
-    "address": ""
+    "address": "天津市",
+    "crm_id": "D006"
   },
   {
     "id": "AG-007",
-    "name": "杭州慧眼科技",
-    "token": "AG-007-v8su1wef590sndzk",
+    "name": "石家庄嘉悦润视光学科技有限公司",
+    "token": "AG-007-56d0e6c9a15be342",
     "phone": "",
-    "address": ""
+    "address": "河北省",
+    "crm_id": "D007"
+  },
+  {
+    "id": "AG-008",
+    "name": "随喜健康科技（河北）有限公司",
+    "token": "AG-008-813b5f1fb5cb7733",
+    "phone": "",
+    "address": "河北省",
+    "crm_id": "D008"
+  },
+  {
+    "id": "AG-009",
+    "name": "沈阳悦目星禾科技有限公司",
+    "token": "AG-009-4a345a70000111b2",
+    "phone": "",
+    "address": "辽宁省",
+    "crm_id": "D009"
+  },
+  {
+    "id": "AG-010",
+    "name": "吉林翔渲商贸有限公司",
+    "token": "AG-010-7da967907fb3577b",
+    "phone": "",
+    "address": "吉林省",
+    "crm_id": "D010"
+  },
+  {
+    "id": "AG-011",
+    "name": "黑龙江方圆科技有限公司",
+    "token": "AG-011-93fafb7d224b4262",
+    "phone": "",
+    "address": "黑龙江省",
+    "crm_id": "D011"
+  },
+  {
+    "id": "AG-012",
+    "name": "上海聚势医药科技有限公司",
+    "token": "AG-012-deb43048af90815c",
+    "phone": "",
+    "address": "上海市",
+    "crm_id": "D012"
+  },
+  {
+    "id": "AG-013",
+    "name": "上海眺瞻公司",
+    "token": "AG-013-93216cd9e1741000",
+    "phone": "",
+    "address": "上海市",
+    "crm_id": "D013"
+  },
+  {
+    "id": "AG-014",
+    "name": "上海瞳恩欣公司",
+    "token": "AG-014-afc70c1d96f5e632",
+    "phone": "",
+    "address": "上海市",
+    "crm_id": "D014"
+  },
+  {
+    "id": "AG-015",
+    "name": "上海熠衍科技发展有限公司",
+    "token": "AG-015-eb4d8afcbd2194e4",
+    "phone": "",
+    "address": "上海市",
+    "crm_id": "D015"
+  },
+  {
+    "id": "AG-016",
+    "name": "南京嘉泽智丰光学有限公司",
+    "token": "AG-016-372eea490d5e138b",
+    "phone": "",
+    "address": "江苏省",
+    "crm_id": "D016"
+  },
+  {
+    "id": "AG-017",
+    "name": "南京博德眼科医院",
+    "token": "AG-017-3df7834c3574c0e6",
+    "phone": "",
+    "address": "江苏省",
+    "crm_id": "D017"
+  },
+  {
+    "id": "AG-018",
+    "name": "上海戛桦医疗科技有限公司",
+    "token": "AG-018-e17b86093d888693",
+    "phone": "",
+    "address": "江苏省",
+    "crm_id": "D018"
+  },
+  {
+    "id": "AG-019",
+    "name": "浙江致信生物医药有限公司",
+    "token": "AG-019-ff29648c5c33ea81",
+    "phone": "",
+    "address": "浙江省",
+    "crm_id": "D019"
+  },
+  {
+    "id": "AG-020",
+    "name": "济南华裕医疗科技有限公司",
+    "token": "AG-020-38dba568730f4663",
+    "phone": "",
+    "address": "山东省",
+    "crm_id": "D020"
+  },
+  {
+    "id": "AG-021",
+    "name": "山东蓝健医疗",
+    "token": "AG-021-8f492fca1fabc574",
+    "phone": "",
+    "address": "山东省",
+    "crm_id": "D021"
+  },
+  {
+    "id": "AG-022",
+    "name": "山东瞳康",
+    "token": "AG-022-c5905a432d124712",
+    "phone": "",
+    "address": "山东省",
+    "crm_id": "D022"
+  },
+  {
+    "id": "AG-023",
+    "name": "河南眼视康生物技术有限公司",
+    "token": "AG-023-9044fa6519e746e3",
+    "phone": "",
+    "address": "河南省",
+    "crm_id": "D023"
+  },
+  {
+    "id": "AG-024",
+    "name": "河南初玖医疗科技有限公司",
+    "token": "AG-024-4553ae3882ccda8b",
+    "phone": "",
+    "address": "河南省",
+    "crm_id": "D024"
+  },
+  {
+    "id": "AG-025",
+    "name": "河南强晟医疗科技有限公司",
+    "token": "AG-025-776cfc81aa0e25cb",
+    "phone": "",
+    "address": "河南省",
+    "crm_id": "D025"
+  },
+  {
+    "id": "AG-026",
+    "name": "武汉亿祥昊医疗有限公司",
+    "token": "AG-026-9b3feb53f83436eb",
+    "phone": "",
+    "address": "湖北省",
+    "crm_id": "D026"
+  },
+  {
+    "id": "AG-027",
+    "name": "长沙新辰医疗器械有限公司",
+    "token": "AG-027-145514b0d36354ad",
+    "phone": "",
+    "address": "湖南省",
+    "crm_id": "D027"
+  },
+  {
+    "id": "AG-028",
+    "name": "深圳视力康眼健康有限公司",
+    "token": "AG-028-b9bd93d8ec941280",
+    "phone": "",
+    "address": "广东省",
+    "crm_id": "D028"
+  },
+  {
+    "id": "AG-029",
+    "name": "广州云锦商贸（金眼科）",
+    "token": "AG-029-00394e1127f95a25",
+    "phone": "",
+    "address": "广东省",
+    "crm_id": "D029"
+  },
+  {
+    "id": "AG-030",
+    "name": "深圳柏琪眼镜制造有限公司",
+    "token": "AG-030-4d1ca923bd1104bf",
+    "phone": "",
+    "address": "广东省",
+    "crm_id": "D030"
+  },
+  {
+    "id": "AG-031",
+    "name": "珠海科宏医疗器械有限公司",
+    "token": "AG-031-11d13e3c6624dd61",
+    "phone": "",
+    "address": "海南省",
+    "crm_id": "D031"
+  },
+  {
+    "id": "AG-032",
+    "name": "重庆博萃医疗有限公司",
+    "token": "AG-032-aecdbc7c95dff4c7",
+    "phone": "",
+    "address": "重庆市",
+    "crm_id": "D032"
+  },
+  {
+    "id": "AG-033",
+    "name": "成都锦牧加",
+    "token": "AG-033-d786cc64ce215b16",
+    "phone": "",
+    "address": "四川省",
+    "crm_id": "D033"
+  },
+  {
+    "id": "AG-034",
+    "name": "昆明明德医疗有限公司",
+    "token": "AG-034-2a2c7fbfb9949f43",
+    "phone": "",
+    "address": "云南省",
+    "crm_id": "D034"
+  },
+  {
+    "id": "AG-035",
+    "name": "凌渡（西安）医疗管理有限公司",
+    "token": "AG-035-3fb43ed446504ddb",
+    "phone": "",
+    "address": "陕西省",
+    "crm_id": "D035"
+  },
+  {
+    "id": "AG-037",
+    "name": "西安美镜诚商贸有限公司",
+    "token": "AG-037-3f1956bd347fd51e",
+    "phone": "",
+    "address": "陕西省",
+    "crm_id": "D037"
+  },
+  {
+    "id": "AG-038",
+    "name": "陕西博美乐商贸有限公司",
+    "token": "AG-038-8700b0ada5d5170f",
+    "phone": "",
+    "address": "甘肃省",
+    "crm_id": "D038"
+  },
+  {
+    "id": "AG-041",
+    "name": "陕西龙兴圣德",
+    "token": "AG-041-14270a12555af60c",
+    "phone": "",
+    "address": "宁夏回族自治区",
+    "crm_id": "D041"
+  },
+  {
+    "id": "AG-042",
+    "name": "新疆德康达因苏商贸有限公司",
+    "token": "AG-042-90bc66c0828512e0",
+    "phone": "",
+    "address": "新疆维吾尔自治区",
+    "crm_id": "D042"
+  },
+  {
+    "id": "AG-045",
+    "name": "上海视路",
+    "token": "AG-045-a58c9ee85f945d94",
+    "phone": "",
+    "address": "上海市",
+    "crm_id": "D045"
   }
 ]
