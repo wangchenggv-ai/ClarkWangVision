@@ -210,6 +210,10 @@ body { background: #f5f6fa; }
     <button class="btn btn-primary" onclick="previewSelected()">预览标签</button>
     <button class="btn btn-outline" onclick="printLabels()">打印</button>
     <button class="btn btn-outline" onclick="downloadZip()">导出ZIP</button>
+    <span style="border-left:1px solid #e0e0e0;margin:0 4px;padding:0 4px"></span>
+    <button class="btn btn-outline" style="color:#1677ff;border-color:#1677ff" onclick="confirmOrders()">确认订单</button>
+    <button class="btn btn-outline" style="color:#52c41a;border-color:#52c41a" onclick="shipOrders()">确认发货</button>
+    <button class="btn btn-outline" style="color:#722ed1;border-color:#722ed1" onclick="deliverOrders()">标记签收</button>
     <span class="count" id="selectedCount">已选 0 个订单</span>
   </div>
 
@@ -420,11 +424,59 @@ function printLabels() {
 
 function downloadZip() {
   if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
-  // 逐个下载 ZIP（每个订单一个）
-  for (const orderNo of selectedOrders) {
-    const url = `/api/order/${encodeURIComponent(orderNo)}/factory-zip?t=${adminToken}`;
-    window.open(url, "_blank");
-  }
+  // 批量下载：一个合并 ZIP
+  const orderNos = [...selectedOrders].join(",");
+  const url = `/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNos)}`;
+  window.open(url, "_blank");
+}
+
+// ─── 物流操作 ──────────────────────────────────────────────────────────
+
+async function adminApi(path, body) {
+  const res = await fetch(`${path}?admin=${adminToken}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return res.json();
+}
+
+async function confirmOrders() {
+  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
+  const orderNos = [...selectedOrders];
+  if (!confirm(`确认 ${orderNos.length} 个订单？\n状态将变为"生产中"并生成镜片码。`)) return;
+
+  const data = await adminApi("/api/admin/confirm", { orderNos });
+  const ok = data.results.filter(r => r.ok).length;
+  const fail = data.results.filter(r => !r.ok).length;
+  alert(`确认完成：成功 ${ok} 单${fail ? "，失败 " + fail + " 单" : ""}`);
+  loadOrders();
+}
+
+async function shipOrders() {
+  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
+  const orderNos = [...selectedOrders];
+  if (!confirm(`发货 ${orderNos.length} 个订单？\n将自动生成快递单号，状态变为"已发货"。`)) return;
+
+  const data = await adminApi("/api/admin/ship", { orderNos });
+  const ok = data.results.filter(r => r.ok);
+  const fail = data.results.filter(r => !r.ok);
+  let msg = `发货完成：成功 ${ok.length} 单${fail.length ? "，失败 " + fail.length + " 单" : ""}`;
+  if (ok.length) msg += "\n\n" + ok.map(r => `${r.orderNo}: ${r.courier} ${r.trackingNo}`).join("\n");
+  alert(msg);
+  loadOrders();
+}
+
+async function deliverOrders() {
+  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
+  const orderNos = [...selectedOrders];
+  if (!confirm(`标记 ${orderNos.length} 个订单为"已签收"？`)) return;
+
+  const data = await adminApi("/api/admin/deliver", { orderNos });
+  const ok = data.results.filter(r => r.ok).length;
+  const fail = data.results.filter(r => !r.ok).length;
+  alert(`签收完成：成功 ${ok} 单${fail ? "，失败 " + fail + " 单" : ""}`);
+  loadOrders();
 }
 
 // ─── 初始化 ──────────────────────────────────────────────────────────

@@ -26,6 +26,8 @@ const BASE      = "https://open.feishu.cn/open-apis";
 const APP_TOKEN = "B3xQbbqicaome1sKdZbcwdk8nWg";
 const ORDER_TBL = "tblk9Ch4gk2uQ1zG";
 const LENS_TBL  = "tblC7pve7ObFgIOl";
+const ENV       = loadEnv();
+const SERVER_BASE = ENV.SERVER_BASE_URL || "http://localhost:3210";
 const ARGS      = process.argv.slice(2);
 const CMD       = ARGS[0] || "help";
 const ORDER_NO  = ARGS[ARGS.indexOf("--order") + 1] || null;
@@ -501,7 +503,7 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
 
   const eyeRow = (r) => {
     const lc = r.lensCode || "—";
-    const qr = `https://api.qrserver.com/v1/create-qr-code/?size=56x56&ecc=M&data=${encodeURIComponent("http://192.168.0.84:3210/verify/" + lc)}`;
+    const qr = `https://api.qrserver.com/v1/create-qr-code/?size=56x56&ecc=M&data=${encodeURIComponent(SERVER_BASE + "/verify/" + lc)}`;
     const isR = r.eye?.includes("右");
     return `
     <tr>
@@ -880,7 +882,7 @@ function slipHTML(order) {
   // 左眼/右眼行
   const eyeRow = (r) => {
     const lc = r.lensCode || "—";
-    const qr = `https://api.qrserver.com/v1/create-qr-code/?size=64x64&ecc=M&data=${encodeURIComponent("http://192.168.0.84:3210/verify/" + lc)}`;
+    const qr = `https://api.qrserver.com/v1/create-qr-code/?size=64x64&ecc=M&data=${encodeURIComponent(SERVER_BASE + "/verify/" + lc)}`;
     return `
     <tr>
       <td class="eye ${r.eye === "左眼" ? "eye-l" : "eye-r"}">${r.eye === "左眼" ? "L<br><span>左眼</span>" : "R<br><span>右眼</span>"}</td>

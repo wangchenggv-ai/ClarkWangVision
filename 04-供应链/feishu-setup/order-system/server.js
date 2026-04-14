@@ -1647,6 +1647,185 @@ const server = createServer(async (req, res) => {
       return logReq(req, 200, start);
     }
 
+    // GET /api/admin/batch-zip — 批量导出 ZIP（多订单合并为一个 ZIP）
+    const batchZipMatch = pathname.match(/^\/api\/admin\/batch-zip$/);
+    if (batchZipMatch && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const orderNosParam = url.searchParams.get("orderNos") || "";
+      if (!orderNosParam) { jsonRes(res, 400, { error: "请提供 orderNos 参数" }); return logReq(req, 400, start); }
+
+      const orderNos = orderNosParam.split(",").map(s => s.trim()).filter(Boolean);
+      const allFiles = [];
+
+      for (const orderNo of orderNos) {
+        const details = await getLensDetailsByOrder(orderNo);
+        if (!details.length) continue;
+
+        // 每个订单一个子目录
+        const prefix = orderNos.length > 1 ? `${orderNo}/` : "";
+        const excelBuf = buildFactoryExcel(details, orderNo);
+        allFiles.push({ name: `${prefix}订单_${orderNo}.xlsx`, data: excelBuf });
+
+        for (const rec of details) {
+          const f = rec.fields;
+          const lensCode = f["镜片码"];
+          if (!lensCode) continue;
+
+          const qrPath = resolve(QR_DIR, `${lensCode}.png`);
+          if (existsSync(qrPath)) {
+            allFiles.push({ name: `${prefix}qrcodes/${lensCode}.png`, data: readFileSync(qrPath) });
+          }
+
+          const labelEntry = await buildLabelHtml(rec, orderNo);
+          if (labelEntry) {
+            allFiles.push({ name: `${prefix}${labelEntry.name}`, data: labelEntry.data });
+          }
+        }
+      }
+
+      if (!allFiles.length) { jsonRes(res, 404, { error: "所选订单无镜片数据" }); return logReq(req, 404, start); }
+
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const readme = `工厂导出包 — ${dateStr}\n共 ${orderNos.length} 个订单\n`;
+      allFiles.push({ name: "说明.txt", data: Buffer.from(readme, "utf-8") });
+
+      const zipBuf = buildZipBuffer(allFiles);
+      res.writeHead(200, {
+        "Content-Type": "application/zip",
+        "Content-Disposition": `attachment; filename="factory-export-${dateStr}.zip"`,
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(zipBuf);
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/confirm — 确认订单（批量）
+    if (pathname === "/api/admin/confirm" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req);
+      const orderNos = payload.orderNos || [];
+      if (!orderNos.length) { jsonRes(res, 400, { error: "请提供 orderNos" }); return logReq(req, 400, start); }
+
+      const results = [];
+      for (const orderNo of orderNos) {
+        try {
+          // 查订单主表记录
+          const encoded = encodeURIComponent(`"${orderNo}"`);
+          const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+          const records = d?.data?.items || [];
+          if (!records.length) { results.push({ orderNo, ok: false, error: "未找到" }); continue; }
+
+          // 生成镜片码（幂等）
+          await assignLensCodes(orderNo);
+
+          // 更新状态为生产中
+          for (const rec of records) {
+            await updateRecord(TABLES.order, rec.record_id, { "订单状态": "生产中" });
+          }
+          results.push({ orderNo, ok: true });
+        } catch (e) {
+          results.push({ orderNo, ok: false, error: e.message });
+        }
+      }
+      jsonRes(res, 200, { results });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/ship — 发货（逐单或批量）
+    if (pathname === "/api/admin/ship" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req);
+      const orderNos = payload.orderNos || [];
+      const courierKey = payload.courier || ""; // 可选指定快递
+      if (!orderNos.length) { jsonRes(res, 400, { error: "请提供 orderNos" }); return logReq(req, 400, start); }
+
+      // 快递公司配置
+      const COURIERS_WEB = {
+        sf: { name: "顺丰速运", icon: "🚚" },
+        zt: { name: "中通快递", icon: "📦" },
+        yd: { name: "韵达快递", icon: "📮" },
+        jd: { name: "京东快递", icon: "🔷" },
+      };
+      function genTrackingNoWeb(key) {
+        const prefix = { sf: "SF", zt: "75", yd: "YD", jd: "JD" };
+        const p = prefix[key] || "SF";
+        const digits = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10)).join("");
+        return p + digits;
+      }
+      function autoSelectCourierWeb(agentId) {
+        const map = { "AG-003": "sf", "AG-006": "sf", "AG-005": "zt" };
+        return map[agentId] || "sf";
+      }
+
+      const results = [];
+      const now = Date.now();
+
+      for (const orderNo of orderNos) {
+        try {
+          const encoded = encodeURIComponent(`"${orderNo}"`);
+          const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+          const records = d?.data?.items || [];
+          if (!records.length) { results.push({ orderNo, ok: false, error: "未找到" }); continue; }
+
+          const f0 = records[0].fields;
+          const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
+          const agentId = rawVal(f0["代理商ID"]) || "";
+          const ck = courierKey || autoSelectCourierWeb(agentId);
+          const courier = COURIERS_WEB[ck] || COURIERS_WEB.sf;
+          const trackingNo = genTrackingNoWeb(ck);
+
+          for (const rec of records) {
+            await updateRecord(TABLES.order, rec.record_id, {
+              "物流公司": courier.name,
+              "快递单号": trackingNo,
+              "发货时间": now,
+              "物流状态": "已发货",
+              "订单状态": "已发货",
+            });
+          }
+          results.push({ orderNo, ok: true, courier: courier.name, trackingNo });
+        } catch (e) {
+          results.push({ orderNo, ok: false, error: e.message });
+        }
+      }
+      jsonRes(res, 200, { results });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/deliver — 签收（批量）
+    if (pathname === "/api/admin/deliver" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req);
+      const orderNos = payload.orderNos || [];
+      if (!orderNos.length) { jsonRes(res, 400, { error: "请提供 orderNos" }); return logReq(req, 400, start); }
+
+      const now = Date.now();
+      const results = [];
+
+      for (const orderNo of orderNos) {
+        try {
+          const encoded = encodeURIComponent(`"${orderNo}"`);
+          const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+          const records = d?.data?.items || [];
+          if (!records.length) { results.push({ orderNo, ok: false, error: "未找到" }); continue; }
+
+          for (const rec of records) {
+            await updateRecord(TABLES.order, rec.record_id, {
+              "订单状态": "已签收",
+              "物流状态": "已签收",
+              "签收时间": now,
+            });
+          }
+          results.push({ orderNo, ok: true });
+        } catch (e) {
+          results.push({ orderNo, ok: false, error: e.message });
+        }
+      }
+      jsonRes(res, 200, { results });
+      return logReq(req, 200, start);
+    }
+
     // ── Excel 处方解析 ─────────────────────────────────────────────────────────
     if (pathname === "/api/excel-parse" && req.method === "POST") {
       const agent = await findAgent(token);
