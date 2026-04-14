@@ -283,8 +283,6 @@ async function showDetail(orderNo) {
       <thead><tr>
         <th>顾客</th><th>SKU</th><th>眼别</th>
         <th>SPH</th><th>CYL</th><th>AXIS</th>
-        <th class="hide-mobile">PD</th><th class="hide-mobile">PH</th>
-        <th class="hide-mobile">镜框</th>
       </tr></thead><tbody>`;
 
     for (const item of data.items) {
@@ -295,26 +293,12 @@ async function showDetail(orderNo) {
         <td>${item.sph ?? '-'}</td>
         <td>${item.cyl ?? '-'}</td>
         <td>${item.axis ?? '-'}</td>
-        <td class="hide-mobile">${item.pd ?? '-'}</td>
-        <td class="hide-mobile">${item.ph ?? '-'}</td>
-        <td class="hide-mobile">${item.frame || '-'}</td>
       </tr>`;
     }
 
     html += `</tbody></table>`;
 
-    // 操作按钮
-    html += `<div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">`;
-    if (data.status === "待处理") {
-      html += `<button class="btn btn-primary" onclick="confirmOrder('${orderNo}')" id="confirmBtn">确认订单</button>`;
-    }
-    if (lensCodes.length > 0) {
-      html += `<a class="btn btn-outline" href="/api/order/${encodeURIComponent(orderNo)}/qrcode?t=${token}" target="_blank">下载二维码</a>`;
-      html += `<a class="btn btn-outline" href="/api/order/${encodeURIComponent(orderNo)}/factory-zip?t=${token}" target="_blank">导出工厂包</a>`;
-    }
-    html += `</div>`;
-
-    // QR 码展示
+    // 镜片码展示（代理商只看码，不操作）
     if (lensCodes.length > 0) {
       html += `<div style="margin-top:12px;padding:12px;background:#f8f9fc;border-radius:8px">`;
       html += `<div style="font-size:13px;color:#666;margin-bottom:8px">镜片码</div>`;

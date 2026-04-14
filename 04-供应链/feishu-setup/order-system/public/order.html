@@ -149,7 +149,7 @@
     </div>
 
     <div class="card">
-      <div class="loading" id="loading"><span class="spinner"></span>提交中，请稍候...</div>
+      <div class="loading" id="loading" style="display:none"><span class="spinner"></span>提交中，请稍候...</div>
       <button class="btn btn-primary btn-lg btn-block" onclick="showConfirm()" id="submitBtn">提交订单</button>
     </div>
   </div>
@@ -184,8 +184,6 @@ let SKU_OPTIONS = []; // 从 API 动态加载
 let customerNames = [];
 let terminalCustomers = []; // 终端客户列表 [{id,name,contact,phone,address}]
 let patientCount = 0;
-let estimateTimers = {};
-let excelParsedPatients = null; // 暂存 Excel 解析结果
 
 async function init() {
   if (!token) {
@@ -293,8 +291,7 @@ function onTerminalCustomerSelect() {
 function renderSkuOptions() {
   let html = '<option value="">请选择产品型号</option>';
   for (const s of SKU_OPTIONS) {
-    const badge = s.status === '有货' ? ' ✓' : s.status === '定制' ? ' (定制)' : s.status === '低库存' ? ' (低库存)' : '';
-    html += `<option value="${s.value}">${s.label}${badge}</option>`;
+    html += `<option value="${s.value}">${s.label}</option>`;
   }
   return html;
 }
@@ -320,15 +317,14 @@ function addPatient() {
     </div>
     <div class="field">
       <label>产品型号 <span class="req">*</span></label>
-      <select id="sku-${id}" onchange="onSkuChange(${id})">${skuOptions}</select>
+      <select id="sku-${id}">${skuOptions}</select>
       <div class="error-tip">请选择产品型号</div>
     </div>
     <div class="field">
       <label>数量 <span class="req">*</span></label>
-      <input type="number" id="qty-${id}" min="1" max="100" value="1" inputmode="numeric" onchange="onQtyChange(${id})" oninput="onQtyChange(${id})">
+      <input type="number" id="qty-${id}" min="1" max="100" value="1" inputmode="numeric">
       <div class="error-tip">数量需在 1-100 之间</div>
     </div>
-    <div class="delivery-estimate" id="estimate-${id}"></div>
 
     <div class="eye-block">
       <div class="eye-header">
@@ -364,9 +360,13 @@ function addPatient() {
       </div>
     </div>
 
-    <div style="margin-top:4px">
-      <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
-        <input type="checkbox" id="assembly-${id}" checked style="width:auto;margin:0"> 是否装配
+    <div style="margin-top:4px;display:flex;align-items:center;gap:4px;font-size:13px">
+      <span style="color:#666">装配：</span>
+      <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #e0e0e0;border-radius:4px;background:#fff" id="assy-yes-${id}">
+        <input type="radio" name="assembly-${id}" value="yes" style="width:auto;margin:0;accent-color:#1677ff" onchange="toggleAssemblyStyle(${id})"> 是
+      </label>
+      <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #1677ff;border-radius:4px;background:#f0f7ff" id="assy-no-${id}">
+        <input type="radio" name="assembly-${id}" value="no" checked style="width:auto;margin:0;accent-color:#1677ff" onchange="toggleAssemblyStyle(${id})"> 否
       </label>
     </div>
     <div class="field" style="margin-top:8px">
@@ -377,6 +377,14 @@ function addPatient() {
     <button class="copy-eye-btn" onclick="copyEye(${id},'right','left')">← 复制右眼到左眼</button>
   `;
   document.getElementById("patientList").appendChild(div);
+}
+
+function toggleAssemblyStyle(id) {
+  const checked = document.querySelector(`input[name="assembly-${id}"]:checked`)?.value;
+  const yesLabel = document.getElementById(`assy-yes-${id}`);
+  const noLabel = document.getElementById(`assy-no-${id}`);
+  if (yesLabel) { yesLabel.style.borderColor = checked === 'yes' ? '#1677ff' : '#e0e0e0'; yesLabel.style.background = checked === 'yes' ? '#f0f7ff' : '#fff'; }
+  if (noLabel) { noLabel.style.borderColor = checked === 'no' ? '#1677ff' : '#e0e0e0'; noLabel.style.background = checked === 'no' ? '#f0f7ff' : '#fff'; }
 }
 
 function removePatient(id) {
@@ -400,35 +408,6 @@ function copyEye(id, from, to) {
   showToast("已复制右眼处方到左眼", "info");
 }
 
-// ─── 交期预估 ──────────────────────────────────────────────────────────────
-function onSkuChange(id) { debouncedEstimate(id); }
-function onQtyChange(id) { debouncedEstimate(id); }
-
-function debouncedEstimate(id) {
-  clearTimeout(estimateTimers[id]);
-  estimateTimers[id] = setTimeout(() => fetchEstimate(id), 300);
-}
-
-async function fetchEstimate(id) {
-  const sku = document.getElementById(`sku-${id}`)?.value;
-  const qty = Number(document.getElementById(`qty-${id}`)?.value) || 0;
-  const el = document.getElementById(`estimate-${id}`);
-  if (!sku || qty <= 0) { el.className = "delivery-estimate"; return; }
-
-  el.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;vertical-align:middle"></span>';
-  el.className = "delivery-estimate show";
-
-  try {
-    const res = await fetch(`/api/delivery-estimate?t=${token}&sku=${encodeURIComponent(sku)}&qty=${qty}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    const cls = data.available ? "instock" : "custom";
-    el.innerHTML = `<span class="badge badge-${cls === 'instock' ? 'instock' : 'custom'}">${data.deliveryType}</span> 预计 ${data.promiseDateFormatted} 交付`;
-    el.className = `delivery-estimate show ${cls}`;
-    updateSummary();
-  } catch {}
-}
-
 // ─── 订单摘要 ──────────────────────────────────────────────────────────────
 function updateSummary() {
   const patients = collectPatients();
@@ -440,11 +419,8 @@ function updateSummary() {
   let totalLenses = 0, html = "";
   for (const p of patients) {
     totalLenses += p.eyes.length;
-    const estEl = document.getElementById(`estimate-${p.id}`);
-    const estBadge = estEl ? estEl.innerHTML : "";
     html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f5f5f5;font-size:14px">
       <span><strong>${p.customerName}</strong> · ${p.sku} × ${p.eyes.length}片</span>
-      ${estBadge ? `<span style="font-size:12px">${estBadge}</span>` : ""}
     </div>`;
   }
   html += `<div style="padding:10px 0 0;font-size:14px;color:#666;text-align:right">共 ${patients.length} 位顾客，${totalLenses} 片镜片</div>`;
@@ -472,7 +448,8 @@ function collectPatients() {
         axis: document.getElementById(`axis-${id}-${side}`)?.value || "0",
       });
     }
-    const assembly = document.getElementById(`assembly-${id}`)?.checked !== false;
+    const assemblyEl = document.querySelector(`input[name="assembly-${id}"]:checked`);
+    const assembly = assemblyEl?.value === "yes";
     const remark = document.getElementById(`remark-${id}`)?.value.trim() || "";
     if (eyes.length > 0) patients.push({ id, customerName: name, sku, quantity, eyes, assembly, remark });
   }
@@ -519,13 +496,27 @@ function showConfirm() {
   const patients = collectPatients();
   let totalLenses = 0;
   let html = '<div class="confirm-summary">';
-  html += `<div class="row"><span class="label">收货地址</span><span class="value">${document.getElementById("address").value.trim()}</span></div>`;
+  html += `<div style="padding:10px 12px;background:#f5f5f5;border-radius:6px;margin-bottom:12px;font-size:13px;color:#666">收货地址：${document.getElementById("address").value.trim()}</div>`;
   for (const p of patients) {
     totalLenses += p.eyes.length;
-    const estEl = document.getElementById(`estimate-${p.id}`);
-    html += `<div class="row"><span class="label">${p.customerName} · ${p.sku} × ${p.eyes.length}片</span><span class="value">${estEl ? estEl.textContent.trim() : ''}</span></div>`;
+    html += `<div style="background:#fff;border:1px solid #e8e8e8;border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong style="font-size:14px">${p.customerName}</strong>
+        <span style="font-size:12px;color:${p.assembly ? '#1677ff' : '#999'};background:${p.assembly ? '#f0f7ff' : '#f5f5f5'};padding:2px 8px;border-radius:3px">${p.assembly ? '装配' : '不装配'}</span>
+      </div>
+      <div style="font-size:13px;color:#888;margin-bottom:6px">${p.sku} × ${p.eyes.length}片</div>`;
+    for (const eye of p.eyes) {
+      const isRight = eye.side === "右眼";
+      html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:3px;font-size:13px">
+        <span style="background:${isRight ? '#fff1f0' : '#e6f7ff'};color:${isRight ? '#cf1322' : '#096dd9'};padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${eye.side}</span>
+        <span>SPH <strong>${eye.sph}</strong></span>
+        <span>CYL <strong>${eye.cyl}</strong></span>
+        <span>AXIS <strong>${eye.axis}</strong></span>
+      </div>`;
+    }
+    html += `</div>`;
   }
-  html += `<div class="row" style="font-weight:600;border-top:2px solid #eee;padding-top:12px"><span>合计</span><span>${patients.length} 位顾客，${totalLenses} 片镜片</span></div></div>`;
+  html += `<div style="text-align:right;padding-top:8px;font-size:14px;color:#666">共 <strong>${patients.length}</strong> 位顾客，<strong>${totalLenses}</strong> 片镜片</div></div>`;
   document.getElementById("confirmSummary").innerHTML = html;
   document.getElementById("confirmModal").classList.add("show");
 }
@@ -562,14 +553,23 @@ async function doSubmit() {
 
     if (json.success) {
       document.getElementById("formPage").style.display = "none";
-      let d = '<div style="text-align:left;font-size:14px;margin-bottom:16px"><div style="margin-bottom:8px"><strong>订单号：</strong>' + json.orderNo + '</div>';
+      let d = `<div style="text-align:left;margin-bottom:20px">
+        <div style="background:#f0f5ff;border:1px solid #d6e4ff;border-radius:8px;padding:14px 16px;margin-bottom:16px">
+          <div style="font-size:12px;color:#5b8def;margin-bottom:4px">订单编号</div>
+          <div style="font-size:18px;font-weight:700;color:#1677ff;font-family:monospace">${json.orderNo}</div>
+        </div>`;
+      let totalQty = 0;
       for (const item of json.items) {
-        d += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #d9f7be;font-size:13px">
-          <span>${item.skuName} × ${item.quantity}</span>
-          <span class="badge badge-${item.deliveryType.startsWith('有货') ? 'instock' : 'custom'}">${item.deliveryType} · ${item.promiseDateFormatted}</span>
+        totalQty += (item.lensCount || item.quantity);
+        d += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0">
+          <div>
+            <div style="font-size:14px;font-weight:600;color:#333">${item.customerName || ''}</div>
+            <div style="font-size:13px;color:#888;margin-top:2px">${item.skuName}</div>
+          </div>
+          <span style="font-size:13px;color:#666;background:#f5f5f5;padding:3px 10px;border-radius:4px">${item.lensCount || item.quantity} 片</span>
         </div>`;
       }
-      d += '</div>';
+      d += `<div style="text-align:right;padding-top:10px;font-size:13px;color:#999">共 ${json.items.length} 项，${totalQty} 片</div></div>`;
       document.getElementById("successDetail").innerHTML = d;
       document.getElementById("successPage").style.display = "block";
     } else {
@@ -611,14 +611,16 @@ document.getElementById("contact")?.addEventListener("input", function() { this.
 document.getElementById("phone")?.addEventListener("input", function() { this.classList.remove("error"); });
 
 // ─── Excel 解析 ──────────────────────────────────────────────────────────
+let excelParsedPatients = null;
+
 async function handleExcelSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
-  event.target.value = ""; // 允许重复选同一文件
+  event.target.value = "";
 
   if (file.size > 5 * 1024 * 1024) { showToast("文件过大，请限制在 5MB 以内", "error"); return; }
 
-  showToast("正在解析 Excel...", "info");
+  showToast("正在解析 Excel，AI 处理中...", "info");
 
   try {
     const base64 = await new Promise((resolve, reject) => {
@@ -649,19 +651,39 @@ async function handleExcelSelect(event) {
 }
 
 function renderExcelPreview(patients, warnings) {
-  let html = `<div style="font-size:14px;color:#666;margin-bottom:8px">共解析 <strong>${patients.length}</strong> 位患者</div>`;
-  html += '<table class="excel-preview-table"><thead><tr><th>患者</th><th>SKU</th><th>右眼 SPH/CYL/AXIS</th><th>左眼 SPH/CYL/AXIS</th></tr></thead><tbody>';
+  let totalLenses = 0;
+  patients.forEach(p => totalLenses += (p.eyes?.length || 0));
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <span style="font-size:14px;color:#666">共 <strong style="color:#1677ff">${patients.length}</strong> 位患者，<strong style="color:#1677ff">${totalLenses}</strong> 片镜片</span>
+  </div>`;
+
   for (const p of patients) {
-    const rEye = p.eyes?.find(e => e.side === "右眼") || {};
-    const lEye = p.eyes?.find(e => e.side === "左眼") || {};
-    html += `<tr>
-      <td><strong>${p.customerName || "-"}</strong></td>
-      <td>${p.sku || "-"}</td>
-      <td>${rEye.sph || "0"} / ${rEye.cyl || "0"} / ${rEye.axis || "0"}</td>
-      <td>${lEye.sph || "0"} / ${lEye.cyl || "0"} / ${lEye.axis || "0"}</td>
-    </tr>`;
+    const rEye = p.eyes?.find(e => e.side === "右眼");
+    const lEye = p.eyes?.find(e => e.side === "左眼");
+    html += `<div style="background:#fff;border:1px solid #e8e8e8;border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong style="font-size:14px;color:#333">${p.customerName || "-"}</strong>
+        <span style="font-size:12px;color:#888">${p.sku || "-"}</span>
+      </div>`;
+    if (rEye) {
+      html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;font-size:13px">
+        <span style="background:#fff1f0;color:#cf1322;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">右眼</span>
+        <span>SPH <strong>${rEye.sph || "0"}</strong></span>
+        <span>CYL <strong>${rEye.cyl || "0"}</strong></span>
+        <span>AXIS <strong>${rEye.axis || "0"}</strong></span>
+      </div>`;
+    }
+    if (lEye) {
+      html += `<div style="display:flex;gap:8px;align-items:center;font-size:13px">
+        <span style="background:#e6f7ff;color:#096dd9;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">左眼</span>
+        <span>SPH <strong>${lEye.sph || "0"}</strong></span>
+        <span>CYL <strong>${lEye.cyl || "0"}</strong></span>
+        <span>AXIS <strong>${lEye.axis || "0"}</strong></span>
+      </div>`;
+    }
+    html += `</div>`;
   }
-  html += '</tbody></table>';
+
   if (warnings.length) {
     html += '<div class="excel-warning">' + warnings.map(w => "- " + w).join("<br>") + '</div>';
   }
@@ -672,7 +694,6 @@ function importToForm() {
   if (!excelParsedPatients) return;
   closeExcelModal();
 
-  // 清空现有卡片
   document.getElementById("patientList").innerHTML = "";
   patientCount = 0;
 
@@ -700,12 +721,13 @@ function importToForm() {
       }
     }
 
-    const assemblyEl = document.getElementById(`assembly-${id}`);
-    if (assemblyEl) assemblyEl.checked = p.assembly !== false;
+    const assemblyYes = document.querySelector(`input[name="assembly-${id}"][value="yes"]`);
+    const assemblyNo = document.querySelector(`input[name="assembly-${id}"][value="no"]`);
+    if (p.assembly === true) { if (assemblyYes) assemblyYes.checked = true; } else { if (assemblyNo) assemblyNo.checked = true; }
+    // 更新radio样式
+    toggleAssemblyStyle(id);
     const remarkEl = document.getElementById(`remark-${id}`);
     if (remarkEl && p.remark) remarkEl.value = p.remark;
-
-    debouncedEstimate(id);
   }
 
   updateSummary();

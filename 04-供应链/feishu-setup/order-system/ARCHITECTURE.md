@@ -1,6 +1,6 @@
 # 订单交付系统 — 架构说明
 
-**最后更新：** 2026-04-14
+**最后更新：** 2026-04-15
 
 ---
 
@@ -66,9 +66,12 @@
                                    生成镜片码 + QR
                                    扣减库存(如有货)
 
-  Excel文件 ──POST /api/excel-parse→ MiMo解析 → 返回patients[]
+  Excel文件 ──POST /api/excel-parse→ 代码解析列名 → 返回patients[]
                 ↓ 导入表单
               POST /api/submit (同上)
+
+  track.html ──GET /api/orders──→ 查看订单列表+详情（只读）
+                                  无管理操作按钮
 
 助理管理页 (labels.html)          服务端 API                      飞书 IM 通知
 ─────────────────────           ────────────                    ──────────
@@ -191,6 +194,7 @@
 
 - `/api/orders?t=token` — 订单列表（从订单主表读，按状态/日期筛选）
 - `/api/order/:no?t=token` — 订单详情（主表+镜片明细表联合）
+- `track.html` — 代理商订单追踪页，只读，无管理操作按钮（确认/导出/标签等操作归助理管理页）
 
 **关联：** 通过 `订单编号` 字段关联两张表
 
@@ -306,25 +310,27 @@
 
 ### 3.7 Excel 解析模块 (`server.js` — POST /api/excel-parse)
 
-**用途：** 代理商上传医院处方 Excel → AI 自动提取患者+处方 → 填入下单表单
+**用途：** 代理商上传医院处方 Excel → 代码直接解析列名 → 填入下单表单
 
 ```
 代理商上传 Excel (.xlsx/.xls)
   ↓
-XLSX 解析 → 原始行数据（前50行）
+XLSX 解析 → 找"顾客姓名"表头行（模糊匹配列名）
   ↓
-MiMo 大模型 (mimo-v2-pro) → 提取结构化处方 JSON
+逐行提取：顾客姓名、眼别、产品型号、球镜、柱镜、轴位、数量
   ↓
-后处理：SKU 校验 + 数值归一化（SPH 0.25步长、AXIS 0-180）
+同一顾客多行自动合并（左右眼归为一个患者）
   ↓
-返回 patients[] + warnings[]
+SKU 校验 + 数值归一化（SPH 0.25步长、AXIS 0-180）
   ↓
-前端弹窗预览 → "导入表单" → 自动填充患者卡片
+返回 patients[] + warnings[] （秒级响应）
+  ↓
+前端卡片预览（红/蓝眼别标签） → "导入表单" → 自动填充患者卡片
 ```
 
 **技术栈：**
-- LLM：小米 MiMo mimo-v2-pro（OpenAI 兼容格式，`ENV.MIMO_API_URL` + `ENV.MIMO_API_KEY`）
-- Excel 解析：已安装的 `xlsx` 库
+- Excel 解析：`xlsx` 库，纯代码解析，不依赖 AI
+- 列名模糊匹配：支持 `顾客姓名`/`眼别`/`球镜`/`柱镜`/`轴位`/`产品型号`/`数量`（含变体如"数量（片）"）
 - 文件传输：Base64 编码在 JSON body 中（无 multipart，零新依赖）
 
 **关联：** 读取 SKU 表(`getSkusWithInventory` + `getModelSkus`) 用于 SKU 校验
@@ -345,7 +351,7 @@ MiMo 大模型 (mimo-v2-pro) → 提取结构化处方 JSON
               Excel 上传
                 ↓
           Excel解析模块 ──导入表单──→ 下单模块 ──→ 订单主表 ──→ 物流模块(状态写入)
-          (MiMo mimo-v2-pro)                    │  镜片明细表 ← 生成镜片码+QR
+          (代码解析,xlsx)                        │  镜片明细表 ← 生成镜片码+QR
                                                 │       │
                                                 │       │ 订单编号(关联)
                                                 │       ↓
@@ -429,6 +435,6 @@ node_modules/        qrcode, xlsx, http(内置)
 |------|------|
 | `FEISHU_APP_ID` / `FEISHU_APP_SECRET` | 飞书多维表格读写 |
 | `NOTIFY_APP_ID` / `NOTIFY_APP_SECRET` / `NOTIFY_CHAT_ID` | 飞书通知 |
-| `MIMO_API_URL` / `MIMO_API_KEY` | MiMo大模型（Excel解析） |
+| `MIMO_API_URL` / `MIMO_API_KEY` | MiMo大模型（备用，Excel解析已改为纯代码） |
 | `ADMIN_TOKEN` | 管理页访问密码 |
 | `SERVER_BASE_URL` | 服务器外网地址（QR验真链接用） |
