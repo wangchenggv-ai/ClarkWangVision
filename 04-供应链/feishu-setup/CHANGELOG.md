@@ -1,5 +1,76 @@
 # Changelog
 
+## [2026-04-14] Sprint 14：代理商管理迁入Bitable + 门户架构切换
+
+### 架构决策
+
+废弃旧订单表同步，门户下单为唯一订单源。代理商数据从 agents.json 迁入飞书多维表格，CRM自动同步。
+
+### 今日交付物
+
+| 模块 | 文件 | 说明 |
+|------|------|------|
+| 代理商表 | Bitable `tblHsgGbJWkB31qu` | 10字段，CRM同步+门户管理，41条记录 |
+| CRM代理商同步 | `sync_agents.js` | 双token读CRM "01_代理商开发管理"，增量同步 |
+| 门户改造 | `agent-portal/server.js` | loadAgents()从Bitable读取，异步化，30s缓存 |
+| 数据迁移 | `migrate_agents_to_bitable.js` | 一次性脚本，agents.json→Bitable，保留token向后兼容 |
+| 同步编排 | `sync_all.js` | 3步同步：1/3代理商→2/3客户→3/3订单 |
+| 环境配置 | `.env` | 新增 CRM_AGENT_TABLE + AGENT_TABLE |
+
+### 功能详情
+
+#### 1. 代理商表（Bitable `tblHsgGbJWkB31qu`）
+
+字段设计：
+- 代理商ID（AG-XXX）、代理商名称、CRM_ID（D001-D045）
+- 下单Token（门户认证）、手机号、地址
+- 状态（启用/停用）、CRM同步时间、来源系统、备注
+
+#### 2. CRM代理商同步（`sync_agents.js`）
+
+- 数据源：CRM "01_代理商开发管理"（RlfTb6gykaEb3gsR1lwcGnShnAA / tblWmD23R4djdAlW）
+- 筛选"是否签约=是"的代理商（41条）
+- 已存在（按CRM_ID匹配）：更新名称+地址，**不覆盖**Token/手机/状态/备注
+- 新代理商：生成AG-XXX ID + token，状态=启用
+- CRM已删除：状态=停用（软删除）
+- 无CRM_ID的代理商（如测试代理商）：跳过不动
+
+#### 3. 门户改造（`server.js`）
+
+- TABLES 新增 agent 表
+- loadAgents() 改为 async，从 Bitable 读取，只加载状态=启用的代理商
+- findAgent() 改为 async，12个调用点全部加 await
+- 保持 `{ id, name, token, phone, address, crm_id }` 接口不变，下游零修改
+
+#### 4. 旧数据处理
+
+- 869条旧表同步订单保留在订单主表，不拆分镜片明细
+- 门户新下单双写：订单主表 + 镜片明细表
+- 旧订单表同步（sync_orders.js）标记为可停止
+
+### E2E测试结果
+
+```
+AG-001 北京澳美雅博医疗器械有限公司
+→ 5单下单（订单主表+镜片明细双写）
+→ 确认（生成5个16位hex镜片码）
+→ 合单发货（5单→1个顺丰包裹）
+→ 5单签收（状态→已签收，飞书通知）
+全链路 ✅
+```
+
+### 管理方式
+
+| 场景 | 方法 |
+|------|------|
+| CRM签约新代理商 | sync_agents.js 自动同步 |
+| CRM解约代理商 | 状态→停用，token 30秒内失效 |
+| 手动添加代理商 | Bitable UI 直接新建 |
+| 修改代理信息 | Bitable UI 直接编辑 |
+| 重新生成token | Bitable UI 修改"下单Token"字段 |
+
+---
+
 ## [2026-04-14] Sprint 13：CRM真实数据同步 + 三系统数据打通
 
 ### 今日交付物

@@ -39,6 +39,7 @@ const TABLES = {
   order: "tblk9Ch4gk2uQ1zG",
   customer: "tbltXNNhF65EBl17",
   lens_detail: "tblC7pve7ObFgIOl",
+  agent: "tblHsgGbJWkB31qu",
 };
 
 // ─── 配置 ──────────────────────────────────────────────────────────────────
@@ -63,20 +64,35 @@ const ENV = loadEnv();
 let _agentsCache = null;
 let _agentsCacheTime = 0;
 
-function loadAgents() {
+async function loadAgents() {
   if (Date.now() - _agentsCacheTime < 30000 && _agentsCache) return _agentsCache;
   try {
-    _agentsCache = JSON.parse(readFileSync(resolve(__dirname, "agents.json"), "utf-8"));
+    const records = await listRecords(TABLES.agent);
+    _agentsCache = records
+      .filter(r => {
+        const status = r.fields["状态"];
+        return !status || status === "启用"; // 没有状态字段或状态=启用
+      })
+      .map(r => ({
+        id: r.fields["代理商ID"],
+        name: r.fields["代理商名称"],
+        token: r.fields["下单Token"],
+        phone: r.fields["手机号"] || "",
+        address: r.fields["地址"] || "",
+        crm_id: r.fields["CRM_ID"] || "",
+      }));
     _agentsCacheTime = Date.now();
     return _agentsCache;
-  } catch {
-    return [];
+  } catch (e) {
+    console.error("loadAgents error:", e.message);
+    return _agentsCache || [];
   }
 }
 
-function findAgent(token) {
+async function findAgent(token) {
   if (!token) return null;
-  return loadAgents().find(a => a.token === token) || null;
+  const agents = await loadAgents();
+  return agents.find(a => a.token === token) || null;
 }
 
 // ─── 飞书 API ───────────────────────────────────────────────────────────────
@@ -750,7 +766,7 @@ const server = createServer(async (req, res) => {
 
     // ── API: 代理商信息 ──
     if (pathname === "/api/agent") {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
       jsonRes(res, 200, { id: agent.id, name: agent.name });
       return logReq(req, 200, start);
@@ -758,7 +774,7 @@ const server = createServer(async (req, res) => {
 
     // ── API: SKU列表 + 库存状态 ──
     if (pathname === "/api/skus") {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
       const skus = await getSkusWithInventory();
       jsonRes(res, 200, skus);
@@ -767,7 +783,7 @@ const server = createServer(async (req, res) => {
 
     // ── API: 交期预估 ──
     if (pathname === "/api/delivery-estimate") {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const skuId = url.searchParams.get("sku") || "";
@@ -796,7 +812,7 @@ const server = createServer(async (req, res) => {
 
     // ── API: 客户名列表 ──
     if (pathname === "/api/customers") {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
       const names = await getCustomerNames(agent.id);
       jsonRes(res, 200, { customers: names });
@@ -805,7 +821,7 @@ const server = createServer(async (req, res) => {
 
     // ── API: 提交订单 ──
     if (pathname === "/api/submit" && req.method === "POST") {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const payload = await readBody(req);
@@ -943,7 +959,7 @@ const server = createServer(async (req, res) => {
 
     // ── API: 订单列表（筛选+分页+统计） ──
     if (pathname === "/api/orders") {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const filterStatus = url.searchParams.get("status") || "";
@@ -1027,7 +1043,7 @@ const server = createServer(async (req, res) => {
 
     // ── API: 单个订单详情 ──
     if (pathname.startsWith("/api/order/") && pathname.split("/").length === 4) {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const orderNo = pathname.split("/").pop();
@@ -1097,7 +1113,7 @@ const server = createServer(async (req, res) => {
 
     // ── API: CSV 导出 ──
     if (pathname === "/api/orders/export") {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       // 复用 orders 查询逻辑，不分页
@@ -1172,7 +1188,7 @@ const server = createServer(async (req, res) => {
     // ── API: 查询订单镜片码 ──
     const lensCodesMatch = pathname.match(/^\/api\/order\/([^/]+)\/lens-codes$/);
     if (lensCodesMatch) {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const orderNo = decodeURIComponent(lensCodesMatch[1]);
@@ -1194,7 +1210,7 @@ const server = createServer(async (req, res) => {
     // ── API: 确认订单 → 生成镜片码 + QR ──
     const confirmMatch = pathname.match(/^\/api\/order\/([^/]+)\/confirm$/);
     if (confirmMatch && req.method === "POST") {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const orderNo = decodeURIComponent(confirmMatch[1]);
@@ -1266,7 +1282,7 @@ const server = createServer(async (req, res) => {
     // ── API: 下载 QR 码 ──
     const qrMatch = pathname.match(/^\/api\/order\/([^/]+)\/qrcode$/);
     if (qrMatch) {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const orderNo = decodeURIComponent(qrMatch[1]);
@@ -1289,7 +1305,7 @@ const server = createServer(async (req, res) => {
     // ── API: 工厂导出 ZIP ──
     const zipMatch = pathname.match(/^\/api\/order\/([^/]+)\/factory-zip$/);
     if (zipMatch) {
-      const agent = findAgent(token);
+      const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const orderNo = decodeURIComponent(zipMatch[1]);
