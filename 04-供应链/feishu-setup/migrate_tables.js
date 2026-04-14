@@ -244,8 +244,8 @@ async function main() {
   });
 
   // Migration 13: Add supply chain workflow fields to order table
-  console.log("\nMigration 13: order.SKU + 数量 + 订单状态 + 交期类型 + 预计交期");
-  await ensureField("tblk9Ch4gk2uQ1zG", "order", { field_name: "SKU", type: 1 });
+  console.log("\nMigration 13: order.产品型号 + 数量 + 订单状态 + 预计交期");
+  await ensureField("tblk9Ch4gk2uQ1zG", "order", { field_name: "产品型号", type: 1 });
   await ensureField("tblk9Ch4gk2uQ1zG", "order", { field_name: "数量", type: 2, property: { formatter: "0" } });
   await ensureField("tblk9Ch4gk2uQ1zG", "order", {
     field_name: "订单状态",
@@ -253,11 +253,16 @@ async function main() {
       { name: "待处理" }, { name: "待人工审核" }, { name: "已发货" }, { name: "完成" }, { name: "已签收" }
     ]},
   });
-  await ensureField("tblk9Ch4gk2uQ1zG", "order", { field_name: "交期类型", type: 1 });
   await ensureField("tblk9Ch4gk2uQ1zG", "order", {
     field_name: "预计交期",
     type: 5, property: { date_formatter: "yyyy/MM/dd" },
   });
+
+  // Migration 14: Add contact fields to 终端客户 table
+  console.log("\nMigration 14: 终端客户.联系人 + 联系电话 + 收货地址");
+  await ensureField("tbltXNNhF65EBl17", "终端客户", { field_name: "联系人", type: 1 });
+  await ensureField("tbltXNNhF65EBl17", "终端客户", { field_name: "联系电话", type: 1 });
+  await ensureField("tbltXNNhF65EBl17", "终端客户", { field_name: "收货地址", type: 1 });
 
   console.log("\n✅ All migrations complete");
 }

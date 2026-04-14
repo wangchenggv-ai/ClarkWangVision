@@ -180,7 +180,7 @@ async function getSkusWithInventory() {
   // 建立库存索引
   const invMap = {};
   for (const r of invRecords) {
-    const sku = r.fields["SKU"];
+    const sku = r.fields["产品型号"];
     if (sku) invMap[sku] = r;
   }
 
@@ -330,6 +330,56 @@ async function getCustomerNames(agentId) {
   return result;
 }
 
+// ─── 终端客户缓存 ────────────────────────────────────────────────────────
+
+const _terminalCustomerCache = {};
+
+async function getTerminalCustomers(agentId) {
+  if (_terminalCustomerCache[agentId] && Date.now() - _terminalCustomerCache[agentId].time < 10 * 60 * 1000) {
+    return _terminalCustomerCache[agentId].data;
+  }
+
+  // 从订单表获取该代理商历史下的顾客姓名
+  const encoded = encodeURIComponent(`"${agentId}"`);
+  const orderNames = new Set();
+  let pageToken = "";
+  while (true) {
+    let qs = `?page_size=100&filter=CurrentValue.[代理商ID]=${encoded}`;
+    if (pageToken) qs += `&page_token=${pageToken}`;
+    const res = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records${qs}`);
+    if (!res) break;
+    for (const r of res.items || []) {
+      const name = r.fields["顾客姓名"];
+      if (name) orderNames.add(name);
+    }
+    if (!res.has_more) break;
+    pageToken = res.page_token;
+  }
+
+  // 从终端客户表获取完整信息
+  const allCustomers = await listRecords(TABLES.customer);
+  const result = [];
+  for (const r of allCustomers) {
+    const name = r.fields["客户名称"];
+    if (!name) continue;
+    // 匹配条件：名称在订单历史中出现过，或者是有联系信息的CRM同步客户
+    const isCrmSync = r.fields["来源系统"] === "CRM同步";
+    const hasContactInfo = r.fields["联系人"] || r.fields["联系电话"] || r.fields["收货地址"];
+    if (orderNames.has(name) || isCrmSync || hasContactInfo) {
+      result.push({
+        id: r.fields["客户ID"] || "",
+        name,
+        contact: r.fields["联系人"] || "",
+        phone: r.fields["联系电话"] || "",
+        address: r.fields["收货地址"] || "",
+      });
+    }
+  }
+  result.sort((a, b) => a.name.localeCompare(b.name, "zh"));
+  _terminalCustomerCache[agentId] = { data: result, time: Date.now() };
+  return result;
+}
+
 // ─── 飞书通知 ──────────────────────────────────────────────────────────────
 
 async function sendNotify(agentName, summary, orderNo) {
@@ -462,7 +512,7 @@ function buildFactoryExcel(records, orderNo) {
     return {
       "订单号": f["来源订单号"] || "",
       "顾客": f["顾客姓名"] || "",
-      "SKU": f["SKU"] || "",
+      "产品型号": f["产品型号"] || "",
       "数量": Number(f["数量"]) || 1,
       "眼别": f["眼别"] || "",
       "球镜SPH": f["球镜SPH"] ?? "",
@@ -472,7 +522,6 @@ function buildFactoryExcel(records, orderNo) {
       "瞳高": f["瞳高"] ?? "",
       "镜框型号": f["镜框型号"] || "",
       "镜片码": f["镜片码"] || "",
-      "交期类型": f["交期类型"] || "",
       "收货地址": f["收货地址"] || "",
     };
   });
@@ -497,7 +546,7 @@ async function buildLabelHtml(record, orderNo) {
 
   const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
   const eye = f["眼别"] || "";
-  const sku = f["SKU"] || "";
+  const sku = f["产品型号"] || "";
   const sph = f["球镜SPH"] ?? "";
   const cyl = f["柱镜CYL"] ?? "";
   const axis = f["轴位AXIS"] ?? "";
@@ -544,7 +593,7 @@ async function buildLabelHtmlFromFields(f, orderNo) {
 
   const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
   const eye = f["眼别"] || "";
-  const sku = f["SKU"] || "";
+  const sku = f["产品型号"] || "";
   const sph = f["球镜SPH"] ?? "";
   const cyl = f["柱镜CYL"] ?? "";
   const axis = f["轴位AXIS"] ?? "";
@@ -838,12 +887,21 @@ const server = createServer(async (req, res) => {
       return logReq(req, 200, start);
     }
 
-    // ── API: 客户名列表 ──
+    // ── API: 客户名列表（兼容：返回名称数组）──
     if (pathname === "/api/customers") {
       const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
       const names = await getCustomerNames(agent.id);
       jsonRes(res, 200, { customers: names });
+      return logReq(req, 200, start);
+    }
+
+    // ── API: 终端客户列表（含联系人/电话/地址）──
+    if (pathname === "/api/terminal-customers") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+      const customers = await getTerminalCustomers(agent.id);
+      jsonRes(res, 200, { customers });
       return logReq(req, 200, start);
     }
 
@@ -853,8 +911,20 @@ const server = createServer(async (req, res) => {
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const payload = await readBody(req);
-      const { address, patients } = payload;
+      const { address, patients, terminalCustomer } = payload;
 
+      if (!terminalCustomer?.name?.trim()) {
+        jsonRes(res, 400, { error: "请填写终端客户" });
+        return logReq(req, 400, start);
+      }
+      if (!terminalCustomer?.contact?.trim()) {
+        jsonRes(res, 400, { error: "请填写联系人" });
+        return logReq(req, 400, start);
+      }
+      if (!terminalCustomer?.phone?.trim()) {
+        jsonRes(res, 400, { error: "请填写联系电话" });
+        return logReq(req, 400, start);
+      }
       if (!address?.trim()) {
         jsonRes(res, 400, { error: "请填写收货地址" });
         return logReq(req, 400, start);
@@ -875,7 +945,7 @@ const server = createServer(async (req, res) => {
       let totalLenses = 0;
 
       for (const p of patients) {
-        const { customerName, sku, quantity, eyes, remark } = p;
+        const { customerName, sku, quantity, eyes, assembly, remark } = p;
         if (!customerName?.trim() || !sku || !quantity || quantity <= 0) continue;
         if (!Array.isArray(eyes) || eyes.length === 0) continue;
 
@@ -892,10 +962,9 @@ const server = createServer(async (req, res) => {
         orderRecords.push({
           fields: {
             "来源订单号": orderNo,
-            "SKU": sku,
+            "产品型号": sku,
             "数量": quantity * lensCount,
             "订单状态": "待处理",
-            "交期类型": est.deliveryType,
             "预计交期": est.promiseDate,
             "下单日期": now,
             "同步时间": now,
@@ -905,6 +974,8 @@ const server = createServer(async (req, res) => {
             "收货地址": address.trim(),
             "订单来源": "代理商门户",
             "客户ID": customerId,
+            ...(terminalCustomer?.contact ? { "联系人": terminalCustomer.contact } : {}),
+            ...(terminalCustomer?.phone ? { "联系电话": terminalCustomer.phone } : {}),
             ...(remark?.trim() ? { "备注": remark.trim() } : {}),
           },
         });
@@ -918,10 +989,8 @@ const server = createServer(async (req, res) => {
               "球镜SPH": Number(eye.sph) || 0,
               "柱镜CYL": Number(eye.cyl) || 0,
               "轴位AXIS": Number(eye.axis) || 0,
-              "瞳距": Number(eye.pd) || 0,
-              "瞳高": Number(eye.ph) || 0,
-              "镜框型号": eye.frame?.trim() || "",
-              "SKU": sku,
+              "是否装配": assembly !== false,
+              "产品型号": sku,
               "顾客姓名": customerName.trim(),
               "代理商名称": agent.name,
               "代理商ID": agent.id,
@@ -934,7 +1003,7 @@ const server = createServer(async (req, res) => {
         // 有货时扣减库存
         if (est.available && skuInfo && skuInfo.currentStock > 0) {
           const invRecords = await listRecords(TABLES.finished_inventory);
-          const invRec = invRecords.find(r => r.fields["SKU"] === sku);
+          const invRec = invRecords.find(r => r.fields["产品型号"] === sku);
           if (invRec) {
             const newStock = Math.max(0, Number(invRec.fields["当前库存"] || 0) - quantity);
             await updateRecord(TABLES.finished_inventory, invRec.record_id, { "当前库存": newStock });
@@ -985,6 +1054,7 @@ const server = createServer(async (req, res) => {
 
       // 清除客户名缓存
       delete _customerCache[agent.id];
+      delete _terminalCustomerCache[agent.id];
 
       jsonRes(res, 200, {
         success: true,
@@ -1026,11 +1096,10 @@ const server = createServer(async (req, res) => {
         const f = r.fields;
         return {
           orderNo: f["来源订单号"] || "",
-          sku: f["SKU"] || "",
-          skuDisplay: f["SKU"] || "",
+          sku: f["产品型号"] || "",
+          skuDisplay: f["产品型号"] || "",
           quantity: Number(f["数量"]) || 1,
           status: f["订单状态"] || "",
-          deliveryType: f["交期类型"] || "",
           customerName: f["顾客姓名"] || "",
           eye: f["眼别"] || "",
           date: f["同步时间"] || f["下单日期"] || null,
@@ -1051,8 +1120,6 @@ const server = createServer(async (req, res) => {
       const stats = {
         total: orders.length,
         pending: orders.filter(o => o.status === "待处理").length,
-        instock: orders.filter(o => o.deliveryType && o.deliveryType.startsWith("有货")).length,
-        custom: orders.filter(o => o.deliveryType && o.deliveryType.startsWith("定制")).length,
         shipped: orders.filter(o => o.status === "已发货" || o.status === "已签收" || o.status === "完成").length,
       };
 
@@ -1111,9 +1178,8 @@ const server = createServer(async (req, res) => {
         const f = r.fields;
         return {
           customerName: f["顾客姓名"] || "",
-          sku: f["SKU"] || "",
+          sku: f["产品型号"] || "",
           quantity: Number(f["数量"]) || 1,
-          deliveryType: f["交期类型"] || "",
           status: f["订单状态"] || "",
         };
       });
@@ -1140,8 +1206,6 @@ const server = createServer(async (req, res) => {
         date: firstItem.fields["下单日期"] || firstItem.fields["同步时间"],
         address: firstItem.fields["收货地址"] || "",
         remark: firstItem.fields["备注"] || "",
-        deliveryType: firstItem.fields["交期类型"] || "",
-        promiseDate: firstItem.fields["预计交期"] || null,
         status: firstItem.fields["订单状态"] || "",
         items,
         lenses,
@@ -1178,7 +1242,7 @@ const server = createServer(async (req, res) => {
         return {
           orderNo: f["来源订单号"] || "",
           customer: f["顾客姓名"] || "",
-          sku: f["SKU"] || "",
+          sku: f["产品型号"] || "",
           qty: Number(f["数量"]) || 1,
           eye: f["眼别"] || "",
           sph: f["球镜SPH"] ?? "",
@@ -1187,10 +1251,8 @@ const server = createServer(async (req, res) => {
           pd: f["瞳距"] ?? "",
           ph: f["瞳高"] ?? "",
           frame: f["镜框型号"] || "",
-          deliveryType: f["交期类型"] || "",
           status: f["订单状态"] || "",
           date: f["下单日期"] ? formatDate(f["下单日期"]) : "",
-          promiseDate: f["预计交期"] ? formatDate(f["预计交期"]) : "",
           address: f["收货地址"] || "",
           remark: f["备注"] || "",
         };
@@ -1208,10 +1270,10 @@ const server = createServer(async (req, res) => {
 
       rows.sort((a, b) => a.orderNo.localeCompare(b.orderNo));
 
-      const headers = ["订单号","顾客","SKU","数量","眼别","球镜SPH","柱镜CYL","轴位AXIS","瞳距","瞳高","镜框型号","交期类型","状态","下单日期","预计交期","收货地址","备注"];
+      const headers = ["订单号","顾客","产品型号","数量","眼别","球镜SPH","柱镜CYL","轴位AXIS","瞳距","瞳高","镜框型号","状态","下单日期","收货地址","备注"];
       const csvRows = [headers.join(",")];
       for (const r of rows) {
-        csvRows.push([r.orderNo, r.customer, r.sku, r.qty, r.eye, r.sph, r.cyl, r.axis, r.pd, r.ph, r.frame, r.deliveryType, r.status, r.date, r.promiseDate, r.address, r.remark].map(csvEscape).join(","));
+        csvRows.push([r.orderNo, r.customer, r.sku, r.qty, r.eye, r.sph, r.cyl, r.axis, r.pd, r.ph, r.frame, r.status, r.date, r.address, r.remark].map(csvEscape).join(","));
       }
 
       const csv = "\uFEFF" + csvRows.join("\n");
@@ -1360,7 +1422,7 @@ const server = createServer(async (req, res) => {
         orderInfo = {
           orderNo: srcOrderNo,
           customerName: f["顾客姓名"] || "",
-          sku: f["SKU"] || "",
+          sku: f["产品型号"] || "",
           date: formatDate(f["下单日期"]),
           leftSph: leftEye?.fields["球镜SPH"] ?? "",
           leftCyl: leftEye?.fields["柱镜CYL"] ?? "",
@@ -1411,10 +1473,9 @@ const server = createServer(async (req, res) => {
           customerName: f["顾客姓名"] || "",
           agentName: f["代理商名称"] || "",
           agentId: f["代理商ID"] || "",
-          sku: f["SKU"] || "",
+          sku: f["产品型号"] || "",
           quantity: Number(f["数量"]) || 1,
           status: f["订单状态"] || "",
-          deliveryType: f["交期类型"] || "",
           date: f["下单日期"] || f["同步时间"] || null,
           lensCode: f["镜片码"] || "",
         };
@@ -1469,7 +1530,7 @@ const server = createServer(async (req, res) => {
           ph: f["瞳高"] ?? "",
           frame: f["镜框型号"] || "",
           lensCode: f["镜片码"] || "",
-          sku: f["SKU"] || "",
+          sku: f["产品型号"] || "",
           customerName: f["顾客姓名"] || "",
           status: f["订单状态"] || "",
         };

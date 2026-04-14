@@ -94,16 +94,31 @@
     <div class="card">
       <div class="card-title">收货信息</div>
       <div class="field">
+        <label>终端客户 <span class="req">*</span></label>
+        <input type="text" id="terminalCustomer" placeholder="选择或输入终端客户名称" list="terminalCustomerList" autocomplete="off" onchange="onTerminalCustomerSelect()">
+        <div class="error-tip">请填写终端客户</div>
+      </div>
+      <div class="field">
+        <label>联系人 <span class="req">*</span></label>
+        <input type="text" id="contact" placeholder="联系人姓名" autocomplete="off">
+        <div class="error-tip">请填写联系人</div>
+      </div>
+      <div class="field">
+        <label>联系电话 <span class="req">*</span></label>
+        <input type="text" id="phone" placeholder="手机号码" inputmode="tel" autocomplete="off">
+        <div class="error-tip">请填写联系电话</div>
+      </div>
+      <div class="field">
         <label>收货地址 <span class="req">*</span></label>
-        <input type="text" id="address" placeholder="请填写详细收货地址">
+        <input type="text" id="address" placeholder="请填写详细收货地址" list="addressList" autocomplete="off">
         <div class="error-tip">请填写收货地址</div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-title">患者订单</div>
+      <div class="card-title">顾客订单</div>
       <div id="patientList"></div>
-      <button class="btn btn-outline btn-block" onclick="addPatient()" id="addPatientBtn">＋ 添加患者</button>
+      <button class="btn btn-outline btn-block" onclick="addPatient()" id="addPatientBtn">＋ 添加顾客</button>
     </div>
 
     <div class="card" id="summaryCard" style="display:none">
@@ -112,10 +127,6 @@
     </div>
 
     <div class="card">
-      <div class="field">
-        <label>批次备注（选填）</label>
-        <textarea id="remark" rows="2" placeholder="如有特殊要求请备注"></textarea>
-      </div>
       <div class="loading" id="loading"><span class="spinner"></span>提交中，请稍候...</div>
       <button class="btn btn-primary btn-lg btn-block" onclick="showConfirm()" id="submitBtn">提交订单</button>
     </div>
@@ -138,6 +149,7 @@ const token = new URLSearchParams(location.search).get("t") || "";
 let agentInfo = null;
 let SKU_OPTIONS = []; // 从 API 动态加载
 let customerNames = [];
+let terminalCustomers = []; // 终端客户列表 [{id,name,contact,phone,address}]
 let patientCount = 0;
 let estimateTimers = {};
 
@@ -189,7 +201,18 @@ async function init() {
     }
   } catch (e) { console.error("客户数据加载失败:", e); }
 
+  // 加载终端客户（含联系人/电话/地址）
+  try {
+    const tcRes = await fetch(`/api/terminal-customers?t=${token}`);
+    if (tcRes.ok) {
+      const tcData = await tcRes.json();
+      terminalCustomers = tcData.customers || [];
+    }
+  } catch (e) { console.error("终端客户数据加载失败:", e); }
+
   renderCustomerDatalist();
+  renderTerminalCustomerDatalist();
+  renderAddressDatalist();
   addPatient();
 }
 
@@ -203,6 +226,36 @@ function renderCustomerDatalist() {
   dl.innerHTML = customerNames.map(n => `<option value="${n}">`).join("");
 }
 
+function renderTerminalCustomerDatalist() {
+  let dl = document.getElementById("terminalCustomerList");
+  if (!dl) {
+    dl = document.createElement("datalist");
+    dl.id = "terminalCustomerList";
+    document.body.appendChild(dl);
+  }
+  dl.innerHTML = terminalCustomers.map(c => `<option value="${c.name}">`).join("");
+}
+
+function renderAddressDatalist() {
+  let dl = document.getElementById("addressList");
+  if (!dl) {
+    dl = document.createElement("datalist");
+    dl.id = "addressList";
+    document.body.appendChild(dl);
+  }
+  const addrs = [...new Set(terminalCustomers.filter(c => c.address).map(c => c.address))];
+  dl.innerHTML = addrs.map(a => `<option value="${a}">`).join("");
+}
+
+function onTerminalCustomerSelect() {
+  const name = document.getElementById("terminalCustomer").value.trim();
+  const tc = terminalCustomers.find(c => c.name === name);
+  if (!tc) return;
+  if (tc.contact) document.getElementById("contact").value = tc.contact;
+  if (tc.phone) document.getElementById("phone").value = tc.phone;
+  if (tc.address) document.getElementById("address").value = tc.address;
+}
+
 function renderSkuOptions() {
   let html = '<option value="">请选择产品型号</option>';
   for (const s of SKU_OPTIONS) {
@@ -213,7 +266,7 @@ function renderSkuOptions() {
 }
 
 function addPatient() {
-  if (patientCount >= 20) { showToast("最多添加 20 位患者", "error"); return; }
+  if (patientCount >= 20) { showToast("最多添加 20 位顾客", "error"); return; }
   patientCount++;
   const id = patientCount;
   const skuOptions = renderSkuOptions();
@@ -223,7 +276,7 @@ function addPatient() {
   div.id = `patient-${id}`;
   div.innerHTML = `
     <div class="patient-header">
-      <span class="patient-no">患者 ${id}</span>
+      <span class="patient-no">顾客 ${id}</span>
       ${id > 1 ? `<button class="btn-danger" onclick="removePatient(${id})">✕ 删除</button>` : ""}
     </div>
     <div class="field">
@@ -251,15 +304,11 @@ function addPatient() {
       <div class="eye-fields" id="eye-fields-${id}-right">
         <div class="rx-grid">
           <div class="rx-field"><label>球镜 SPH</label><input type="number" step="0.25" id="sph-${id}-right" placeholder="-2.75" inputmode="decimal"></div>
-          <div class="rx-field"><label>柱镜 CYL</label><input type="number" step="0.25" id="cyl-${id}-right" placeholder="-1.00" inputmode="decimal" onchange="toggleAxis(${id},'right')" oninput="toggleAxis(${id},'right')"></div>
+          <div class="rx-field"><label>柱镜 CYL</label><input type="number" step="0.25" id="cyl-${id}-right" placeholder="-1.00" inputmode="decimal"></div>
         </div>
         <div class="rx-grid" style="margin-top:8px">
-          <div class="rx-field" id="axis-wrap-${id}-right" style="display:none"><label>轴位 AXIS</label><input type="number" min="0" max="180" step="1" id="axis-${id}-right" placeholder="0-180" inputmode="numeric"></div>
-          <div class="rx-field"><label>瞳距 PD</label><input type="number" step="0.5" id="pd-${id}-right" placeholder="32.0" inputmode="decimal"></div>
-        </div>
-        <div class="rx-grid" style="margin-top:8px">
-          <div class="rx-field"><label>瞳高 PH</label><input type="number" step="0.5" id="ph-${id}-right" placeholder="29" inputmode="decimal"></div>
-          <div class="rx-field"><label>镜框型号（选填）</label><input type="text" id="frame-${id}-right" placeholder="如 52-17-145"></div>
+          <div class="rx-field"><label>轴位 AXIS</label><input type="number" min="0" max="180" step="1" id="axis-${id}-right" placeholder="0-180" inputmode="numeric"></div>
+          <div class="rx-field"></div>
         </div>
       </div>
     </div>
@@ -272,17 +321,23 @@ function addPatient() {
       <div class="eye-fields" id="eye-fields-${id}-left">
         <div class="rx-grid">
           <div class="rx-field"><label>球镜 SPH</label><input type="number" step="0.25" id="sph-${id}-left" placeholder="-2.75" inputmode="decimal"></div>
-          <div class="rx-field"><label>柱镜 CYL</label><input type="number" step="0.25" id="cyl-${id}-left" placeholder="-1.00" inputmode="decimal" onchange="toggleAxis(${id},'left')" oninput="toggleAxis(${id},'left')"></div>
+          <div class="rx-field"><label>柱镜 CYL</label><input type="number" step="0.25" id="cyl-${id}-left" placeholder="-1.00" inputmode="decimal"></div>
         </div>
         <div class="rx-grid" style="margin-top:8px">
-          <div class="rx-field" id="axis-wrap-${id}-left" style="display:none"><label>轴位 AXIS</label><input type="number" min="0" max="180" step="1" id="axis-${id}-left" placeholder="0-180" inputmode="numeric"></div>
-          <div class="rx-field"><label>瞳距 PD</label><input type="number" step="0.5" id="pd-${id}-left" placeholder="32.0" inputmode="decimal"></div>
-        </div>
-        <div class="rx-grid" style="margin-top:8px">
-          <div class="rx-field"><label>瞳高 PH</label><input type="number" step="0.5" id="ph-${id}-left" placeholder="29" inputmode="decimal"></div>
-          <div class="rx-field"><label>镜框型号（选填）</label><input type="text" id="frame-${id}-left" placeholder="如 52-17-145"></div>
+          <div class="rx-field"><label>轴位 AXIS</label><input type="number" min="0" max="180" step="1" id="axis-${id}-left" placeholder="0-180" inputmode="numeric"></div>
+          <div class="rx-field"></div>
         </div>
       </div>
+    </div>
+
+    <div style="margin-top:4px">
+      <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="assembly-${id}" checked style="width:auto;margin:0"> 是否装配
+      </label>
+    </div>
+    <div class="field" style="margin-top:8px">
+      <label>备注（选填）</label>
+      <textarea id="remark-${id}" rows="1" placeholder="该顾客的特殊要求"></textarea>
     </div>
 
     <button class="copy-eye-btn" onclick="copyEye(${id},'right','left')">← 复制右眼到左眼</button>
@@ -300,21 +355,14 @@ function toggleEye(id, side) {
   document.getElementById(`eye-fields-${id}-${side}`).classList.toggle("disabled", !checked);
 }
 
-function toggleAxis(id, side) {
-  const cyl = document.getElementById(`cyl-${id}-${side}`)?.value;
-  const wrap = document.getElementById(`axis-wrap-${id}-${side}`);
-  if (wrap) wrap.style.display = (cyl && Number(cyl) !== 0) ? "" : "none";
-}
-
 function copyEye(id, from, to) {
-  for (const f of ["sph", "cyl", "axis", "pd", "ph", "frame"]) {
+  for (const f of ["sph", "cyl", "axis"]) {
     const src = document.getElementById(`${f}-${id}-${from}`);
     const dst = document.getElementById(`${f}-${id}-${to}`);
     if (src && dst) dst.value = src.value;
   }
   const check = document.getElementById(`eye-check-${id}-${to}`);
   if (check && !check.checked) { check.checked = true; toggleEye(id, to); }
-  toggleAxis(id, to);
   showToast("已复制右眼处方到左眼", "info");
 }
 
@@ -365,7 +413,7 @@ function updateSummary() {
       ${estBadge ? `<span style="font-size:12px">${estBadge}</span>` : ""}
     </div>`;
   }
-  html += `<div style="padding:10px 0 0;font-size:14px;color:#666;text-align:right">共 ${patients.length} 位患者，${totalLenses} 片镜片</div>`;
+  html += `<div style="padding:10px 0 0;font-size:14px;color:#666;text-align:right">共 ${patients.length} 位顾客，${totalLenses} 片镜片</div>`;
   content.innerHTML = html;
 }
 
@@ -388,12 +436,11 @@ function collectPatients() {
         sph: document.getElementById(`sph-${id}-${side}`)?.value || "0",
         cyl: document.getElementById(`cyl-${id}-${side}`)?.value || "0",
         axis: document.getElementById(`axis-${id}-${side}`)?.value || "0",
-        pd: document.getElementById(`pd-${id}-${side}`)?.value || "0",
-        ph: document.getElementById(`ph-${id}-${side}`)?.value || "0",
-        frame: document.getElementById(`frame-${id}-${side}`)?.value.trim() || "",
       });
     }
-    if (eyes.length > 0) patients.push({ id, customerName: name, sku, quantity, eyes });
+    const assembly = document.getElementById(`assembly-${id}`)?.checked !== false;
+    const remark = document.getElementById(`remark-${id}`)?.value.trim() || "";
+    if (eyes.length > 0) patients.push({ id, customerName: name, sku, quantity, eyes, assembly, remark });
   }
   return patients;
 }
@@ -401,12 +448,22 @@ function collectPatients() {
 // ─── 验证 ──────────────────────────────────────────────────────────────────
 function validate() {
   let valid = true;
+
+  const tc = document.getElementById("terminalCustomer");
+  if (!tc.value.trim()) { tc.classList.add("error"); valid = false; } else tc.classList.remove("error");
+
+  const contact = document.getElementById("contact");
+  if (!contact.value.trim()) { contact.classList.add("error"); valid = false; } else contact.classList.remove("error");
+
+  const phone = document.getElementById("phone");
+  if (!phone.value.trim()) { phone.classList.add("error"); valid = false; } else phone.classList.remove("error");
+
   const addr = document.getElementById("address");
   if (!addr.value.trim()) { addr.classList.add("error"); valid = false; }
   else addr.classList.remove("error");
 
   const patients = collectPatients();
-  if (patients.length === 0) { showToast("请至少填写一位患者的完整信息", "error"); return false; }
+  if (patients.length === 0) { showToast("请至少填写一位顾客的完整信息", "error"); return false; }
 
   for (const card of document.querySelectorAll(".patient-card")) {
     const id = card.id.replace("patient-", "");
@@ -417,7 +474,7 @@ function validate() {
 
     const r = document.getElementById(`eye-check-${id}-right`);
     const l = document.getElementById(`eye-check-${id}-left`);
-    if (!r?.checked && !l?.checked) { showToast(`患者 ${id}：请至少勾选一只眼睛`, "error"); valid = false; }
+    if (!r?.checked && !l?.checked) { showToast(`顾客 ${id}：请至少勾选一只眼睛`, "error"); valid = false; }
   }
   return valid;
 }
@@ -434,7 +491,7 @@ function showConfirm() {
     const estEl = document.getElementById(`estimate-${p.id}`);
     html += `<div class="row"><span class="label">${p.customerName} · ${p.sku} × ${p.eyes.length}片</span><span class="value">${estEl ? estEl.textContent.trim() : ''}</span></div>`;
   }
-  html += `<div class="row" style="font-weight:600;border-top:2px solid #eee;padding-top:12px"><span>合计</span><span>${patients.length} 位患者，${totalLenses} 片镜片</span></div></div>`;
+  html += `<div class="row" style="font-weight:600;border-top:2px solid #eee;padding-top:12px"><span>合计</span><span>${patients.length} 位顾客，${totalLenses} 片镜片</span></div></div>`;
   document.getElementById("confirmSummary").innerHTML = html;
   document.getElementById("confirmModal").classList.add("show");
 }
@@ -446,19 +503,26 @@ async function doSubmit() {
   closeConfirm();
   const patients = collectPatients();
   const address = document.getElementById("address").value.trim();
-  const remark = document.getElementById("remark").value.trim();
+  const tcName = document.getElementById("terminalCustomer").value.trim();
+  const contact = document.getElementById("contact").value.trim();
+  const phone = document.getElementById("phone").value.trim();
 
   document.getElementById("submitBtn").disabled = true;
   document.getElementById("loading").style.display = "block";
 
   try {
+    const body = {
+      address,
+      patients: patients.map(p => ({ customerName: p.customerName, sku: p.sku, quantity: p.quantity, eyes: p.eyes, assembly: p.assembly, remark: p.remark })),
+    };
+    if (tcName || contact || phone) {
+      body.terminalCustomer = { name: tcName, contact, phone, address };
+    }
+
     const res = await fetch(`/api/submit?t=${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        address,
-        patients: patients.map(p => ({ customerName: p.customerName, sku: p.sku, quantity: p.quantity, eyes: p.eyes, remark })),
-      }),
+      body: JSON.stringify(body),
     });
     const json = await res.json();
 
@@ -486,8 +550,10 @@ async function doSubmit() {
 }
 
 function resetForm() {
+  document.getElementById("terminalCustomer").value = "";
+  document.getElementById("contact").value = "";
+  document.getElementById("phone").value = "";
   document.getElementById("address").value = "";
-  document.getElementById("remark").value = "";
   document.getElementById("patientList").innerHTML = "";
   document.getElementById("summaryCard").style.display = "none";
   patientCount = 0;
@@ -506,6 +572,9 @@ function showToast(msg, type = "success") {
 }
 
 document.getElementById("address")?.addEventListener("input", function() { this.classList.remove("error"); });
+document.getElementById("terminalCustomer")?.addEventListener("input", function() { this.classList.remove("error"); });
+document.getElementById("contact")?.addEventListener("input", function() { this.classList.remove("error"); });
+document.getElementById("phone")?.addEventListener("input", function() { this.classList.remove("error"); });
 
 init();
 </script>
