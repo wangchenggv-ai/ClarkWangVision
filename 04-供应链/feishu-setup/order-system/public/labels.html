@@ -3,10 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>高视高清 · 标签打印管理</title>
+<title>高视高清 · 订单管理中心</title>
 <link rel="stylesheet" href="/css/common.css">
 <style>
-body { background: #f5f6fa; }
+body { background: #f5f6fa; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+/* Header */
 .admin-header {
   background: linear-gradient(135deg, #1a1a2e, #16213e);
   color: #fff;
@@ -15,16 +17,123 @@ body { background: #f5f6fa; }
   align-items: center;
   gap: 12px;
 }
-.admin-header h1 { font-size: 18px; font-weight: 600; }
+.admin-header h1 { font-size: 18px; font-weight: 600; margin: 0; }
 .admin-header .badge { background: #e74c3c; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+.admin-header .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.admin-header .clock { font-size: 12px; opacity: 0.7; }
 
 .admin-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
 
-/* 筛选栏 */
+/* ─── 统计卡片 ─── */
+.stats-cards {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 20px;
+  flex: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border-left: 4px solid #d9d9d9;
+  transition: all 0.2s;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+.stat-card.active { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-2px); }
+.stat-card .icon { position: absolute; right: 12px; top: 10px; font-size: 22px; opacity: 0.15; }
+.stat-card .val { font-size: 24px; font-weight: 700; line-height: 1.2; }
+.stat-card .lbl { font-size: 12px; color: #888; margin-top: 2px; }
+.stat-card .avg-days { font-size: 11px; color: #aaa; margin-top: 2px; }
+.stat-card[data-status="all"] { border-left-color: #595959; }
+.stat-card[data-status="all"] .val { color: #595959; }
+.stat-card[data-status="all"].active { background: #fafafa; }
+.stat-card[data-status="待处理"] { border-left-color: #d46b08; }
+.stat-card[data-status="待处理"] .val { color: #d46b08; }
+.stat-card[data-status="待处理"].active { background: #fff7e6; }
+.stat-card[data-status="生产中"] { border-left-color: #0958d9; }
+.stat-card[data-status="生产中"] .val { color: #0958d9; }
+.stat-card[data-status="生产中"].active { background: #e6f4ff; }
+.stat-card[data-status="已发货"] { border-left-color: #389e0d; }
+.stat-card[data-status="已发货"] .val { color: #389e0d; }
+.stat-card[data-status="已发货"].active { background: #f6ffed; }
+.stat-card[data-status="已签收"] { border-left-color: #237804; }
+.stat-card[data-status="已签收"] .val { color: #237804; }
+.stat-card[data-status="已签收"].active { background: #f0f9e8; }
+
+/* ─── 智能提醒条 ─── */
+.smart-bar {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 20px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border-left: 4px solid #1677ff;
+  min-height: 20px;
+  flex-wrap: wrap;
+}
+.smart-bar:empty { display: none; }
+.smart-bar .tip { color: #595959; font-weight: 500; white-space: nowrap; }
+.smart-bar .action-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.smart-bar .action-tag:hover { opacity: 0.8; }
+.smart-bar .tag-pending { background: #fff7e6; color: #d46b08; border: 1px solid #ffd591; }
+.smart-bar .tag-producing { background: #e6f4ff; color: #0958d9; border: 1px solid #91caff; }
+.smart-bar .tag-overdue { background: #fff1f0; color: #cf1322; border: 1px solid #ffccc7; }
+.smart-bar .tag-ok { color: #52c41a; }
+.smart-bar .today-stats { display: flex; gap: 10px; margin-left: auto; }
+.smart-bar .today-item { font-size: 11px; color: #888; white-space: nowrap; }
+.smart-bar .today-item b { color: #333; }
+
+/* ─── 快捷筛选标签 ─── */
+.quick-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.quick-filter {
+  padding: 6px 14px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  color: #666;
+  white-space: nowrap;
+  transition: all 0.2s;
+  user-select: none;
+}
+.quick-filter:hover { border-color: #1677ff; color: #1677ff; }
+.quick-filter.active { background: #1677ff; color: #fff; border-color: #1677ff; }
+.quick-filter .count { font-size: 10px; opacity: 0.7; margin-left: 4px; }
+.quick-filter.overdue { border-color: #ffccc7; color: #cf1322; }
+.quick-filter.overdue.active { background: #cf1322; color: #fff; border-color: #cf1322; }
+
+/* ─── 筛选栏 ─── */
 .admin-filter {
   background: #fff;
-  border-radius: 8px;
-  padding: 16px 20px;
+  border-radius: 10px;
+  padding: 14px 20px;
   margin-bottom: 16px;
   display: flex;
   flex-wrap: wrap;
@@ -46,40 +155,51 @@ body { background: #f5f6fa; }
 .admin-filter input[type="text"] { width: 180px; }
 .admin-filter .btn { padding: 8px 16px; font-size: 13px; }
 
-/* 统计栏 */
-.admin-stats {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.admin-stat {
+/* 快捷日期按钮 */
+.date-quick-btns { display: flex; gap: 4px; }
+.date-btn {
+  padding: 5px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
   background: #fff;
-  border-radius: 8px;
-  padding: 12px 20px;
-  flex: 1;
-  text-align: center;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  font-size: 12px;
+  cursor: pointer;
+  color: #595959;
+  transition: all 0.2s;
 }
-.admin-stat .val { font-size: 22px; font-weight: 700; color: #1677ff; }
-.admin-stat .lbl { font-size: 12px; color: #888; margin-top: 2px; }
+.date-btn:hover { border-color: #1677ff; color: #1677ff; }
+.date-btn.active { background: #1677ff; color: #fff; border-color: #1677ff; }
+.date-btn-clear { color: #999; }
+.date-btn-clear:hover { color: #ff4d4f; border-color: #ff4d4f; }
 
-/* 操作栏 */
+/* ─── 操作栏 ─── */
 .admin-actions {
   background: #fff;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 12px 20px;
   margin-bottom: 16px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-wrap: wrap;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  position: sticky;
+  bottom: 0;
+  z-index: 50;
+  border-top: 1px solid #f0f0f0;
 }
 .admin-actions .count { color: #888; font-size: 13px; margin-left: auto; }
+.admin-actions .divider { width: 1px; height: 24px; background: #e0e0e0; }
+.action-group { display: flex; gap: 8px; }
 
-/* 订单表格 */
+/* 上下文操作按钮 */
+.ctx-btn { display: none; }
+.ctx-btn.visible { display: inline-flex; }
+
+/* ─── 表格 ─── */
 .admin-table {
   background: #fff;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
@@ -90,21 +210,190 @@ body { background: #f5f6fa; }
   text-align: left;
   font-weight: 600;
   color: #666;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 2px solid #f0f0f0;
   position: sticky;
   top: 0;
+  z-index: 1;
+  white-space: nowrap;
 }
 .admin-table td {
   padding: 10px 12px;
   border-bottom: 1px solid #f5f5f5;
+  vertical-align: middle;
 }
-.admin-table tr:hover { background: #f8faff; }
+.admin-table tr.data-row { border-left: 3px solid transparent; transition: background 0.15s; }
+.admin-table tr.data-row:nth-child(4n+1) { background: #fafbfc; }
+.admin-table tr.data-row:hover { background: #f0f5ff; }
+.admin-table tr.data-row[data-status="待处理"] { border-left-color: #d46b08; }
+.admin-table tr.data-row[data-status="生产中"] { border-left-color: #0958d9; }
+.admin-table tr.data-row[data-status="已发货"] { border-left-color: #389e0d; }
+.admin-table tr.data-row[data-status="已签收"] { border-left-color: #237804; }
+.admin-table tr.data-row[data-status="完成"] { border-left-color: #237804; }
+.admin-table tr.data-row.overdue { background: #fff5f5 !important; }
+.admin-table tr.data-row.overdue:hover { background: #ffe8e8 !important; }
 .admin-table input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 
-/* 标签预览区 */
+/* 展开按钮 */
+.expand-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  color: #888;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  line-height: 1;
+}
+.expand-btn:hover { background: #f0f0f0; color: #333; }
+.expand-btn.open { transform: rotate(90deg); }
+
+/* 展开详情行 */
+.detail-row td { padding: 0 !important; border-bottom: 1px solid #f0f0f0; }
+.detail-panel {
+  padding: 12px 20px 12px 52px;
+  background: #fafbfc;
+  font-size: 12px;
+}
+.detail-panel table { width: 100%; border-collapse: collapse; }
+.detail-panel th { text-align: left; padding: 4px 8px; color: #888; font-weight: 500; background: none; position: static; }
+.detail-panel td { padding: 4px 8px; border: none; font-family: monospace; }
+.detail-panel .lens-code { color: #1677ff; font-weight: 600; }
+.detail-panel .no-data { color: #bbb; padding: 8px 0; }
+
+/* 天数标签 */
+.days-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.days-badge.normal { background: #f0f9e8; color: #237804; }
+.days-badge.warning { background: #fff7e6; color: #d46b08; }
+.days-badge.danger { background: #fff1f0; color: #cf1322; }
+
+/* 行内快捷操作按钮 */
+.row-action-btn {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  letter-spacing: 0.3px;
+}
+.row-action-btn:hover { transform: scale(1.05); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+.row-action-btn.act-confirm { background: linear-gradient(135deg, #e6f4ff, #bae0ff); color: #0958d9; }
+.row-action-btn.act-zip { background: linear-gradient(135deg, #f0f5ff, #d6e4ff); color: #2f54eb; }
+.row-action-btn.act-ship { background: linear-gradient(135deg, #f6ffed, #b7eb8f); color: #237804; }
+.row-action-btn.act-deliver { background: linear-gradient(135deg, #f9f0ff, #d3adf7); color: #531dab; }
+.row-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 镜片码 tooltip */
+.lens-code-cell { position: relative; cursor: default; }
+.lens-code-cell .short { font-family: monospace; font-size: 11px; color: #888; }
+.lens-code-cell .full-tooltip {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 10;
+  background: #333;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: monospace;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+.lens-code-cell:hover .full-tooltip { display: block; }
+
+/* 状态圆点 */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.status-dot.pending { background: #faad14; }
+.status-dot.producing { background: #1677ff; }
+.status-dot.shipped { background: #52c41a; }
+.status-dot.received { background: #237804; }
+.status-dot.done { background: #d9d9d9; }
+
+/* ─── Toast ─── */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  animation: toastIn 0.3s ease;
+  pointer-events: auto;
+  max-width: 500px;
+}
+.toast.success { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+.toast.error { background: #fff2f0; color: #cf1322; border: 1px solid #ffccc7; }
+.toast.info { background: #e6f4ff; color: #0958d9; border: 1px solid #91caff; }
+.toast.fade-out { animation: toastOut 0.3s ease forwards; }
+@keyframes toastIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes toastOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-10px); } }
+
+/* ─── 确认弹窗 ─── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 9000;
+  align-items: center;
+  justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  min-width: 360px;
+  max-width: 500px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  animation: modalIn 0.25s ease;
+}
+@keyframes modalIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+.modal h3 { margin: 0 0 12px; font-size: 16px; color: #333; }
+.modal .modal-body { font-size: 13px; color: #595959; line-height: 1.6; margin-bottom: 20px; }
+.modal .modal-footer { display: flex; justify-content: flex-end; gap: 8px; }
+.modal .btn { padding: 8px 20px; font-size: 13px; border-radius: 6px; cursor: pointer; border: 1px solid #d9d9d9; background: #fff; transition: all 0.2s; }
+.modal .btn:hover { background: #f5f5f5; }
+.modal .btn-primary { background: #1677ff; color: #fff; border-color: #1677ff; }
+.modal .btn-primary:hover { background: #4096ff; }
+.modal .btn-danger { background: #ff4d4f; color: #fff; border-color: #ff4d4f; }
+.modal .btn-danger:hover { background: #ff7875; }
+.modal .result-list { max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; background: #fafafa; padding: 8px 12px; border-radius: 4px; margin-top: 8px; }
+
+/* ─── 标签预览区 ─── */
 .preview-section {
   background: #fff;
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 20px;
   margin-top: 16px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
@@ -137,11 +426,59 @@ body { background: #f5f6fa; }
   background: #fff;
 }
 
-/* 打印时的样式 */
+/* ─── 分页 ─── */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.pagination .page-info { font-size: 13px; color: #888; }
+
+/* ─── 键盘快捷键提示 ─── */
+.keyboard-hints {
+  position: fixed;
+  bottom: 60px;
+  right: 20px;
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  font-size: 11px;
+  color: #888;
+  z-index: 40;
+  display: none;
+  line-height: 1.8;
+}
+.keyboard-hints kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  font-family: monospace;
+  font-size: 10px;
+  color: #333;
+}
+.keyboard-hints.show { display: block; }
+
+/* ─── 移动端表格提示 ─── */
+.table-scroll-hint {
+  display: none;
+  text-align: center;
+  padding: 8px;
+  font-size: 12px;
+  color: #bbb;
+  background: #fafafa;
+}
+
+/* ─── 打印 ─── */
 @media print {
   body { background: #fff !important; }
-  .admin-header, .admin-filter, .admin-stats, .admin-actions,
-  .admin-table, .preview-section h3, .no-print { display: none !important; }
+  .admin-header, .stats-cards, .smart-bar, .quick-filters, .admin-filter, .admin-actions,
+  .admin-table, .preview-section h3, .no-print, .toast-container, .modal-overlay,
+  .keyboard-hints, .table-scroll-hint, .info-panels { display: none !important; }
   .preview-section {
     display: block !important;
     box-shadow: none;
@@ -167,62 +504,662 @@ body { background: #f5f6fa; }
     border: none;
   }
 }
+
+/* ─── AI 自然语言搜索 ─── */
+.nl-search {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border: 1px solid #e8e8e8;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.nl-search:focus-within { border-color: #1677ff; box-shadow: 0 0 0 3px rgba(22,119,255,0.1); }
+.nl-search .ai-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 14px;
+}
+.nl-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  background: transparent;
+}
+.nl-search input::placeholder { color: #bbb; }
+.nl-search .search-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+.nl-search .search-btn:hover { opacity: 0.85; }
+.nl-search .search-btn:disabled { opacity: 0.5; cursor: wait; }
+.nl-search .nl-result {
+  font-size: 12px;
+  color: #888;
+  white-space: nowrap;
+}
+
+/* ─── 异常检测条 ─── */
+.anomaly-bar {
+  background: #fff;
+  border-radius: 10px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border-left: 4px solid #ff4d4f;
+  font-size: 12px;
+  display: none;
+}
+.anomaly-bar.show { display: block; }
+.anomaly-bar .anomaly-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.anomaly-bar .anomaly-header h4 { margin: 0; font-size: 13px; color: #cf1322; }
+.anomaly-bar .anomaly-list { max-height: 200px; overflow-y: auto; }
+.anomaly-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid #fafafa;
+  font-size: 11px;
+}
+.anomaly-item:last-child { border-bottom: none; }
+.anomaly-item .sev-warning { color: #d46b08; }
+.anomaly-item .sev-danger { color: #cf1322; }
+.anomaly-item .order-link { color: #1677ff; font-family: monospace; cursor: pointer; text-decoration: underline; }
+
+/* ─── 数据问答聊天 ─── */
+.qa-chat {
+  position: fixed;
+  bottom: 60px;
+  right: 20px;
+  z-index: 60;
+}
+.qa-toggle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(102,126,234,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+.qa-toggle:hover { transform: scale(1.1); }
+.qa-panel {
+  display: none;
+  position: absolute;
+  bottom: 56px;
+  right: 0;
+  width: 360px;
+  max-height: 420px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  flex-direction: column;
+  overflow: hidden;
+}
+.qa-panel.open { display: flex; }
+.qa-panel-header {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.qa-panel-header .close-btn { background: none; border: none; color: #fff; font-size: 18px; cursor: pointer; opacity: 0.7; }
+.qa-panel-header .close-btn:hover { opacity: 1; }
+.qa-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 200px;
+}
+.qa-msg {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 85%;
+}
+.qa-msg.user { background: #e6f4ff; color: #0958d9; align-self: flex-end; border-bottom-right-radius: 2px; }
+.qa-msg.bot { background: #f5f5f5; color: #333; align-self: flex-start; border-bottom-left-radius: 2px; }
+.qa-msg.bot.loading { color: #999; }
+.qa-input-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid #f0f0f0;
+}
+.qa-input-bar input {
+  flex: 1;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+.qa-input-bar input:focus { border-color: #667eea; }
+.qa-input-bar button {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.qa-suggestions {
+  padding: 4px 12px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.qa-sug-btn {
+  padding: 3px 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  background: #fafafa;
+  font-size: 11px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.qa-sug-btn:hover { border-color: #667eea; color: #667eea; }
+
+/* ─── 流程图 & AI Agent 面板 ─── */
+.info-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.info-panel {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+.info-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.info-panel-header:hover { background: #fafafa; }
+.info-panel-header h3 { font-size: 14px; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 8px; }
+.info-panel-header .toggle { font-size: 12px; color: #999; transition: transform 0.2s; }
+.info-panel-header .toggle.open { transform: rotate(180deg); }
+.info-panel-body { padding: 0 16px 16px; display: none; }
+.info-panel-body.open { display: block; }
+
+/* 流程图 */
+.flowchart {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.flow-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  transition: background 0.15s;
+  position: relative;
+}
+.flow-step:hover { background: #f5f7fa; }
+.flow-step .step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: #fff;
+}
+.flow-step .step-num.c1 { background: #1677ff; }
+.flow-step .step-num.c2 { background: #0958d9; }
+.flow-step .step-num.c3 { background: #52c41a; }
+.flow-step .step-num.c4 { background: #722ed1; }
+.flow-step .step-num.c5 { background: #13c2c2; }
+.flow-step .step-num.c6 { background: #fa8c16; }
+.flow-step .step-num.c7 { background: #2f54eb; }
+.flow-step .step-num.c8 { background: #eb2f96; }
+.flow-step .step-content { flex: 1; }
+.flow-step .step-title { font-weight: 600; color: #333; }
+.flow-step .step-desc { color: #888; font-size: 11px; margin-top: 1px; }
+.flow-step .step-actor {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.flow-step .actor-agent { background: #e6f4ff; color: #0958d9; }
+.flow-step .actor-assistant { background: #f6ffed; color: #389e0d; }
+.flow-step .actor-system { background: #f5f5f5; color: #595959; }
+.flow-step .actor-factory { background: #fff7e6; color: #d46b08; }
+.flow-step .actor-consumer { background: #f9f0ff; color: #722ed1; }
+.flow-arrow {
+  text-align: center;
+  color: #d9d9d9;
+  font-size: 10px;
+  line-height: 1;
+  padding-left: 10px;
+}
+.flow-branch {
+  display: flex;
+  gap: 8px;
+  padding: 6px 0 6px 32px;
+  font-size: 11px;
+  color: #888;
+}
+.flow-branch-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: #fafafa;
+  border-radius: 4px;
+  border: 1px solid #f0f0f0;
+}
+
+/* AI Agent */
+.ai-agent-list { display: flex; flex-direction: column; gap: 10px; }
+.ai-agent-card {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fafbfc;
+  transition: all 0.15s;
+}
+.ai-agent-card:hover { border-color: #d0e4ff; background: #f5f9ff; }
+.ai-agent-card .agent-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-agent-card .agent-name .agent-icon { font-size: 16px; }
+.ai-agent-card .agent-desc { font-size: 11px; color: #888; line-height: 1.5; }
+.ai-agent-card .agent-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.ai-agent-card .skill-tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #e6f4ff;
+  color: #0958d9;
+}
+.ai-agent-card .skill-tag.ready { background: #f6ffed; color: #237804; }
+.ai-agent-card .skill-tag.planned { background: #fff7e6; color: #d46b08; }
+.ai-agent-card .skill-tag.future { background: #f5f5f5; color: #999; }
+
+/* ─── 响应式 ─── */
+@media (max-width: 768px) {
+  .stats-cards { flex-wrap: wrap; }
+  .stat-card { min-width: calc(50% - 8px); }
+  .admin-container { padding: 12px; }
+  .admin-filter { flex-direction: column; }
+  .admin-filter input[type="text"] { width: 100%; }
+  .table-scroll-hint { display: block; }
+  .admin-table { overflow-x: auto; }
+  .smart-bar { flex-direction: column; align-items: flex-start; }
+  .smart-bar .today-stats { margin-left: 0; margin-top: 8px; }
+  .info-panels { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
 
+<!-- Toast 容器 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- 确认弹窗 -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalDialog">
+    <h3 id="modalTitle"></h3>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-footer" id="modalFooter"></div>
+  </div>
+</div>
+
+<!-- 键盘快捷键提示 -->
+<div class="keyboard-hints" id="keyboardHints">
+  <div><kbd>Ctrl</kbd>+<kbd>A</kbd> 全选当前页</div>
+  <div><kbd>Esc</kbd> 清除选择</div>
+  <div><kbd>Space</kbd> 展开/折叠行</div>
+  <div><kbd>?</kbd> 显示/隐藏快捷键</div>
+</div>
+
 <div class="admin-header">
-  <h1>标签打印管理</h1>
+  <h1>订单管理中心</h1>
   <span class="badge">内部运营</span>
+  <div class="header-right">
+    <span class="clock" id="headerClock"></span>
+    <span style="font-size:12px;opacity:0.6;cursor:pointer" onclick="toggleKeyboardHints()" title="快捷键提示">⌨</span>
+  </div>
 </div>
 
 <div class="admin-container">
+  <!-- 统计卡片 -->
+  <div class="stats-cards" id="statsCards">
+    <div class="stat-card active" data-status="all" onclick="filterByStatus('all')">
+      <div class="icon"></div>
+      <div class="val" id="statTotal">-</div>
+      <div class="lbl">总订单</div>
+      <div class="avg-days" id="avgDaysAll"></div>
+    </div>
+    <div class="stat-card" data-status="待处理" onclick="filterByStatus('待处理')">
+      <div class="icon">&#9203;</div>
+      <div class="val" id="statPending">-</div>
+      <div class="lbl">待处理</div>
+      <div class="avg-days" id="avgDaysPending"></div>
+    </div>
+    <div class="stat-card" data-status="生产中" onclick="filterByStatus('生产中')">
+      <div class="icon">&#9881;</div>
+      <div class="val" id="statProducing">-</div>
+      <div class="lbl">生产中</div>
+      <div class="avg-days" id="avgDaysProducing"></div>
+    </div>
+    <div class="stat-card" data-status="已发货" onclick="filterByStatus('已发货')">
+      <div class="icon">&#128666;</div>
+      <div class="val" id="statShipped">-</div>
+      <div class="lbl">已发货</div>
+      <div class="avg-days" id="avgDaysShipped"></div>
+    </div>
+    <div class="stat-card" data-status="已签收" onclick="filterByStatus('已签收')">
+      <div class="icon">&#10003;</div>
+      <div class="val" id="statReceived">-</div>
+      <div class="lbl">已签收</div>
+      <div class="avg-days" id="avgDaysReceived"></div>
+    </div>
+  </div>
+
+  <!-- 流程图 & AI Agent 面板 -->
+  <div class="info-panels">
+    <!-- 订单流程图 -->
+    <div class="info-panel">
+      <div class="info-panel-header" onclick="togglePanel('flow')">
+        <h3>&#128203; 订单全链路流程</h3>
+        <span class="toggle" id="toggle-flow">&#9660;</span>
+      </div>
+      <div class="info-panel-body" id="panel-flow">
+        <div class="flowchart">
+          <div class="flow-step">
+            <div class="step-num c1">1</div>
+            <div class="step-content">
+              <div class="step-title">代理商下单</div>
+              <div class="step-desc">Web表单 / Excel导入 → 生成订单号 + 镜片码</div>
+            </div>
+            <span class="step-actor actor-agent">代理商</span>
+          </div>
+          <div class="flow-arrow">&darr;</div>
+          <div class="flow-step">
+            <div class="step-num c2">2</div>
+            <div class="step-content">
+              <div class="step-title">助理确认</div>
+              <div class="step-desc">待处理 &rarr; 生产中，镜片码回写主表</div>
+            </div>
+            <span class="step-actor actor-assistant">助理</span>
+          </div>
+          <div class="flow-arrow">&darr;</div>
+          <div class="flow-step">
+            <div class="step-num c3">3</div>
+            <div class="step-content">
+              <div class="step-title">导出ZIP给工厂</div>
+              <div class="step-desc">Excel处方 + QR码 + 标签 → ZIP 包发工厂生产</div>
+            </div>
+            <span class="step-actor actor-assistant">助理</span>
+          </div>
+          <div class="flow-arrow">&darr;</div>
+          <div class="flow-step">
+            <div class="step-num c4">4</div>
+            <div class="step-content">
+              <div class="step-title">工厂生产加工</div>
+              <div class="step-desc">按处方加工镜片 → 返回镜片给助理</div>
+            </div>
+            <span class="step-actor actor-factory">工厂</span>
+          </div>
+          <div class="flow-arrow">&darr;</div>
+          <div class="flow-step">
+            <div class="step-num c5">5</div>
+            <div class="step-content">
+              <div class="step-title">助理打印标签</div>
+              <div class="step-desc">工厂返回镜片后 → 贴80&times;50mm专业标签（红/蓝眼别色带）</div>
+            </div>
+            <span class="step-actor actor-assistant">助理</span>
+          </div>
+          <div class="flow-arrow">&darr;</div>
+          <div class="flow-step">
+            <div class="step-num c6">6</div>
+            <div class="step-content">
+              <div class="step-title">助理发货</div>
+              <div class="step-desc">贴好标签后 → 自动生成快递单号 &rarr; 飞书发货卡片</div>
+            </div>
+            <span class="step-actor actor-assistant">助理</span>
+          </div>
+          <div class="flow-arrow">&darr;</div>
+          <div class="flow-step">
+            <div class="step-num c7">7</div>
+            <div class="step-content">
+              <div class="step-title">助理签收</div>
+              <div class="step-desc">已发货 &rarr; 已签收 &rarr; 飞书签收卡片</div>
+            </div>
+            <span class="step-actor actor-assistant">助理</span>
+          </div>
+          <div class="flow-arrow">&darr;</div>
+          <div class="flow-step">
+            <div class="step-num c8">8</div>
+            <div class="step-content">
+              <div class="step-title">消费者验真</div>
+              <div class="step-desc">扫码 &rarr; 验真页面（处方 + 镜片溯源）</div>
+            </div>
+            <span class="step-actor actor-consumer">消费者</span>
+          </div>
+        </div>
+        <div class="flow-branch" style="margin-top:8px">
+          <span>状态流：</span>
+          <span class="flow-branch-item" style="border-color:#ffd591;color:#d46b08">待处理</span>
+          <span style="color:#ccc">&rarr;</span>
+          <span class="flow-branch-item" style="border-color:#91caff;color:#0958d9">生产中</span>
+          <span style="color:#ccc">&rarr;</span>
+          <span class="flow-branch-item" style="border-color:#b7eb8f;color:#389e0d">已发货</span>
+          <span style="color:#ccc">&rarr;</span>
+          <span class="flow-branch-item" style="border-color:#d9f7be;color:#237804">已签收</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Agent 能力图谱 -->
+    <div class="info-panel">
+      <div class="info-panel-header" onclick="togglePanel('ai')">
+        <h3>&#129302; AI Agent 能力图谱</h3>
+        <span class="toggle" id="toggle-ai">&#9660;</span>
+      </div>
+      <div class="info-panel-body" id="panel-ai">
+        <div class="ai-agent-list">
+          <div class="ai-agent-card">
+            <div class="agent-name"><span class="agent-icon">&#9889;</span>订单智能助手</div>
+            <div class="agent-desc">自然语言搜索订单，自动识别异常和风险，给出下一步操作建议</div>
+            <div class="agent-skills">
+              <span class="skill-tag ready">自然语言搜索</span>
+              <span class="skill-tag ready">异常检测+解释</span>
+              <span class="skill-tag ready">超期预警</span>
+              <span class="skill-tag ready">智能建议</span>
+              <span class="skill-tag planned">交期预测</span>
+            </div>
+          </div>
+          <div class="ai-agent-card">
+            <div class="agent-name"><span class="agent-icon">&#128200;</span>产能调度 Agent</div>
+            <div class="agent-desc">基于订单量、库存、模具状态，自动计算产能瓶颈并给出排产建议</div>
+            <div class="agent-skills">
+              <span class="skill-tag ready">销售预测 &rarr; 排产</span>
+              <span class="skill-tag ready">库存预警</span>
+              <span class="skill-tag planned">工厂负载均衡</span>
+              <span class="skill-tag future">自动下单采购</span>
+            </div>
+          </div>
+          <div class="ai-agent-card">
+            <div class="agent-name"><span class="agent-icon">&#128666;</span>物流追踪 Agent</div>
+            <div class="agent-desc">监控发货到签收全链路，自动推送物流异常和到货提醒</div>
+            <div class="agent-skills">
+              <span class="skill-tag ready">自动分配快递</span>
+              <span class="skill-tag planned">物流轨迹追踪</span>
+              <span class="skill-tag planned">签收自动确认</span>
+              <span class="skill-tag future">客户主动通知</span>
+            </div>
+          </div>
+          <div class="ai-agent-card">
+            <div class="agent-name"><span class="agent-icon">&#128172;</span>飞书通知 Agent</div>
+            <div class="agent-desc">关键节点自动发送飞书卡片通知，覆盖下单/发货/签收全流程</div>
+            <div class="agent-skills">
+              <span class="skill-tag ready">下单通知</span>
+              <span class="skill-tag ready">发货卡片</span>
+              <span class="skill-tag ready">签收卡片</span>
+              <span class="skill-tag planned">日报汇总</span>
+            </div>
+          </div>
+          <div class="ai-agent-card">
+            <div class="agent-name"><span class="agent-icon">&#128196;</span>数据分析 Agent</div>
+            <div class="agent-desc">周维度AI分析 + 随时随地数据问答，覆盖订单/代理商/交期/库存</div>
+            <div class="agent-skills">
+              <span class="skill-tag ready">AI 周分析报告</span>
+              <span class="skill-tag ready">ECharts 仪表盘</span>
+              <span class="skill-tag ready">数据问答聊天</span>
+              <span class="skill-tag planned">季节性备货建议</span>
+              <span class="skill-tag future">根因分析</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 智能提醒条 -->
+  <div class="smart-bar" id="smartBar"></div>
+
+  <!-- AI 自然语言搜索 -->
+  <div class="nl-search">
+    <div class="ai-icon">AI</div>
+    <input type="text" id="nlSearchInput" placeholder="试试搜索：深圳视力康超期订单 / 上周待处理 / ORD-20260414" onkeydown="if(event.key==='Enter')nlSearch()">
+    <button class="search-btn" id="nlSearchBtn" onclick="nlSearch()">搜索</button>
+    <span class="nl-result" id="nlResult"></span>
+  </div>
+
+  <!-- 异常检测条 -->
+  <div class="anomaly-bar" id="anomalyBar">
+    <div class="anomaly-header" onclick="document.getElementById('anomalyList').style.display=document.getElementById('anomalyList').style.display==='none'?'block':'none'">
+      <h4>&#9888; 异常检测 <span id="anomalyCount"></span></h4>
+      <span style="font-size:11px;color:#999">点击展开</span>
+    </div>
+    <div class="anomaly-list" id="anomalyList" style="display:none"></div>
+  </div>
+
+  <!-- 快捷筛选标签 -->
+  <div class="quick-filters" id="quickFilters">
+    <button class="quick-filter active" onclick="applyQuickFilter('all')">全部</button>
+    <button class="quick-filter" onclick="applyQuickFilter('overdue')">&#9888; 超期 <span class="count" id="countOverdue">0</span></button>
+    <button class="quick-filter" onclick="applyQuickFilter('today')">今日新增</button>
+    <button class="quick-filter" onclick="applyQuickFilter('week')">7天内</button>
+  </div>
+
   <!-- 筛选栏 -->
   <div class="admin-filter">
     <input type="text" id="filterQ" placeholder="订单号 / 顾客名">
     <select id="filterAgent"><option value="">全部代理商</option></select>
-    <select id="filterStatus">
-      <option value="">全部状态</option>
-      <option value="待处理">待处理</option>
-      <option value="生产中">生产中</option>
-      <option value="已发货">已发货</option>
-      <option value="已签收">已签收</option>
-      <option value="完成">完成</option>
-    </select>
+    <div class="date-quick-btns">
+      <button class="date-btn" onclick="quickDate('today')">今日</button>
+      <button class="date-btn" onclick="quickDate('yesterday')">昨日</button>
+      <button class="date-btn" onclick="quickDate('week')">本周</button>
+      <button class="date-btn" onclick="quickDate('month')">本月</button>
+      <button class="date-btn date-btn-clear" onclick="clearDate()">清除</button>
+    </div>
     <input type="date" id="filterFrom">
     <input type="date" id="filterTo">
     <button class="btn btn-primary" onclick="loadOrders()">查询</button>
     <button class="btn btn-outline" onclick="resetFilter()">重置</button>
   </div>
 
-  <!-- 统计栏 -->
-  <div class="admin-stats" id="statsBar">
-    <div class="admin-stat"><div class="val" id="statTotal">-</div><div class="lbl">总订单</div></div>
-    <div class="admin-stat"><div class="val" id="statPending">-</div><div class="lbl">待处理</div></div>
-    <div class="admin-stat"><div class="val" id="statProducing">-</div><div class="lbl">生产中</div></div>
-    <div class="admin-stat"><div class="val" id="statShipped">-</div><div class="lbl">已发货</div></div>
-    <div class="admin-stat"><div class="val" id="statReceived">-</div><div class="lbl">已签收</div></div>
-  </div>
-
   <!-- 操作栏 -->
   <div class="admin-actions no-print">
     <label><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> 全选</label>
-    <button class="btn btn-primary" onclick="previewSelected()">预览标签</button>
-    <button class="btn btn-outline" onclick="printLabels()">打印</button>
-    <button class="btn btn-outline" onclick="downloadZip()">导出ZIP</button>
-    <span style="border-left:1px solid #e0e0e0;margin:0 4px;padding:0 4px"></span>
-    <button class="btn btn-outline" style="color:#1677ff;border-color:#1677ff" onclick="confirmOrders()">确认订单</button>
-    <button class="btn btn-outline" style="color:#52c41a;border-color:#52c41a" onclick="shipOrders()">确认发货</button>
-    <button class="btn btn-outline" style="color:#722ed1;border-color:#722ed1" onclick="deliverOrders()">标记签收</button>
+    <div class="divider"></div>
+    <div class="action-group">
+      <button class="btn btn-outline ctx-btn act-confirm-btn" style="color:#1677ff;border-color:#1677ff" onclick="confirmOrders()">确认订单</button>
+      <button class="btn btn-outline" style="color:#0958d9;border-color:#91caff" onclick="downloadZip()">导出ZIP给工厂</button>
+      <button class="btn btn-outline" style="color:#531dab;border-color:#d3adf7" onclick="previewSelected()">预览标签</button>
+      <button class="btn btn-outline" style="color:#722ed1;border-color:#d3adf7" onclick="printLabels()">打印标签</button>
+      <button class="btn btn-outline ctx-btn act-ship-btn" style="color:#52c41a;border-color:#52c41a" onclick="shipOrders()">确认发货</button>
+      <button class="btn btn-outline ctx-btn act-deliver-btn" style="color:#237804;border-color:#b7eb8f" onclick="deliverOrders()">标记签收</button>
+    </div>
     <span class="count" id="selectedCount">已选 0 个订单</span>
   </div>
+
+  <!-- 移动端滚动提示 -->
+  <div class="table-scroll-hint">← 左右滑动查看完整表格 →</div>
 
   <!-- 订单表格 -->
   <div class="admin-table">
     <table>
       <thead>
         <tr>
-          <th style="width:40px"></th>
+          <th style="width:36px"></th>
+          <th style="width:32px"></th>
           <th>订单号</th>
           <th>顾客</th>
           <th>代理商</th>
@@ -230,7 +1167,9 @@ body { background: #f5f6fa; }
           <th>数量</th>
           <th>状态</th>
           <th>下单日期</th>
+          <th>天数</th>
           <th>镜片码</th>
+          <th style="width:70px">操作</th>
         </tr>
       </thead>
       <tbody id="orderBody"></tbody>
@@ -238,7 +1177,7 @@ body { background: #f5f6fa; }
   </div>
 
   <!-- 分页 -->
-  <div class="pagination" id="pagination" style="display:none;margin-top:12px">
+  <div class="pagination" id="pagination" style="display:none">
     <button class="btn btn-outline" id="prevBtn" onclick="changePage(-1)">上一页</button>
     <span class="page-info" id="pageInfo"></span>
     <button class="btn btn-outline" id="nextBtn" onclick="changePage(1)">下一页</button>
@@ -255,16 +1194,81 @@ body { background: #f5f6fa; }
 const adminToken = new URLSearchParams(location.search).get("admin") || "";
 let currentPage = 1;
 let allOrders = [];
+let allOrdersRaw = []; // 全量数据用于统计
 let selectedOrders = new Set();
+let activeStatusFilter = "all";
+let activeQuickFilter = "all";
+let lastStats = {};
+let detailCache = {};
+
+// ─── 时钟 ──────────────────────────────────────────────────────────
+
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,"0");
+  const m = String(now.getMinutes()).padStart(2,"0");
+  document.getElementById("headerClock").textContent = `${h}:${m}`;
+}
+setInterval(updateClock, 30000);
+updateClock();
+
+// ─── 基础 API ──────────────────────────────────────────────────────
 
 function api(path) {
   const sep = path.includes("?") ? "&" : "?";
   return fetch(`${path}${sep}admin=${adminToken}`).then(r => r.json());
 }
 
+function adminApi(path, body) {
+  return fetch(`${path}?admin=${adminToken}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).then(r => r.json());
+}
+
+// ─── Toast 通知 ─────────────────────────────────────────────────────
+
+function showToast(msg, type = "info") {
+  const container = document.getElementById("toastContainer");
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add("fade-out");
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
+
+// ─── 确认弹窗 ───────────────────────────────────────────────────────
+
+function showConfirmModal({ title, body, confirmText = "确定", cancelText = "取消", danger = false, resultHtml = "" }) {
+  return new Promise(resolve => {
+    const overlay = document.getElementById("modalOverlay");
+    document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalBody").innerHTML = body + (resultHtml ? `<div class="result-list">${resultHtml}</div>` : "");
+    const footer = document.getElementById("modalFooter");
+    footer.innerHTML = `
+      <button class="btn" id="modalCancel">${cancelText}</button>
+      <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="modalConfirm">${confirmText}</button>
+    `;
+    overlay.classList.add("show");
+
+    const close = (val) => { overlay.classList.remove("show"); resolve(val); };
+    document.getElementById("modalCancel").onclick = () => close(false);
+    document.getElementById("modalConfirm").onclick = () => close(true);
+    overlay.onclick = (e) => { if (e.target === overlay) close(false); };
+  });
+}
+
+// ─── 工具函数 ───────────────────────────────────────────────────────
+
 function statusBadge(s) {
-  const m = { "待处理":"badge-pending","生产中":"badge-producing","已发货":"badge-shipped","已签收":"badge-received","完成":"badge-done" };
-  return `<span class="badge ${m[s]||'badge-pending'}">${s||'未知'}</span>`;
+  const dotMap = { "待处理":"pending","生产中":"producing","已发货":"shipped","已签收":"received","完成":"done" };
+  const clsMap = { "待处理":"badge-pending","生产中":"badge-producing","已发货":"badge-shipped","已签收":"badge-received","完成":"badge-done" };
+  const dot = dotMap[s] ? `<span class="status-dot ${dotMap[s]}"></span>` : '';
+  return `<span class="badge ${clsMap[s]||'badge-pending'}">${dot}${s||'未知'}</span>`;
 }
 
 function fmtDate(ts) {
@@ -272,33 +1276,92 @@ function fmtDate(ts) {
   return new Date(ts).toLocaleDateString("zh-CN", { month:"2-digit", day:"2-digit" });
 }
 
+// 计算订单天数（从下单到当前）
+function getOrderDays(dateVal) {
+  if (!dateVal) return null;
+  const d = new Date(dateVal);
+  const now = new Date();
+  return Math.floor((now - d) / (1000 * 60 * 60 * 24));
+}
+
+// 是否超期
+function isOverdue(status, days) {
+  if (days === null) return false;
+  if (status === "待处理" && days > 3) return true;
+  if (status === "生产中" && days > 7) return true;
+  return false;
+}
+
+// 天数标签
+function daysBadge(status, dateVal) {
+  const days = getOrderDays(dateVal);
+  if (days === null) return '<span style="color:#ccc">-</span>';
+  const overdue = isOverdue(status, days);
+  let cls = "normal";
+  if (overdue) cls = "danger";
+  else if (days > 1) cls = "warning";
+  const icon = overdue ? "&#9888; " : "";
+  return `<span class="days-badge ${cls}">${icon}${days}天</span>`;
+}
+
+// ─── 加载数据 ───────────────────────────────────────────────────────
+
 async function loadOrders() {
   const params = new URLSearchParams();
   const q = document.getElementById("filterQ").value.trim();
   const agent = document.getElementById("filterAgent").value;
-  const status = document.getElementById("filterStatus").value;
   const from = document.getElementById("filterFrom").value;
   const to = document.getElementById("filterTo").value;
+
+  // 快捷筛选模式
+  if (activeQuickFilter === "overdue") {
+    // 超期：不传状态，让前端筛选
+  } else if (activeQuickFilter === "today") {
+    const todayStr = fmtDateISO(new Date());
+    params.set("from", todayStr);
+    params.set("to", todayStr);
+  } else if (activeQuickFilter === "week") {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    params.set("from", fmtDateISO(d));
+  } else {
+    // 状态筛选走统计卡片
+    if (activeStatusFilter !== "all") params.set("status", activeStatusFilter);
+  }
+
   if (q) params.set("q", q);
   if (agent) params.set("agent", agent);
-  if (status) params.set("status", status);
-  if (from) params.set("from", from);
-  if (to) params.set("to", to);
+  if (from && activeQuickFilter === "all") params.set("from", from);
+  if (to && activeQuickFilter === "all") params.set("to", to);
   params.set("page", currentPage);
   params.set("pageSize", 50);
 
   const data = await api(`/api/admin/orders?${params}`);
   allOrders = data.orders || [];
+  allOrdersRaw = allOrders;
+
+  // 超期筛选：客户端过滤
+  if (activeQuickFilter === "overdue") {
+    allOrders = allOrders.filter(o => isOverdue(o.status, getOrderDays(o.date)));
+  }
 
   // 更新统计
   const s = data.stats || {};
+  lastStats = s;
   document.getElementById("statTotal").textContent = s.total || 0;
   document.getElementById("statPending").textContent = s.pending || 0;
   document.getElementById("statProducing").textContent = s.producing || 0;
   document.getElementById("statShipped").textContent = s.shipped || 0;
   document.getElementById("statReceived").textContent = s.received || 0;
 
-  // 更新代理商筛选下拉
+  // 更新平均天数
+  updateAvgDays(allOrders, s);
+
+  // 更新超期计数
+  const overdueCount = allOrdersRaw.filter(o => isOverdue(o.status, getOrderDays(o.date))).length;
+  document.getElementById("countOverdue").textContent = overdueCount;
+
+  // 更新代理商下拉
   const agentSelect = document.getElementById("filterAgent");
   const currentVal = agentSelect.value;
   const agents = data.agents || [];
@@ -306,13 +1369,92 @@ async function loadOrders() {
 
   renderOrders();
   renderPagination(data.page, data.totalPages);
+  renderSmartSuggestions(s);
 }
+
+function updateAvgDays(orders, s) {
+  function avgFor(status) {
+    const filtered = orders.filter(o => o.status === status);
+    if (!filtered.length) return '';
+    const total = filtered.reduce((sum, o) => sum + (getOrderDays(o.date) || 0), 0);
+    const avg = Math.round(total / filtered.length);
+    return `均 ${avg} 天`;
+  }
+  document.getElementById("avgDaysPending").textContent = avgFor("待处理");
+  document.getElementById("avgDaysProducing").textContent = avgFor("生产中");
+  document.getElementById("avgDaysShipped").textContent = avgFor("已发货");
+  document.getElementById("avgDaysReceived").textContent = avgFor("已签收");
+}
+
+// ─── 统计卡片筛选 ───────────────────────────────────────────────────
+
+function filterByStatus(status) {
+  activeStatusFilter = status;
+  activeQuickFilter = "all";
+  document.querySelectorAll(".stat-card").forEach(c => {
+    c.classList.toggle("active", c.dataset.status === status);
+  });
+  document.querySelectorAll(".quick-filter").forEach(b => b.classList.remove("active"));
+  document.querySelector('.quick-filter[onclick="applyQuickFilter(\'all\')"]')?.classList.add("active");
+  currentPage = 1;
+  loadOrders();
+}
+
+// ─── 快捷筛选 ───────────────────────────────────────────────────────
+
+function applyQuickFilter(type) {
+  activeQuickFilter = type;
+  activeStatusFilter = "all";
+  document.querySelectorAll(".stat-card").forEach(c => {
+    c.classList.toggle("active", c.dataset.status === "all");
+  });
+  document.querySelectorAll(".quick-filter").forEach(b => b.classList.remove("active"));
+  event.target.closest(".quick-filter")?.classList.add("active");
+  currentPage = 1;
+  loadOrders();
+}
+
+// ─── 智能提醒 ───────────────────────────────────────────────────────
+
+function renderSmartSuggestions(s) {
+  const bar = document.getElementById("smartBar");
+  const tips = [];
+
+  // 超期订单
+  const overdueCount = allOrdersRaw.filter(o => isOverdue(o.status, getOrderDays(o.date))).length;
+  if (overdueCount > 0) {
+    tips.push(`<span class="action-tag tag-overdue" onclick="applyQuickFilter('overdue')">&#9888; ${overdueCount} 个订单超期</span>`);
+  }
+  if (s.pending > 0) tips.push(`<span class="action-tag tag-pending" onclick="filterByStatus('待处理')">${s.pending} 个订单待确认</span>`);
+  if (s.producing > 0) tips.push(`<span class="action-tag tag-producing" onclick="filterByStatus('生产中')">${s.producing} 个订单可发货</span>`);
+
+  // 今日统计
+  const todayStr = fmtDateISO(new Date());
+  const todayNew = allOrdersRaw.filter(o => o.date && fmtDateISO(new Date(o.date)) === todayStr).length;
+  const todayItems = [];
+  if (todayNew > 0) todayItems.push(`今日新增 <b>${todayNew}</b>`);
+
+  if (tips.length === 0 && todayItems.length === 0) {
+    bar.innerHTML = '<span class="tip">所有订单已处理</span><span class="tag-ok">&#10003; 正常</span>';
+  } else {
+    let html = '<span class="tip">待办：</span>' + tips.join("");
+    if (todayItems.length) html += `<span class="today-stats">${todayItems.map(t => `<span class="today-item">${t}</span>`).join("")}</span>`;
+    bar.innerHTML = html;
+  }
+}
+
+// ─── 渲染表格 ───────────────────────────────────────────────────────
 
 function renderOrders() {
   const tbody = document.getElementById("orderBody");
-  tbody.innerHTML = allOrders.map(o => `
-    <tr>
+  tbody.innerHTML = allOrders.map((o, i) => {
+    const rowId = `row-${i}`;
+    const quickAction = getQuickAction(o);
+    const overdue = isOverdue(o.status, getOrderDays(o.date));
+    return `
+    <tr class="data-row ${overdue ? 'overdue' : ''}" data-status="${o.status}" id="${rowId}">
       <td><input type="checkbox" data-order="${o.orderNo}" ${selectedOrders.has(o.orderNo)?'checked':''} onchange="toggleOrder('${o.orderNo}')"></td>
+      <td><button class="expand-btn" onclick="toggleRowExpand('${i}', '${o.orderNo}')" title="展开详情">&#9654;</button></td>
       <td style="font-family:monospace;font-size:12px">${o.orderNo}</td>
       <td>${o.customerName}</td>
       <td>${o.agentName}</td>
@@ -320,16 +1462,86 @@ function renderOrders() {
       <td>${o.quantity}</td>
       <td>${statusBadge(o.status)}</td>
       <td>${fmtDate(o.date)}</td>
-      <td style="font-family:monospace;font-size:11px;color:#888">${o.lensCode ? o.lensCode.substring(0,16)+'…' : '-'}</td>
+      <td>${daysBadge(o.status, o.date)}</td>
+      <td class="lens-code-cell">
+        ${o.lensCode ? `<span class="short">${o.lensCode.substring(0,16)}…</span><div class="full-tooltip">${o.lensCode}</div>` : '-'}
+      </td>
+      <td>${quickAction}</td>
     </tr>
-  `).join("");
+    <tr class="detail-row" id="detail-${i}" style="display:none"><td colspan="12"><div class="detail-panel" id="detail-panel-${i}"></div></td></tr>
+    `;
+  }).join("");
   updateSelectedCount();
+  updateContextualActions();
 }
+
+function getQuickAction(o) {
+  if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}')">确认</button>`;
+  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}')" title="导出ZIP给工厂">导出</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}')">发货</button>`;
+  if (o.status === "已发货") return `<button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}')">签收</button>`;
+  return '<span style="color:#ccc;font-size:12px">-</span>';
+}
+
+// ─── 展开行详情 ─────────────────────────────────────────────────────
+
+async function toggleRowExpand(idx, orderNo) {
+  const detailRow = document.getElementById(`detail-${idx}`);
+  const btn = document.querySelector(`#row-${idx} .expand-btn`);
+
+  if (detailRow.style.display !== "none") {
+    detailRow.style.display = "none";
+    btn.classList.remove("open");
+    return;
+  }
+
+  btn.classList.add("open");
+  detailRow.style.display = "table-row";
+
+  const panel = document.getElementById(`detail-panel-${idx}`);
+
+  if (detailCache[orderNo]) {
+    renderDetail(panel, detailCache[orderNo]);
+    return;
+  }
+
+  panel.innerHTML = '<div class="no-data">加载中...</div>';
+  try {
+    const data = await api(`/api/admin/order/${orderNo}/lens-details`);
+    detailCache[orderNo] = data;
+    renderDetail(panel, data);
+  } catch (e) {
+    panel.innerHTML = '<div class="no-data">加载失败</div>';
+  }
+}
+
+function renderDetail(panel, data) {
+  if (!data || !data.lenses || data.lenses.length === 0) {
+    panel.innerHTML = '<div class="no-data">暂无处方数据</div>';
+    return;
+  }
+  panel.innerHTML = `
+    <table>
+      <thead><tr><th>眼别</th><th>SPH</th><th>CYL</th><th>AXIS</th><th>镜片码</th></tr></thead>
+      <tbody>${data.lenses.map(l => `
+        <tr>
+          <td>${l.eye}</td>
+          <td>${l.sph}</td>
+          <td>${l.cyl}</td>
+          <td>${l.axis || '-'}</td>
+          <td class="lens-code">${l.lensCode || '-'}</td>
+        </tr>
+      `).join("")}</tbody>
+    </table>
+  `;
+}
+
+// ─── 选择逻辑 ───────────────────────────────────────────────────────
 
 function toggleOrder(orderNo) {
   if (selectedOrders.has(orderNo)) selectedOrders.delete(orderNo);
   else selectedOrders.add(orderNo);
   updateSelectedCount();
+  updateContextualActions();
 }
 
 function toggleSelectAll() {
@@ -342,6 +1554,24 @@ function toggleSelectAll() {
 function updateSelectedCount() {
   document.getElementById("selectedCount").textContent = `已选 ${selectedOrders.size} 个订单`;
 }
+
+function updateContextualActions() {
+  const statuses = new Set();
+  selectedOrders.forEach(no => {
+    const o = allOrders.find(x => x.orderNo === no);
+    if (o) statuses.add(o.status);
+  });
+
+  const showConfirm = statuses.has("待处理");
+  const showShip = statuses.has("生产中");
+  const showDeliver = statuses.has("已发货");
+
+  document.querySelector(".act-confirm-btn").classList.toggle("visible", showConfirm);
+  document.querySelector(".act-ship-btn").classList.toggle("visible", showShip);
+  document.querySelector(".act-deliver-btn").classList.toggle("visible", showDeliver);
+}
+
+// ─── 分页 ───────────────────────────────────────────────────────────
 
 function renderPagination(page, totalPages) {
   const el = document.getElementById("pagination");
@@ -360,17 +1590,214 @@ function changePage(delta) {
 function resetFilter() {
   document.getElementById("filterQ").value = "";
   document.getElementById("filterAgent").value = "";
-  document.getElementById("filterStatus").value = "";
   document.getElementById("filterFrom").value = "";
   document.getElementById("filterTo").value = "";
+  activeStatusFilter = "all";
+  activeQuickFilter = "all";
+  document.querySelectorAll(".stat-card").forEach(c => c.classList.toggle("active", c.dataset.status === "all"));
+  document.querySelectorAll(".quick-filter").forEach(b => b.classList.remove("active"));
+  document.querySelector('.quick-filter[onclick="applyQuickFilter(\'all\')"]')?.classList.add("active");
+  clearDate();
   currentPage = 1;
   loadOrders();
 }
 
-// ─── 标签预览 ────────────────────────────────────────────────────────
+// ─── 快捷日期筛选 ───────────────────────────────────────────────────
+
+function quickDate(type) {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+  let from, to;
+
+  if (type === "today") {
+    from = to = todayStr;
+  } else if (type === "yesterday") {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 1);
+    from = to = fmtDateISO(d);
+  } else if (type === "week") {
+    const d = new Date(today);
+    const day = d.getDay() || 7;
+    d.setDate(d.getDate() - day + 1);
+    from = fmtDateISO(d);
+    to = todayStr;
+  } else if (type === "month") {
+    from = `${yyyy}-${mm}-01`;
+    to = todayStr;
+  }
+
+  // 重置快捷筛选
+  activeQuickFilter = "all";
+  document.querySelectorAll(".quick-filter").forEach(b => b.classList.remove("active"));
+  document.querySelector('.quick-filter[onclick="applyQuickFilter(\'all\')"]')?.classList.add("active");
+
+  document.getElementById("filterFrom").value = from;
+  document.getElementById("filterTo").value = to;
+
+  document.querySelectorAll(".date-btn").forEach(b => b.classList.remove("active"));
+  document.querySelector(`.date-btn[onclick="quickDate('${type}')"]`)?.classList.add("active");
+
+  currentPage = 1;
+  loadOrders();
+}
+
+function clearDate() {
+  document.getElementById("filterFrom").value = "";
+  document.getElementById("filterTo").value = "";
+  document.querySelectorAll(".date-btn").forEach(b => b.classList.remove("active"));
+}
+
+function fmtDateISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// ─── 单行快捷操作 ───────────────────────────────────────────────────
+
+function quickZip(orderNo) {
+  selectedOrders.clear();
+  selectedOrders.add(orderNo);
+  downloadZip();
+}
+
+async function quickConfirm(orderNo) {
+  const ok = await showConfirmModal({ title: "确认订单", body: `确认订单 <b>${orderNo}</b>？<br>状态将变为"生产中"并生成镜片码。` });
+  if (!ok) return;
+  const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo] });
+  const r = data.results[0];
+  if (r.ok) { showToast(`订单 ${orderNo} 已确认`, "success"); loadOrders(); }
+  else showToast(`确认失败: ${r.error}`, "error");
+}
+
+async function quickShip(orderNo) {
+  const ok = await showConfirmModal({ title: "确认发货", body: `发货订单 <b>${orderNo}</b>？<br>将自动生成快递单号。` });
+  if (!ok) return;
+  const data = await adminApi("/api/admin/ship", { orderNos: [orderNo] });
+  const r = data.results[0];
+  if (r.ok) {
+    showToast(`${orderNo} 已发货: ${r.courier} ${r.trackingNo}`, "success");
+    loadOrders();
+  } else showToast(`发货失败: ${r.error}`, "error");
+}
+
+async function quickDeliver(orderNo) {
+  const ok = await showConfirmModal({ title: "标记签收", body: `标记订单 <b>${orderNo}</b> 为"已签收"？` });
+  if (!ok) return;
+  const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo] });
+  const r = data.results[0];
+  if (r.ok) { showToast(`${orderNo} 已签收`, "success"); loadOrders(); }
+  else showToast(`签收失败: ${r.error}`, "error");
+}
+
+// ─── 批量操作 ───────────────────────────────────────────────────────
+
+async function confirmOrders() {
+  const orderNos = getSelectedByStatus("待处理");
+  if (orderNos.length === 0) { showToast("没有待处理的订单可确认", "info"); return; }
+  const ok = await showConfirmModal({ title: "批量确认", body: `确认 <b>${orderNos.length}</b> 个订单？<br>状态将变为"生产中"并生成镜片码。` });
+  if (!ok) return;
+  const data = await adminApi("/api/admin/confirm", { orderNos });
+  const done = data.results.filter(r => r.ok).length;
+  const fail = data.results.filter(r => !r.ok).length;
+  showToast(`确认完成：成功 ${done} 单${fail ? "，失败 " + fail + " 单" : ""}`, fail ? "error" : "success");
+  loadOrders();
+}
+
+async function shipOrders() {
+  const orderNos = getSelectedByStatus("生产中");
+  if (orderNos.length === 0) { showToast("没有生产中的订单可发货", "info"); return; }
+  const ok = await showConfirmModal({ title: "批量发货", body: `发货 <b>${orderNos.length}</b> 个订单？<br>将自动生成快递单号。` });
+  if (!ok) return;
+  const data = await adminApi("/api/admin/ship", { orderNos });
+  const okResults = data.results.filter(r => r.ok);
+  const fail = data.results.filter(r => !r.ok).length;
+  let html = okResults.map(r => `${r.orderNo}: ${r.courier} ${r.trackingNo}`).join("<br>");
+  await showConfirmModal({ title: "发货完成", body: `成功 ${okResults.length} 单${fail ? "，失败 " + fail + " 单" : ""}`, confirmText: "关闭", cancelText: "", resultHtml: html });
+  loadOrders();
+}
+
+async function deliverOrders() {
+  const orderNos = getSelectedByStatus("已发货");
+  if (orderNos.length === 0) { showToast("没有已发货的订单可签收", "info"); return; }
+  const ok = await showConfirmModal({ title: "批量签收", body: `标记 <b>${orderNos.length}</b> 个订单为"已签收"？` });
+  if (!ok) return;
+  const data = await adminApi("/api/admin/deliver", { orderNos });
+  const done = data.results.filter(r => r.ok).length;
+  const fail = data.results.filter(r => !r.ok).length;
+  showToast(`签收完成：成功 ${done} 单${fail ? "，失败 " + fail + " 单" : ""}`, fail ? "error" : "success");
+  loadOrders();
+}
+
+function getSelectedByStatus(status) {
+  return [...selectedOrders].filter(no => {
+    const o = allOrders.find(x => x.orderNo === no);
+    return o && o.status === status;
+  });
+}
+
+// ─── 键盘快捷键 ─────────────────────────────────────────────────────
+
+document.addEventListener("keydown", (e) => {
+  // Ctrl+A 全选当前页
+  if ((e.ctrlKey || e.metaKey) && e.key === "a") {
+    if (document.activeElement.tagName !== "INPUT") {
+      e.preventDefault();
+      allOrders.forEach(o => selectedOrders.add(o.orderNo));
+      document.getElementById("selectAll").checked = true;
+      renderOrders();
+      showToast(`已全选 ${allOrders.length} 个订单`, "info");
+    }
+  }
+
+  // Esc 清除选择
+  if (e.key === "Escape") {
+    selectedOrders.clear();
+    document.getElementById("selectAll").checked = false;
+    renderOrders();
+  }
+
+  // ? 显示/隐藏快捷键提示
+  if (e.key === "?" && document.activeElement.tagName !== "INPUT") {
+    toggleKeyboardHints();
+  }
+});
+
+// ─── 面板折叠 ───────────────────────────────────────────────────────
+
+function togglePanel(id) {
+  const body = document.getElementById(`panel-${id}`);
+  const toggle = document.getElementById(`toggle-${id}`);
+  body.classList.toggle("open");
+  toggle.classList.toggle("open");
+  // 持久化
+  const panels = JSON.parse(localStorage.getItem("labelPanels") || "{}");
+  panels[id] = body.classList.contains("open");
+  localStorage.setItem("labelPanels", JSON.stringify(panels));
+}
+
+// 恢复折叠状态
+(function restorePanels() {
+  try {
+    const panels = JSON.parse(localStorage.getItem("labelPanels") || "{}");
+    for (const [id, open] of Object.entries(panels)) {
+      if (open) {
+        document.getElementById(`panel-${id}`)?.classList.add("open");
+        document.getElementById(`toggle-${id}`)?.classList.add("open");
+      }
+    }
+  } catch {}
+})();
+
+function toggleKeyboardHints() {
+  document.getElementById("keyboardHints").classList.toggle("show");
+}
+
+// ─── 标签预览 ───────────────────────────────────────────────────────
 
 async function previewSelected() {
-  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
+  if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
 
   const orderNos = [...selectedOrders].join(",");
   const data = await api(`/api/admin/labels/batch?orderNos=${encodeURIComponent(orderNos)}`);
@@ -397,7 +1824,6 @@ async function previewSelected() {
     `;
     grid.appendChild(card);
 
-    // 写入 iframe
     const frame = card.querySelector("iframe");
     frame.onload = () => {
       frame.style.height = frame.contentDocument.body.scrollHeight + "px";
@@ -415,77 +1841,181 @@ function clearPreview() {
 }
 
 function printLabels() {
-  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
-  // 先预览再打印
+  if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
   previewSelected().then(() => {
     setTimeout(() => window.print(), 500);
   });
 }
 
 function downloadZip() {
-  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
-  // 批量下载：一个合并 ZIP
+  if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
   const orderNos = [...selectedOrders].join(",");
-  const url = `/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNos)}`;
-  window.open(url, "_blank");
+  window.open(`/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNos)}`, "_blank");
 }
 
-// ─── 物流操作 ──────────────────────────────────────────────────────────
+// ─── AI 自然语言搜索 ─────────────────────────────────────────────────
 
-async function adminApi(path, body) {
-  const res = await fetch(`${path}?admin=${adminToken}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return res.json();
+async function nlSearch() {
+  const input = document.getElementById("nlSearchInput");
+  const btn = document.getElementById("nlSearchBtn");
+  const result = document.getElementById("nlResult");
+  const query = input.value.trim();
+  if (!query) { input.focus(); return; }
+
+  btn.disabled = true;
+  btn.textContent = "思考中...";
+  result.textContent = "";
+
+  try {
+    const data = await adminApi("/api/admin/ai-search", { query });
+    if (data.filters?.error) {
+      result.textContent = data.filters.error;
+      result.style.color = "#cf1322";
+    } else {
+      const f = data.filters;
+      // 应用筛选
+      document.getElementById("filterQ").value = f.q || "";
+      document.getElementById("filterAgent").value = f.agent || "";
+      document.getElementById("filterFrom").value = f.from || "";
+      document.getElementById("filterTo").value = f.to || "";
+
+      if (f.status) {
+        activeStatusFilter = f.status;
+        activeQuickFilter = "all";
+        document.querySelectorAll(".stat-card").forEach(c => c.classList.toggle("active", c.dataset.status === f.status));
+      } else {
+        // 超期等特殊查询
+        activeStatusFilter = "all";
+        activeQuickFilter = "all";
+        document.querySelectorAll(".stat-card").forEach(c => c.classList.toggle("active", c.dataset.status === "all"));
+      }
+
+      currentPage = 1;
+      loadOrders();
+
+      const parts = [];
+      if (f.status) parts.push(`状态=${f.status}`);
+      if (f.agent) parts.push(`代理商=${f.agent}`);
+      if (f.q) parts.push(`关键词=${f.q}`);
+      if (f.from) parts.push(`从${f.from}`);
+      if (f.to) parts.push(`到${f.to}`);
+      result.textContent = parts.length ? `已筛选: ${parts.join(" ")}` : "已搜索";
+      result.style.color = "#237804";
+    }
+  } catch (e) {
+    result.textContent = "搜索失败: " + e.message;
+    result.style.color = "#cf1322";
+  }
+
+  btn.disabled = false;
+  btn.textContent = "搜索";
 }
 
-async function confirmOrders() {
-  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
-  const orderNos = [...selectedOrders];
-  if (!confirm(`确认 ${orderNos.length} 个订单？\n状态将变为"生产中"并生成镜片码。`)) return;
+// ─── 异常检测 ─────────────────────────────────────────────────────────
 
-  const data = await adminApi("/api/admin/confirm", { orderNos });
-  const ok = data.results.filter(r => r.ok).length;
-  const fail = data.results.filter(r => !r.ok).length;
-  alert(`确认完成：成功 ${ok} 单${fail ? "，失败 " + fail + " 单" : ""}`);
-  loadOrders();
+async function loadAnomalies() {
+  try {
+    const data = await api("/api/admin/ai-anomaly");
+    const bar = document.getElementById("anomalyBar");
+    const list = document.getElementById("anomalyList");
+    const count = document.getElementById("anomalyCount");
+
+    if (!data.anomalies || data.anomalies.length === 0) {
+      bar.classList.remove("show");
+      return;
+    }
+
+    bar.classList.add("show");
+    count.textContent = `(${data.total})`;
+
+    list.innerHTML = data.anomalies.map(a => {
+      const sevCls = a.severity === "danger" ? "sev-danger" : "sev-warning";
+      const sevIcon = a.severity === "danger" ? "&#10060;" : "&#9888;";
+      return `<div class="anomaly-item">
+        <span class="${sevCls}">${sevIcon}</span>
+        <span><span class="order-link" onclick="document.getElementById('filterQ').value='${a.orderNo}';loadOrders()">${a.orderNo}</span> ${a.msg}</span>
+      </div>`;
+    }).join("");
+  } catch (e) {
+    console.error("异常检测失败:", e);
+  }
 }
 
-async function shipOrders() {
-  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
-  const orderNos = [...selectedOrders];
-  if (!confirm(`发货 ${orderNos.length} 个订单？\n将自动生成快递单号，状态变为"已发货"。`)) return;
+// ─── 数据问答 ─────────────────────────────────────────────────────────
 
-  const data = await adminApi("/api/admin/ship", { orderNos });
-  const ok = data.results.filter(r => r.ok);
-  const fail = data.results.filter(r => !r.ok);
-  let msg = `发货完成：成功 ${ok.length} 单${fail.length ? "，失败 " + fail.length + " 单" : ""}`;
-  if (ok.length) msg += "\n\n" + ok.map(r => `${r.orderNo}: ${r.courier} ${r.trackingNo}`).join("\n");
-  alert(msg);
-  loadOrders();
+function toggleQA() {
+  document.getElementById("qaPanel").classList.toggle("open");
 }
 
-async function deliverOrders() {
-  if (selectedOrders.size === 0) { alert("请先选择订单"); return; }
-  const orderNos = [...selectedOrders];
-  if (!confirm(`标记 ${orderNos.length} 个订单为"已签收"？`)) return;
+async function qaSend() {
+  const input = document.getElementById("qaInput");
+  const messages = document.getElementById("qaMessages");
+  const question = input.value.trim();
+  if (!question) return;
 
-  const data = await adminApi("/api/admin/deliver", { orderNos });
-  const ok = data.results.filter(r => r.ok).length;
-  const fail = data.results.filter(r => !r.ok).length;
-  alert(`签收完成：成功 ${ok} 单${fail ? "，失败 " + fail + " 单" : ""}`);
-  loadOrders();
+  // 添加用户消息
+  const userMsg = document.createElement("div");
+  userMsg.className = "qa-msg user";
+  userMsg.textContent = question;
+  messages.appendChild(userMsg);
+  input.value = "";
+
+  // 加载中
+  const botMsg = document.createElement("div");
+  botMsg.className = "qa-msg bot loading";
+  botMsg.textContent = "思考中...";
+  messages.appendChild(botMsg);
+  messages.scrollTop = messages.scrollHeight;
+
+  try {
+    const data = await adminApi("/api/admin/ai-qa", { question });
+    botMsg.className = "qa-msg bot";
+    botMsg.textContent = data.answer || "抱歉，无法回答这个问题";
+  } catch (e) {
+    botMsg.className = "qa-msg bot";
+    botMsg.textContent = "请求失败: " + e.message;
+  }
+  messages.scrollTop = messages.scrollHeight;
 }
 
-// ─── 初始化 ──────────────────────────────────────────────────────────
+function askQA(q) {
+  document.getElementById("qaInput").value = q;
+  qaSend();
+}
+
+// ─── 初始化 ─────────────────────────────────────────────────────────
 
 if (!adminToken) {
   document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#e74c3c">缺少管理权限参数，请使用 ?admin=xxx 访问</div>';
 } else {
   loadOrders();
+  loadAnomalies();
 }
 </script>
+
+<!-- AI 数据问答 -->
+<div class="qa-chat">
+  <div class="qa-panel" id="qaPanel">
+    <div class="qa-panel-header">
+      <span>&#129302; 数据问答</span>
+      <button class="close-btn" onclick="toggleQA()">&times;</button>
+    </div>
+    <div class="qa-suggestions">
+      <button class="qa-sug-btn" onclick="askQA('这个月有多少订单？')">本月订单量</button>
+      <button class="qa-sug-btn" onclick="askQA('哪个代理商下单最多？')">代理商排名</button>
+      <button class="qa-sug-btn" onclick="askQA('超期订单有哪些？')">超期订单</button>
+      <button class="qa-sug-btn" onclick="askQA('平均交期多少天？')">平均交期</button>
+    </div>
+    <div class="qa-messages" id="qaMessages">
+      <div class="qa-msg bot">你好！我是供应链数据助手，可以问我关于订单、代理商、交期等问题。</div>
+    </div>
+    <div class="qa-input-bar">
+      <input type="text" id="qaInput" placeholder="输入问题，如：哪个SKU卖得最好？" onkeydown="if(event.key==='Enter')qaSend()">
+      <button onclick="qaSend()">发送</button>
+    </div>
+  </div>
+  <button class="qa-toggle" onclick="toggleQA()" title="AI 数据问答">&#128172;</button>
+</div>
+
 </body>
 </html>

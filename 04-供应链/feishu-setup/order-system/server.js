@@ -1260,8 +1260,22 @@ const server = createServer(async (req, res) => {
       }
 
       // 镜片码+QR 异步生成（不阻塞下单返回）
-      assignLensCodes(orderNo).then(codes => {
-        if (codes.length > 0) console.log(`  镜片码已生成: ${orderNo} → ${codes.join(", ")}`);
+      assignLensCodes(orderNo).then(async codes => {
+        if (codes.length > 0) {
+          console.log(`  镜片码已生成: ${orderNo} → ${codes.join(", ")}`);
+          // 回写镜片码到订单主表
+          try {
+            const encoded = encodeURIComponent(`"${orderNo}"`);
+            const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+            const recs = d?.items || [];
+            for (const rec of recs) {
+              await updateRecord(TABLES.order, rec.record_id, { "镜片码": codes.join(",") });
+            }
+            console.log(`  镜片码已回写主表: ${orderNo}`);
+          } catch (e) {
+            console.error(`  镜片码回写主表失败: ${orderNo}`, e.message);
+          }
+        }
       }).catch(e => console.error(`  镜片码生成失败: ${orderNo}`, e.message));
 
       // 通知
@@ -1836,13 +1850,16 @@ const server = createServer(async (req, res) => {
           if (!records.length) { results.push({ orderNo, ok: false, error: "未找到" }); continue; }
 
           // 生成镜片码（幂等）
-          await assignLensCodes(orderNo);
+          const lensCodes = await assignLensCodes(orderNo);
 
-          // 更新状态为生产中
+          // 更新状态为生产中 + 回写镜片码
           for (const rec of records) {
-            await updateRecord(TABLES.order, rec.record_id, { "订单状态": "生产中" });
+            await updateRecord(TABLES.order, rec.record_id, {
+              "订单状态": "生产中",
+              ...(lensCodes.length > 0 ? { "镜片码": lensCodes.join(",") } : {}),
+            });
           }
-          results.push({ orderNo, ok: true });
+          results.push({ orderNo, ok: true, lensCodes });
         } catch (e) {
           results.push({ orderNo, ok: false, error: e.message });
         }
@@ -1966,6 +1983,283 @@ const server = createServer(async (req, res) => {
         }
       }
       jsonRes(res, 200, { results });
+      return logReq(req, 200, start);
+    }
+
+    // ── AI 自然语言搜索 ──────────────────────────────────────────────────────────
+    if (pathname === "/api/admin/ai-search" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req);
+      const query = (payload.query || "").trim();
+      if (!query) { jsonRes(res, 400, { error: "请输入搜索内容" }); return logReq(req, 400, start); }
+
+      // 获取可用代理商列表用于提示
+      const allRecs = await listRecords(TABLES.order);
+      const agentNames = [...new Set(allRecs.map(r => r.fields["代理商名称"]).filter(Boolean))].sort();
+
+      const systemPrompt = `你是一个订单管理系统的自然语言搜索助手。用户会用中文描述想要找的订单，你需要将其转换为 JSON 筛选参数。
+
+可用的筛选参数（都是可选的）：
+- status: "待处理" / "生产中" / "已发货" / "已签收"
+- agent: 代理商名称（精确匹配）
+- q: 订单号或顾客姓名的关键词搜索
+- from: 开始日期（格式 YYYY-MM-DD）
+- to: 结束日期（格式 YYYY-MM-DD）
+
+可用代理商列表：${agentNames.join(", ")}
+
+日期处理规则：
+- "今天" "今日" → from 和 to 都设为今天
+- "昨天" → from 和 to 都设为昨天
+- "本周" "这周" → from 设为本周一，to 设为今天
+- "上周" → from 设为上周一，to 设为上周日
+- "本月" "这个月" → from 设为本月1号，to 设为今天
+- "上月" "上个月" → from 设为上月1号，to 设为上月末
+- "最近N天" → from 设为N天前，to 设为今天
+- 具体日期如"3月" "三月" → from=YYYY-03-01, to=YYYY-03-31
+- "Q1" → from=YYYY-01-01, to=YYYY-03-31
+
+状态映射：
+- "超期" "逾期" "晚了" "慢了" → 不设status（前端会用超期标签筛选）
+- "待处理" "未确认" "待确认" → status=待处理
+- "生产中" "在做" → status=生产中
+- "已发货" "已发" "发货" → status=已发货
+- "已签收" "签收" "收到" → status=已签收
+
+只返回 JSON，不要任何解释。格式：{"status":"...","agent":"...","q":"...","from":"...","to":"..."}
+如果某个字段不需要筛选就不包含。如果无法解析，返回 {"error":"无法理解查询内容"}`;
+
+      try {
+        const aiResult = await callMiMo(systemPrompt, query);
+        const parsed = JSON.parse(aiResult);
+        jsonRes(res, 200, { filters: parsed, raw: aiResult });
+      } catch (e) {
+        jsonRes(res, 200, { filters: { error: "AI解析失败：" + e.message }, raw: "" });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // ── AI 异常检测 ──────────────────────────────────────────────────────────────
+    if (pathname === "/api/admin/ai-anomaly" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const allRecords = await listRecords(TABLES.order);
+      const lensRecords = await listRecords(TABLES.lens_detail);
+      const now = Date.now();
+      const anomalies = [];
+
+      // 1. 超期订单
+      for (const r of allRecords) {
+        const f = r.fields;
+        const status = f["订单状态"] || "";
+        const date = f["下单日期"];
+        if (!date) continue;
+        const days = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+        if (status === "待处理" && days > 3) {
+          anomalies.push({ type: "overdue", severity: "warning", orderNo: f["订单编号"], msg: `待处理 ${days} 天（标准≤3天）`, field: "订单状态" });
+        }
+        if (status === "生产中" && days > 7) {
+          anomalies.push({ type: "overdue", severity: "danger", orderNo: f["订单编号"], msg: `生产中 ${days} 天（标准≤7天）`, field: "订单状态" });
+        }
+      }
+
+      // 2. 处方异常检测
+      const sphRanges = {}; // agentId → [min, max]
+      const cylRanges = {};
+      for (const r of lensRecords) {
+        const f = r.fields;
+        const agentId = f["代理商ID"] || "unknown";
+        const sph = Number(f["球镜SPH"]) || 0;
+        const cyl = Number(f["柱镜CYL"]) || 0;
+        if (!sphRanges[agentId]) { sphRanges[agentId] = [sph, sph]; cylRanges[agentId] = [cyl, cyl]; }
+        sphRanges[agentId][0] = Math.min(sphRanges[agentId][0], sph);
+        sphRanges[agentId][1] = Math.max(sphRanges[agentId][1], sph);
+        cylRanges[agentId][0] = Math.min(cylRanges[agentId][0], cyl);
+        cylRanges[agentId][1] = Math.max(cylRanges[agentId][1], cyl);
+      }
+
+      // 检查极端值
+      for (const r of lensRecords) {
+        const f = r.fields;
+        const sph = Number(f["球镜SPH"]) || 0;
+        const cyl = Number(f["柱镜CYL"]) || 0;
+        const orderNo = f["订单编号"] || "";
+        const agentId = f["代理商ID"] || "unknown";
+
+        if (Math.abs(sph) > 12) {
+          anomalies.push({ type: "prescription", severity: "warning", orderNo, msg: `SPH ${sph} 超出常规范围(±12)，请确认处方`, field: "球镜SPH" });
+        }
+        if (Math.abs(cyl) > 4) {
+          anomalies.push({ type: "prescription", severity: "warning", orderNo, msg: `CYL ${cyl} 超出常规范围(±4)，请确认处方`, field: "柱镜CYL" });
+        }
+        const axis = Number(f["轴位AXIS"]) || 0;
+        if (cyl !== 0 && axis === 0) {
+          anomalies.push({ type: "prescription", severity: "danger", orderNo, msg: `有柱镜值(${cyl})但轴位为0，请确认`, field: "轴位AXIS" });
+        }
+      }
+
+      // 3. 重复镜片码检测
+      const codeCount = {};
+      for (const r of lensRecords) {
+        const code = r.fields["镜片码"];
+        if (code) { codeCount[code] = (codeCount[code] || 0) + 1; }
+      }
+      for (const [code, count] of Object.entries(codeCount)) {
+        if (count > 1) {
+          const related = lensRecords.filter(r => r.fields["镜片码"] === code).map(r => r.fields["订单编号"]);
+          anomalies.push({ type: "duplicate", severity: "danger", orderNo: related[0], msg: `镜片码 ${code} 重复 ${count} 次（订单: ${[...new Set(related)].join(", ")}）`, field: "镜片码" });
+        }
+      }
+
+      jsonRes(res, 200, { total: anomalies.length, anomalies: anomalies.slice(0, 50) });
+      return logReq(req, 200, start);
+    }
+
+    // ── AI 数据问答 ──────────────────────────────────────────────────────────────
+    if (pathname === "/api/admin/ai-qa" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req);
+      const question = (payload.question || "").trim();
+      if (!question) { jsonRes(res, 400, { error: "请输入问题" }); return logReq(req, 400, start); }
+
+      // 聚合统计数据给 AI
+      const allRecords = await listRecords(TABLES.order);
+      const now = Date.now();
+      const orders = allRecords.map(r => {
+        const f = r.fields;
+        return {
+          orderNo: f["订单编号"] || "",
+          customer: f["顾客姓名"] || "",
+          agent: f["代理商名称"] || "",
+          sku: f["产品型号"] || "",
+          qty: Number(f["数量"]) || 1,
+          status: f["订单状态"] || "",
+          date: f["下单日期"] || null,
+          courier: f["物流公司"] || "",
+          trackingNo: f["快递单号"] || "",
+        };
+      });
+
+      const statusCounts = {};
+      let totalDays = 0, daysCount = 0;
+      const agentCounts = {};
+      const skuCounts = {};
+      const overdueOrders = [];
+
+      for (const o of orders) {
+        statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
+        if (o.agent) agentCounts[o.agent] = (agentCounts[o.agent] || 0) + 1;
+        if (o.sku) skuCounts[o.sku] = (skuCounts[o.sku] || 0) + o.qty;
+        if (o.date) {
+          const days = Math.floor((now - o.date) / (1000 * 60 * 60 * 24));
+          totalDays += days; daysCount++;
+          if ((o.status === "待处理" && days > 3) || (o.status === "生产中" && days > 7)) {
+            overdueOrders.push({ orderNo: o.orderNo, status: o.status, days, agent: o.agent });
+          }
+        }
+      }
+
+      const dataContext = {
+        总订单数: orders.length,
+        状态分布: statusCounts,
+        各代理商订单数: agentCounts,
+        各SKU销量: skuCounts,
+        平均订单天数: daysCount ? Math.round(totalDays / daysCount) : 0,
+        超期订单数: overdueOrders.length,
+        超期订单详情: overdueOrders.slice(0, 10),
+        当前日期: new Date().toISOString().split("T")[0],
+      };
+
+      const systemPrompt = `你是高视高清眼镜供应链的数据分析师。以下是订单管理系统的真实数据摘要，用户会用中文提问，请基于数据给出准确、简洁的回答。
+
+如果用户问的是数据中没有的内容，请诚实说明无法回答。
+
+数据摘要（JSON）：
+${JSON.stringify(dataContext, null, 2)}
+
+回答要求：
+- 简洁直接，1-3句话
+- 包含具体数字
+- 如果有异常点，指出并建议行动`;
+
+      try {
+        const answer = await callMiMo(systemPrompt, question);
+        jsonRes(res, 200, { question, answer });
+      } catch (e) {
+        jsonRes(res, 500, { error: "AI问答失败：" + e.message });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // ── AI 智能建议 ──────────────────────────────────────────────────────────────
+    if (pathname === "/api/admin/ai-suggest" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const allRecords = await listRecords(TABLES.order);
+      const now = Date.now();
+      const suggestions = [];
+
+      const orders = allRecords.map(r => {
+        const f = r.fields;
+        return {
+          orderNo: f["订单编号"] || "",
+          customer: f["顾客姓名"] || "",
+          agent: f["代理商名称"] || "",
+          sku: f["产品型号"] || "",
+          status: f["订单状态"] || "",
+          date: f["下单日期"] || null,
+          remark: f["备注"] || "",
+        };
+      });
+
+      // 统计
+      const overduePending = orders.filter(o => o.status === "待处理" && o.date && (now - o.date) > 3 * 86400000);
+      const overdueProducing = orders.filter(o => o.status === "生产中" && o.date && (now - o.date) > 7 * 86400000);
+      const pendingCount = orders.filter(o => o.status === "待处理").length;
+      const producingCount = orders.filter(o => o.status === "生产中").length;
+      const todayCount = orders.filter(o => {
+        if (!o.date) return false;
+        const d = new Date(o.date);
+        const t = new Date();
+        return d.toDateString() === t.toDateString();
+      }).length;
+
+      if (overduePending.length > 0) {
+        suggestions.push({
+          priority: "high",
+          action: "批量确认超期待处理订单",
+          detail: `${overduePending.length} 个待处理订单已超3天，建议立即确认进入生产`,
+          orderNos: overduePending.slice(0, 20).map(o => o.orderNo),
+          actionType: "confirm",
+        });
+      }
+      if (overdueProducing.length > 0) {
+        suggestions.push({
+          priority: "high",
+          action: "跟进超期生产订单",
+          detail: `${overdueProducing.length} 个生产中订单已超7天，建议联系工厂确认进度`,
+          orderNos: overdueProducing.slice(0, 20).map(o => o.orderNo),
+          actionType: "follow-up",
+        });
+      }
+      if (producingCount > 0) {
+        suggestions.push({
+          priority: "medium",
+          action: "导出工厂包",
+          detail: `${producingCount} 个生产中订单可导出ZIP给工厂`,
+          actionType: "export-zip",
+        });
+      }
+      if (pendingCount === 0 && producingCount === 0) {
+        suggestions.push({
+          priority: "low",
+          action: "当前无待办",
+          detail: `所有订单已处理完毕，今日新增 ${todayCount} 单`,
+          actionType: "none",
+        });
+      }
+
+      jsonRes(res, 200, { suggestions });
       return logReq(req, 200, start);
     }
 
