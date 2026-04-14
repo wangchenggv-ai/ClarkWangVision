@@ -94,11 +94,20 @@
 <div class="toast" id="toast"></div>
 
 <div class="container">
+  <div class="draft-bar" id="draftBar" style="display:none">
+    <span>检测到上次未提交的订单，是否恢复？</span>
+    <div class="actions">
+      <button class="restore-btn" onclick="restoreDraft()">恢复</button>
+      <button class="discard-btn" onclick="discardDraft()">丢弃</button>
+    </div>
+  </div>
+
   <div class="success-page" id="successPage">
     <div class="success-icon">&#10004;&#65039;</div>
     <h2>订单提交成功</h2>
     <p>订单已进入处理流程，系统将自动分配交期。</p>
     <div class="success-detail" id="successDetail"></div>
+    <div id="successDelivery" style="margin-top:8px;font-size:14px;color:#1677ff;font-weight:500"></div>
     <div class="success-actions">
       <button class="btn btn-outline" onclick="resetForm()">再下一单</button>
       <a class="btn btn-primary" id="viewOrderBtn" href="#">查看订单</a>
@@ -173,7 +182,10 @@
       <button class="modal-close" onclick="closeExcelModal()">&times;</button>
     </div>
     <div id="excelPreviewContent"></div>
-    <button class="btn btn-primary btn-lg btn-block" onclick="importToForm()" id="excelImportBtn">导入表单</button>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary btn-lg" onclick="importToForm('append')" id="excelAppendBtn" style="flex:1">追加到当前</button>
+      <button class="btn btn-outline btn-lg" onclick="importToForm('replace')" id="excelReplaceBtn" style="flex:1">替换当前</button>
+    </div>
   </div>
 </div>
 
@@ -184,6 +196,148 @@ let SKU_OPTIONS = []; // 从 API 动态加载
 let customerNames = [];
 let terminalCustomers = []; // 终端客户列表 [{id,name,contact,phone,address}]
 let patientCount = 0;
+let draftTimer = null;
+const DRAFT_KEY = `orderDraft_${token}`;
+
+// ─── 交期预估 ──────────────────────────────────────────────────────────────
+const _estimateTimers = {};
+function onSkuChange(id) {
+  clearTimeout(_estimateTimers[id]);
+  _estimateTimers[id] = setTimeout(() => fetchEstimate(id), 300);
+}
+
+async function fetchEstimate(id) {
+  const el = document.getElementById(`delivery-${id}`);
+  if (!el) return;
+  const sku = document.getElementById(`sku-${id}`)?.value;
+  const qty = Number(document.getElementById(`qty-${id}`)?.value) || 1;
+  if (!sku) { el.style.display = "none"; return; }
+
+  try {
+    const res = await fetch(`/api/delivery-estimate?t=${token}&sku=${encodeURIComponent(sku)}&qty=${qty}`);
+    if (!res.ok) { el.style.display = "none"; return; }
+    const data = await res.json();
+    if (data.deliveryType) {
+      const isInstock = data.deliveryType.startsWith("有货");
+      el.className = `delivery-estimate-inline ${isInstock ? 'instock' : 'custom'}`;
+      el.textContent = `${data.deliveryType} · 预计 ${data.promiseDateFormatted || ''} 交付`;
+      el.style.display = "inline-flex";
+    }
+  } catch { el.style.display = "none"; }
+}
+
+// ─── 处方校验 ──────────────────────────────────────────────────────────────
+function validatePrescription(patients) {
+  let warnings = [];
+  for (const p of patients) {
+    for (const eye of p.eyes) {
+      const cyl = parseFloat(eye.cyl);
+      const sph = parseFloat(eye.sph);
+      const axis = parseInt(eye.axis);
+      if (cyl > 0) {
+        eye.cyl = String(-cyl);
+        warnings.push(`${p.customerName} ${eye.side}：柱镜已自动转为负值`);
+      }
+      if (cyl === 0 && axis !== 0) {
+        warnings.push(`${p.customerName} ${eye.side}：轴位有值但柱镜为0，请确认`);
+      }
+      if (Math.abs(sph) > 20) {
+        warnings.push(`${p.customerName} ${eye.side}：球镜值 ${sph} 异常，请确认`);
+      }
+    }
+  }
+  return warnings;
+}
+
+// ─── 草稿保存/恢复 ────────────────────────────────────────────────────────
+function scheduleDraftSave() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraft, 3000);
+}
+
+function saveDraft() {
+  if (!token) return;
+  const patients = collectPatients();
+  if (patients.length === 0) return;
+  const draft = {
+    terminalCustomer: document.getElementById("terminalCustomer")?.value || "",
+    contact: document.getElementById("contact")?.value || "",
+    phone: document.getElementById("phone")?.value || "",
+    address: document.getElementById("address")?.value || "",
+    patients,
+    savedAt: Date.now(),
+  };
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch {}
+}
+
+function checkDraft() {
+  if (!token) return;
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    if (draft.patients?.length > 0) {
+      document.getElementById("draftBar").style.display = "flex";
+    }
+  } catch {}
+}
+
+function restoreDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    const draft = JSON.parse(raw);
+    if (draft.terminalCustomer) document.getElementById("terminalCustomer").value = draft.terminalCustomer;
+    if (draft.contact) document.getElementById("contact").value = draft.contact;
+    if (draft.phone) document.getElementById("phone").value = draft.phone;
+    if (draft.address) document.getElementById("address").value = draft.address;
+
+    // 清空当前并恢复 patients
+    document.getElementById("patientList").innerHTML = "";
+    patientCount = 0;
+    for (const p of draft.patients) {
+      addPatient();
+      const id = patientCount;
+      const nameEl = document.getElementById(`name-${id}`);
+      const skuEl = document.getElementById(`sku-${id}`);
+      const qtyEl = document.getElementById(`qty-${id}`);
+      if (nameEl) nameEl.value = p.customerName || "";
+      if (skuEl) skuEl.value = p.sku || "";
+      if (qtyEl) qtyEl.value = p.quantity || 1;
+
+      if (p.eyes) {
+        for (const eye of p.eyes) {
+          const side = eye.side === "右眼" ? "right" : "left";
+          const sphEl = document.getElementById(`sph-${id}-${side}`);
+          const cylEl = document.getElementById(`cyl-${id}-${side}`);
+          const axisEl = document.getElementById(`axis-${id}-${side}`);
+          const checkEl = document.getElementById(`eye-check-${id}-${side}`);
+          if (sphEl) sphEl.value = eye.sph || "0";
+          if (cylEl) cylEl.value = eye.cyl || "0";
+          if (axisEl) axisEl.value = eye.axis || "0";
+          if (checkEl && !checkEl.checked) { checkEl.checked = true; toggleEye(id, side); }
+        }
+      }
+
+      const assemblyYes = document.querySelector(`input[name="assembly-${id}"][value="yes"]`);
+      const assemblyNo = document.querySelector(`input[name="assembly-${id}"][value="no"]`);
+      if (p.assembly === true) { if (assemblyYes) assemblyYes.checked = true; } else { if (assemblyNo) assemblyNo.checked = true; }
+      toggleAssemblyStyle(id);
+      if (p.remark) { const rEl = document.getElementById(`remark-${id}`); if (rEl) rEl.value = p.remark; }
+
+      // 恢复后触发交期预估
+      onSkuChange(id);
+    }
+    updateSummary();
+    showToast("已恢复草稿", "success");
+  } catch {}
+  document.getElementById("draftBar").style.display = "none";
+}
+
+function discardDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch {}
+  document.getElementById("draftBar").style.display = "none";
+}
 
 async function init() {
   if (!token) {
@@ -246,6 +400,9 @@ async function init() {
   renderTerminalCustomerDatalist();
   renderAddressDatalist();
   addPatient();
+
+  // 检查草稿
+  checkDraft();
 }
 
 function renderCustomerDatalist() {
@@ -317,12 +474,13 @@ function addPatient() {
     </div>
     <div class="field">
       <label>产品型号 <span class="req">*</span></label>
-      <select id="sku-${id}">${skuOptions}</select>
+      <select id="sku-${id}" onchange="onSkuChange(${id})">${skuOptions}</select>
+      <div class="delivery-estimate-inline" id="delivery-${id}" style="display:none"></div>
       <div class="error-tip">请选择产品型号</div>
     </div>
     <div class="field">
       <label>数量 <span class="req">*</span></label>
-      <input type="number" id="qty-${id}" min="1" max="100" value="1" inputmode="numeric">
+      <input type="number" id="qty-${id}" min="1" max="100" value="1" inputmode="numeric" onchange="onSkuChange(${id})">
       <div class="error-tip">数量需在 1-100 之间</div>
     </div>
 
@@ -425,6 +583,7 @@ function updateSummary() {
   }
   html += `<div style="padding:10px 0 0;font-size:14px;color:#666;text-align:right">共 ${patients.length} 位顾客，${totalLenses} 片镜片</div>`;
   content.innerHTML = html;
+  scheduleDraftSave();
 }
 
 // ─── 收集数据 ──────────────────────────────────────────────────────────────
@@ -487,6 +646,14 @@ function validate() {
     const l = document.getElementById(`eye-check-${id}-left`);
     if (!r?.checked && !l?.checked) { showToast(`顾客 ${id}：请至少勾选一只眼睛`, "error"); valid = false; }
   }
+
+  // 处方校验
+  const patients = collectPatients();
+  const rxWarnings = validatePrescription(patients);
+  if (rxWarnings.length > 0) {
+    showToast(rxWarnings[0], "info");
+  }
+
   return valid;
 }
 
@@ -571,7 +738,20 @@ async function doSubmit() {
       }
       d += `<div style="text-align:right;padding-top:10px;font-size:13px;color:#999">共 ${json.items.length} 项，${totalQty} 片</div></div>`;
       document.getElementById("successDetail").innerHTML = d;
+
+      // 显示预计交期
+      const deliveryEl = document.getElementById("successDelivery");
+      const firstDelivery = json.items?.find(i => i.deliveryType);
+      if (firstDelivery) {
+        deliveryEl.textContent = `预计 ${firstDelivery.promiseDateFormatted || ''} 交付（${firstDelivery.deliveryType}）`;
+      } else {
+        deliveryEl.textContent = "";
+      }
+
       document.getElementById("successPage").style.display = "block";
+
+      // 清除草稿
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
     } else {
       showToast(json.error || "提交失败，请重试", "error");
     }
@@ -690,13 +870,16 @@ function renderExcelPreview(patients, warnings) {
   document.getElementById("excelPreviewContent").innerHTML = html;
 }
 
-function importToForm() {
+function importToForm(mode) {
   if (!excelParsedPatients) return;
   closeExcelModal();
 
-  document.getElementById("patientList").innerHTML = "";
-  patientCount = 0;
+  if (mode === "replace") {
+    document.getElementById("patientList").innerHTML = "";
+    patientCount = 0;
+  }
 
+  const startCount = patientCount;
   for (const p of excelParsedPatients) {
     addPatient();
     const id = patientCount;
@@ -728,10 +911,14 @@ function importToForm() {
     toggleAssemblyStyle(id);
     const remarkEl = document.getElementById(`remark-${id}`);
     if (remarkEl && p.remark) remarkEl.value = p.remark;
+
+    // 交期预估
+    onSkuChange(id);
   }
 
   updateSummary();
-  showToast(`已导入 ${excelParsedPatients.length} 位患者处方`, "success");
+  const action = mode === "replace" ? "替换" : "追加";
+  showToast(`已${action}导入 ${excelParsedPatients.length} 位患者处方`, "success");
   excelParsedPatients = null;
 }
 

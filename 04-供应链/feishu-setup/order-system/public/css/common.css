@@ -516,3 +516,103 @@ select.error + .error-tip { display: block; }
   .order-group, .admin-table { break-inside: avoid; }
   .modal-overlay { display: none !important; }
 }
+
+/* ─── Delivery Estimate Inline ──────────────────────── */
+.delivery-estimate-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+.delivery-estimate-inline.instock { background: #e8f5e9; color: #2e7d32; }
+.delivery-estimate-inline.custom { background: #f3e5f5; color: #6a1b9a; }
+
+/* ─── Logistics Info Card ───────────────────────────── */
+.logistics-info {
+  background: #f0f7ff;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 16px;
+  font-size: 14px;
+}
+.logistics-info .row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #e8eef8;
+}
+.logistics-info .row:last-child { border-bottom: none; }
+.logistics-info .label { color: #666; }
+.logistics-info .value { font-weight: 500; }
+.logistics-info .copy-btn {
+  background: #fff;
+  border: 1px solid #91caff;
+  color: #1677ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.logistics-info .copy-btn:hover { background: #f0f7ff; }
+
+/* ─── Search Input ──────────────────────────────────── */
+.search-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid #d9d9d9;
+  min-width: 160px;
+}
+.search-input:focus {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22,119,255,0.1);
+  outline: none;
+}
+
+/* ─── Draft Recovery Bar ────────────────────────────── */
+.draft-bar {
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #d46b08;
+}
+.draft-bar .actions { display: flex; gap: 8px; flex-shrink: 0; }
+.draft-bar .actions button {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid;
+}
+.draft-bar .restore-btn { background: #1677ff; color: #fff; border-color: #1677ff; }
+.draft-bar .discard-btn { background: #fff; color: #999; border-color: #d9d9d9; }
+
+/* ─── Overdue Highlight ─────────────────────────────── */
+.overdue { color: #cf1322 !important; }
+.overdue .order-no { color: #cf1322 !important; }
+
+/* ─── Promise Date Badge ────────────────────────────── */
+.promise-date {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.promise-date.on-time { background: #e8f5e9; color: #2e7d32; }
+.promise-date.overdue { background: #fff1f0; color: #cf1322; }

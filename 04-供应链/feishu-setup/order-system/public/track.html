@@ -29,21 +29,20 @@
 <div class="stats-bar" id="statsBar">
   <div class="stat-item"><div class="stat-value" id="statTotal">-</div><div class="stat-label">总订单</div></div>
   <div class="stat-item"><div class="stat-value" id="statPending">-</div><div class="stat-label">待处理</div></div>
-  <div class="stat-item"><div class="stat-value" id="statInstock">-</div><div class="stat-label">有货</div></div>
-  <div class="stat-item"><div class="stat-value" id="statCustom">-</div><div class="stat-label">定制</div></div>
+  <div class="stat-item"><div class="stat-value" id="statProducing">-</div><div class="stat-label">生产中</div></div>
   <div class="stat-item"><div class="stat-value" id="statShipped">-</div><div class="stat-label">已发货</div></div>
+  <div class="stat-item"><div class="stat-value" id="statReceived">-</div><div class="stat-label">已签收</div></div>
 </div>
 
 <!-- 筛选栏 -->
 <div class="filter-bar">
-  <select id="filterStatus">
+  <input type="text" class="search-input" id="searchInput" placeholder="搜订单号或顾客姓名" oninput="filterLocal()">
+  <select id="filterStatus" onchange="filterLocal()">
     <option value="">全部状态</option>
     <option value="待处理">待处理</option>
-    <option value="待人工审核">待人工审核</option>
     <option value="生产中">生产中</option>
     <option value="已发货">已发货</option>
     <option value="已签收">已签收</option>
-    <option value="完成">完成</option>
   </select>
   <select id="filterSku">
     <option value="">全部SKU</option>
@@ -82,6 +81,7 @@
 const token = new URLSearchParams(location.search).get("t") || "";
 let currentPage = 1;
 const pageSize = 20;
+let allOrdersData = []; // 缓存当前页数据用于本地搜索
 
 // ─── 状态 Badge 映射 ────────────────────────────────────────────────────────
 function statusBadge(status) {
@@ -171,54 +171,22 @@ async function loadOrders() {
 
     loading.style.display = "none";
 
-    // 更新统计
+    // 更新统计（修复：生产中+已签收）
     document.getElementById("statTotal").textContent = data.stats.total;
     document.getElementById("statPending").textContent = data.stats.pending;
-    document.getElementById("statInstock").textContent = data.stats.instock;
-    document.getElementById("statCustom").textContent = data.stats.custom;
+    document.getElementById("statProducing").textContent = data.stats.producing;
     document.getElementById("statShipped").textContent = data.stats.shipped;
+    document.getElementById("statReceived").textContent = data.stats.received;
 
-    if (!data.orders || data.orders.length === 0) {
+    allOrdersData = data.orders || [];
+
+    if (allOrdersData.length === 0) {
       empty.style.display = "block";
       document.getElementById("pagination").style.display = "none";
       return;
     }
 
-    // 按订单编号分组
-    const groups = {};
-    for (const o of data.orders) {
-      const key = o.orderNo || "unknown";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(o);
-    }
-
-    let html = "";
-    for (const [orderNo, items] of Object.entries(groups)) {
-      const date = formatDate(items[0].date);
-      html += `<div class="order-group" onclick="showDetail('${orderNo}')">
-        <div class="order-group-header">
-          <span class="order-no">${orderNo}</span>
-          <span class="meta">${date} · ${items.length}片</span>
-        </div>
-        <div class="order-group-body">`;
-
-      for (const item of items) {
-        html += `<div class="order-item">
-          <div class="left">
-            <span class="customer">${item.customerName || '-'}</span>
-            <span class="sku-info">${item.sku} × ${item.quantity}</span>
-          </div>
-          <div class="right">
-            ${deliveryBadge(item.deliveryType)}
-            ${statusBadge(item.status)}
-          </div>
-        </div>`;
-      }
-
-      html += `</div></div>`;
-    }
-
-    orderList.innerHTML = html;
+    renderOrderList(allOrdersData);
 
     // 分页
     const pagination = document.getElementById("pagination");
@@ -237,6 +205,84 @@ async function loadOrders() {
     empty.textContent = "加载失败，请刷新重试";
     console.error(e);
   }
+}
+
+// ─── 渲染订单列表 ────────────────────────────────────────────────────────
+function renderOrderList(orders) {
+  const orderList = document.getElementById("orderList");
+  const empty = document.getElementById("empty");
+
+  if (orders.length === 0) {
+    orderList.innerHTML = "";
+    empty.style.display = "block";
+    return;
+  }
+  empty.style.display = "none";
+
+  // 按订单编号分组
+  const groups = {};
+  for (const o of orders) {
+    const key = o.orderNo || "unknown";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(o);
+  }
+
+  const now = Date.now();
+  let html = "";
+  for (const [orderNo, items] of Object.entries(groups)) {
+    const date = formatDate(items[0].date);
+    const promiseDate = items[0].promiseDate;
+    const isOverdue = promiseDate && new Date(promiseDate).getTime() < now &&
+      !["已签收"].includes(items[0].status);
+
+    // 交期标签
+    let promiseHtml = "";
+    if (promiseDate) {
+      const pd = new Date(promiseDate);
+      const month = pd.getMonth() + 1;
+      const day = pd.getDate();
+      const cls = isOverdue ? "overdue" : "on-time";
+      promiseHtml = `<span class="promise-date ${cls}">预计${month}月${day}日</span>`;
+    }
+
+    html += `<div class="order-group ${isOverdue ? 'overdue' : ''}" onclick="showDetail('${orderNo}')">
+      <div class="order-group-header">
+        <span class="order-no">${orderNo}</span>
+        <span class="meta">${date} · ${items.length}片 ${promiseHtml}</span>
+      </div>
+      <div class="order-group-body">`;
+
+    for (const item of items) {
+      html += `<div class="order-item">
+        <div class="left">
+          <span class="customer">${item.customerName || '-'}</span>
+          <span class="sku-info">${item.sku} × ${item.quantity}</span>
+        </div>
+        <div class="right">
+          ${deliveryBadge(item.deliveryType)}
+          ${statusBadge(item.status)}
+        </div>
+      </div>`;
+    }
+
+    html += `</div></div>`;
+  }
+
+  orderList.innerHTML = html;
+}
+
+// ─── 本地搜索 ──────────────────────────────────────────────────────────────
+function filterLocal() {
+  const search = document.getElementById("searchInput").value.trim().toLowerCase();
+  if (!search) {
+    renderOrderList(allOrdersData);
+    return;
+  }
+  const filtered = allOrdersData.filter(o =>
+    o.orderNo.toLowerCase() === search ||
+    (o.customerName || "").toLowerCase().includes(search)
+  );
+  renderOrderList(filtered);
 }
 
 // ─── 分页 ──────────────────────────────────────────────────────────────────
@@ -276,8 +322,25 @@ async function showDetail(orderNo) {
     html += `<div style="margin-bottom:6px"><strong>下单时间：</strong>${formatDate(data.date)}</div>`;
     html += `<div style="margin-bottom:6px"><strong>收货地址：</strong>${data.address || '-'}</div>`;
     html += `<div style="margin-bottom:6px"><strong>订单状态：</strong>${statusBadge(data.status)}</div>`;
+    if (data.promiseDate) {
+      const pd = new Date(data.promiseDate);
+      const isOverdue = pd.getTime() < Date.now() && !["已签收"].includes(data.status);
+      html += `<div style="margin-bottom:6px"><strong>预计交期：</strong><span class="${isOverdue ? 'overdue' : ''}">${formatDate(data.promiseDate)}${isOverdue ? '（已超期）' : ''}</span></div>`;
+    }
     if (data.remark) html += `<div style="margin-bottom:6px"><strong>备注：</strong>${data.remark}</div>`;
     html += `</div>`;
+
+    // 物流信息
+    if (data.trackingNo) {
+      html += `<div class="logistics-info">`;
+      html += `<div style="font-size:13px;color:#666;margin-bottom:8px;font-weight:600">物流信息</div>`;
+      html += `<div class="row"><span class="label">物流公司</span><span class="value">${data.courier || '-'}</span></div>`;
+      html += `<div class="row"><span class="label">快递单号</span><span class="value">${data.trackingNo} <button class="copy-btn" onclick="event.stopPropagation();copyTrackingNo('${data.trackingNo}')">复制</button></span></div>`;
+      if (data.shipTime) {
+        html += `<div class="row"><span class="label">发货时间</span><span class="value">${formatDate(data.shipTime)}</span></div>`;
+      }
+      html += `</div>`;
+    }
 
     html += `<table class="detail-table">
       <thead><tr>
@@ -358,6 +421,22 @@ async function confirmOrder(orderNo) {
     btn.disabled = false;
     btn.textContent = "确认订单";
   }
+}
+
+// ─── 复制快递单号 ──────────────────────────────────────────────────────
+function copyTrackingNo(no) {
+  navigator.clipboard.writeText(no).then(() => {
+    showToast("已复制快递单号", "success");
+  }).catch(() => {
+    // fallback
+    const ta = document.createElement("textarea");
+    ta.value = no;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    showToast("已复制快递单号", "success");
+  });
 }
 
 // ─── CSV 导出 ──────────────────────────────────────────────────────────────

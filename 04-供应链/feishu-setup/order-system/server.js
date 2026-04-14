@@ -572,10 +572,10 @@ function jsonRes(res, status, data) {
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
-    let body = "";
-    req.on("data", chunk => body += chunk);
+    const chunks = [];
+    req.on("data", chunk => chunks.push(chunk));
     req.on("end", () => {
-      try { resolve(JSON.parse(body)); }
+      try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
       catch { reject(new Error("无效的 JSON")); }
     });
   });
@@ -1304,6 +1304,7 @@ const server = createServer(async (req, res) => {
       const filterSku = url.searchParams.get("sku") || "";
       const filterFrom = url.searchParams.get("from") || "";
       const filterTo = url.searchParams.get("to") || "";
+      const filterSearch = url.searchParams.get("search") || "";
       const page = Math.max(1, parseInt(url.searchParams.get("page")) || 1);
       const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize")) || 20));
 
@@ -1342,7 +1343,9 @@ const server = createServer(async (req, res) => {
       const stats = {
         total: orders.length,
         pending: orders.filter(o => o.status === "待处理").length,
-        shipped: orders.filter(o => o.status === "已发货" || o.status === "已签收" || o.status === "完成").length,
+        producing: orders.filter(o => o.status === "生产中").length,
+        shipped: orders.filter(o => o.status === "已发货").length,
+        received: orders.filter(o => o.status === "已签收").length,
       };
 
       // 筛选
@@ -1355,6 +1358,10 @@ const server = createServer(async (req, res) => {
       if (filterTo) {
         const toTs = new Date(filterTo + "T23:59:59").getTime();
         if (!isNaN(toTs)) orders = orders.filter(o => o.date && o.date <= toTs);
+      }
+      if (filterSearch) {
+        const s = filterSearch.trim().toLowerCase();
+        orders = orders.filter(o => o.orderNo.toLowerCase() === s || (o.customerName || "").toLowerCase().includes(s));
       }
 
       // 排序（最新的在前）
@@ -1431,6 +1438,10 @@ const server = createServer(async (req, res) => {
         address: firstItem.fields["收货地址"] || "",
         remark: firstItem.fields["备注"] || "",
         status: firstItem.fields["订单状态"] || "",
+        courier: firstItem.fields["物流公司"] || "",
+        trackingNo: firstItem.fields["快递单号"] || "",
+        shipTime: firstItem.fields["发货时间"] || null,
+        promiseDate: firstItem.fields["预计交期"] || null,
         items: displayItems,
         lenses,
       });
@@ -1475,6 +1486,9 @@ const server = createServer(async (req, res) => {
           assembly: f["是否装配"] || "",
           status: f["订单状态"] || "",
           date: f["下单日期"] ? formatDate(f["下单日期"]) : "",
+          promiseDate: f["预计交期"] ? formatDate(f["预计交期"]) : "",
+          courier: f["物流公司"] || "",
+          trackingNo: f["快递单号"] || "",
           address: f["收货地址"] || "",
           remark: f["备注"] || "",
         };
@@ -1492,10 +1506,10 @@ const server = createServer(async (req, res) => {
 
       rows.sort((a, b) => a.orderNo.localeCompare(b.orderNo));
 
-      const headers = ["订单号","顾客","终端客户","联系人","电话","产品型号","数量","是否装配","代理商","状态","下单日期","收货地址","备注"];
+      const headers = ["订单号","顾客","终端客户","联系人","电话","产品型号","数量","是否装配","代理商","状态","下单日期","预计交期","物流公司","快递单号","收货地址","备注"];
       const csvRows = [headers.join(",")];
       for (const r of rows) {
-        csvRows.push([r.orderNo, r.customer, r.terminalCustomer, r.contact, r.phone, r.sku, r.qty, r.assembly, r.agent, r.status, r.date, r.address, r.remark].map(csvEscape).join(","));
+        csvRows.push([r.orderNo, r.customer, r.terminalCustomer, r.contact, r.phone, r.sku, r.qty, r.assembly, r.agent, r.status, r.date, r.promiseDate, r.courier, r.trackingNo, r.address, r.remark].map(csvEscape).join(","));
       }
 
       const csv = "\uFEFF" + csvRows.join("\n");
@@ -1986,55 +2000,113 @@ const server = createServer(async (req, res) => {
       return logReq(req, 200, start);
     }
 
-    // ── AI 自然语言搜索 ──────────────────────────────────────────────────────────
+    // ── 自然语言搜索（纯代码解析，不依赖 AI）──────────────────────────────────
     if (pathname === "/api/admin/ai-search" && req.method === "POST") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const payload = await readBody(req);
       const query = (payload.query || "").trim();
       if (!query) { jsonRes(res, 400, { error: "请输入搜索内容" }); return logReq(req, 400, start); }
 
-      // 获取可用代理商列表用于提示
+      const filters = {};
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, "0");
+      const dd = String(now.getDate()).padStart(2, "0");
+      const todayStr = `${yyyy}-${mm}-${dd}`;
+
+      function fmtISO(d) {
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      }
+
+      // 状态匹配
+      if (/超期|逾期|晚了|慢了|积压/.test(query)) {
+        // 不设 status，前端用超期筛选
+      } else if (/待处理|未确认|待确认|pending/.test(query)) {
+        filters.status = "待处理";
+      } else if (/生产中|在做|生产|producing/.test(query)) {
+        filters.status = "生产中";
+      } else if (/已发货|已发|发货|shipped/.test(query)) {
+        filters.status = "已发货";
+      } else if (/已签收|签收|收到|received/.test(query)) {
+        filters.status = "已签收";
+      }
+
+      // 日期匹配
+      if (/今天|今日/.test(query)) {
+        filters.from = todayStr;
+        filters.to = todayStr;
+      } else if (/昨天/.test(query)) {
+        const d = new Date(now); d.setDate(d.getDate() - 1);
+        filters.from = filters.to = fmtISO(d);
+      } else if (/本周|这周/.test(query)) {
+        const d = new Date(now);
+        const day = d.getDay() || 7;
+        d.setDate(d.getDate() - day + 1);
+        filters.from = fmtISO(d);
+        filters.to = todayStr;
+      } else if (/上周/.test(query)) {
+        const d = new Date(now);
+        const day = d.getDay() || 7;
+        d.setDate(d.getDate() - day + 1 - 7);
+        filters.from = fmtISO(d);
+        const e = new Date(d); e.setDate(e.getDate() + 6);
+        filters.to = fmtISO(e);
+      } else if (/本月|这个月/.test(query)) {
+        filters.from = `${yyyy}-${mm}-01`;
+        filters.to = todayStr;
+      } else if (/上月|上个月/.test(query)) {
+        const d = new Date(yyyy, now.getMonth() - 1, 1);
+        const e = new Date(yyyy, now.getMonth(), 0);
+        filters.from = fmtISO(d);
+        filters.to = fmtISO(e);
+      } else {
+        // 匹配 "最近N天"
+        const recentMatch = query.match(/最近(\d+)天/);
+        if (recentMatch) {
+          const d = new Date(now);
+          d.setDate(d.getDate() - parseInt(recentMatch[1]));
+          filters.from = fmtISO(d);
+          filters.to = todayStr;
+        }
+        // 匹配月份 "3月" "三月"
+        const monthMap = {"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9,"十":10,"十一":11,"十二":12};
+        const monthMatch = query.match(/(\d{1,2}|一|二|三|四|五|六|七|八|九|十[一二]?)月/);
+        if (monthMatch) {
+          let m = parseInt(monthMatch[1]) || monthMap[monthMatch[1]];
+          if (m >= 1 && m <= 12) {
+            filters.from = `${yyyy}-${String(m).padStart(2,"0")}-01`;
+            const lastDay = new Date(yyyy, m, 0).getDate();
+            filters.to = `${yyyy}-${String(m).padStart(2,"0")}-${lastDay}`;
+          }
+        }
+      }
+
+      // 代理商匹配（模糊匹配）
       const allRecs = await listRecords(TABLES.order);
-      const agentNames = [...new Set(allRecs.map(r => r.fields["代理商名称"]).filter(Boolean))].sort();
+      const agentNames = [...new Set(allRecs.map(r => r.fields["代理商名称"]).filter(Boolean))];
+      for (const name of agentNames) {
+        if (query.includes(name)) {
+          filters.agent = name;
+          break;
+        }
+      }
 
-      const systemPrompt = `你是一个订单管理系统的自然语言搜索助手。用户会用中文描述想要找的订单，你需要将其转换为 JSON 筛选参数。
+      // 订单号或关键词匹配
+      const orderNoMatch = query.match(/ORD-[A-Z0-9-]+/i);
+      if (orderNoMatch) {
+        filters.q = orderNoMatch[0].toUpperCase();
+      } else if (!filters.status && !filters.from && !filters.agent) {
+        // 纯文本搜索：可能是顾客名
+        const cleaned = query.replace(/的|订单|显示|查找|找|搜索|查看|哪些|个/g, "").trim();
+        if (cleaned.length > 0 && cleaned.length < 20) {
+          filters.q = cleaned;
+        }
+      }
 
-可用的筛选参数（都是可选的）：
-- status: "待处理" / "生产中" / "已发货" / "已签收"
-- agent: 代理商名称（精确匹配）
-- q: 订单号或顾客姓名的关键词搜索
-- from: 开始日期（格式 YYYY-MM-DD）
-- to: 结束日期（格式 YYYY-MM-DD）
-
-可用代理商列表：${agentNames.join(", ")}
-
-日期处理规则：
-- "今天" "今日" → from 和 to 都设为今天
-- "昨天" → from 和 to 都设为昨天
-- "本周" "这周" → from 设为本周一，to 设为今天
-- "上周" → from 设为上周一，to 设为上周日
-- "本月" "这个月" → from 设为本月1号，to 设为今天
-- "上月" "上个月" → from 设为上月1号，to 设为上月末
-- "最近N天" → from 设为N天前，to 设为今天
-- 具体日期如"3月" "三月" → from=YYYY-03-01, to=YYYY-03-31
-- "Q1" → from=YYYY-01-01, to=YYYY-03-31
-
-状态映射：
-- "超期" "逾期" "晚了" "慢了" → 不设status（前端会用超期标签筛选）
-- "待处理" "未确认" "待确认" → status=待处理
-- "生产中" "在做" → status=生产中
-- "已发货" "已发" "发货" → status=已发货
-- "已签收" "签收" "收到" → status=已签收
-
-只返回 JSON，不要任何解释。格式：{"status":"...","agent":"...","q":"...","from":"...","to":"..."}
-如果某个字段不需要筛选就不包含。如果无法解析，返回 {"error":"无法理解查询内容"}`;
-
-      try {
-        const aiResult = await callMiMo(systemPrompt, query);
-        const parsed = JSON.parse(aiResult);
-        jsonRes(res, 200, { filters: parsed, raw: aiResult });
-      } catch (e) {
-        jsonRes(res, 200, { filters: { error: "AI解析失败：" + e.message }, raw: "" });
+      if (Object.keys(filters).length === 0) {
+        jsonRes(res, 200, { filters: { error: "无法理解查询内容，试试：待处理订单 / 深圳视力康 / 上周 / 超期" } });
+      } else {
+        jsonRes(res, 200, { filters });
       }
       return logReq(req, 200, start);
     }
@@ -2115,14 +2187,13 @@ const server = createServer(async (req, res) => {
       return logReq(req, 200, start);
     }
 
-    // ── AI 数据问答 ──────────────────────────────────────────────────────────────
+    // ── 数据问答（纯代码规则匹配）────────────────────────────────────────────
     if (pathname === "/api/admin/ai-qa" && req.method === "POST") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const payload = await readBody(req);
-      const question = (payload.question || "").trim();
-      if (!question) { jsonRes(res, 400, { error: "请输入问题" }); return logReq(req, 400, start); }
+      const q = (payload.question || "").trim();
+      if (!q) { jsonRes(res, 400, { error: "请输入问题" }); return logReq(req, 400, start); }
 
-      // 聚合统计数据给 AI
       const allRecords = await listRecords(TABLES.order);
       const now = Date.now();
       const orders = allRecords.map(r => {
@@ -2135,16 +2206,16 @@ const server = createServer(async (req, res) => {
           qty: Number(f["数量"]) || 1,
           status: f["订单状态"] || "",
           date: f["下单日期"] || null,
-          courier: f["物流公司"] || "",
-          trackingNo: f["快递单号"] || "",
         };
       });
 
+      // 统计
       const statusCounts = {};
       let totalDays = 0, daysCount = 0;
       const agentCounts = {};
       const skuCounts = {};
-      const overdueOrders = [];
+      const overdueList = [];
+      const monthCounts = {};
 
       for (const o of orders) {
         statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
@@ -2154,40 +2225,66 @@ const server = createServer(async (req, res) => {
           const days = Math.floor((now - o.date) / (1000 * 60 * 60 * 24));
           totalDays += days; daysCount++;
           if ((o.status === "待处理" && days > 3) || (o.status === "生产中" && days > 7)) {
-            overdueOrders.push({ orderNo: o.orderNo, status: o.status, days, agent: o.agent });
+            overdueList.push({ orderNo: o.orderNo, status: o.status, days, agent: o.agent });
           }
+          const d = new Date(o.date);
+          const mk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+          monthCounts[mk] = (monthCounts[mk] || 0) + 1;
         }
       }
 
-      const dataContext = {
-        总订单数: orders.length,
-        状态分布: statusCounts,
-        各代理商订单数: agentCounts,
-        各SKU销量: skuCounts,
-        平均订单天数: daysCount ? Math.round(totalDays / daysCount) : 0,
-        超期订单数: overdueOrders.length,
-        超期订单详情: overdueOrders.slice(0, 10),
-        当前日期: new Date().toISOString().split("T")[0],
-      };
+      const avgDays = daysCount ? Math.round(totalDays / daysCount) : 0;
+      const nowDate = new Date();
+      const thisMonthKey = `${nowDate.getFullYear()}-${String(nowDate.getMonth()+1).padStart(2,"0")}`;
+      const thisMonthCount = monthCounts[thisMonthKey] || 0;
 
-      const systemPrompt = `你是高视高清眼镜供应链的数据分析师。以下是订单管理系统的真实数据摘要，用户会用中文提问，请基于数据给出准确、简洁的回答。
+      // 排行榜
+      const agentSorted = Object.entries(agentCounts).sort((a,b) => b[1]-a[1]);
+      const skuSorted = Object.entries(skuCounts).sort((a,b) => b[1]-a[1]);
 
-如果用户问的是数据中没有的内容，请诚实说明无法回答。
+      let answer = "";
 
-数据摘要（JSON）：
-${JSON.stringify(dataContext, null, 2)}
-
-回答要求：
-- 简洁直接，1-3句话
-- 包含具体数字
-- 如果有异常点，指出并建议行动`;
-
-      try {
-        const answer = await callMiMo(systemPrompt, question);
-        jsonRes(res, 200, { question, answer });
-      } catch (e) {
-        jsonRes(res, 500, { error: "AI问答失败：" + e.message });
+      // 规则匹配常见问题
+      if (/总.*多少|共.*多少|多少.*订单|几单|订单.*量|订单.*数/.test(q)) {
+        answer = `当前共 ${orders.length} 个订单。其中待处理 ${statusCounts["待处理"]||0}、生产中 ${statusCounts["生产中"]||0}、已发货 ${statusCounts["已发货"]||0}、已签收 ${statusCounts["已签收"]||0}。`;
+      } else if (/本月|这个月|当月/.test(q) && /多少|几单|数量/.test(q)) {
+        answer = `本月（${thisMonthKey}）新增 ${thisMonthCount} 单。`;
+      } else if (/代理商.*多|谁.*多|排名|最多/.test(q)) {
+        if (agentSorted.length > 0) {
+          const top3 = agentSorted.slice(0, 3).map(([name, count], i) => `${i+1}. ${name}：${count}单`).join("；");
+          answer = `代理商排名：${top3}。`;
+        }
+      } else if (/SKU|产品|型号|卖.*好|销量|热卖/.test(q)) {
+        if (skuSorted.length > 0) {
+          const top3 = skuSorted.slice(0, 3).map(([name, count], i) => `${i+1}. ${name}：${count}片`).join("；");
+          answer = `SKU销量排名：${top3}。`;
+        }
+      } else if (/超期|逾期|积压|慢/.test(q)) {
+        if (overdueList.length === 0) {
+          answer = "当前没有超期订单，一切正常。";
+        } else {
+          const items = overdueList.slice(0, 5).map(o => `${o.orderNo}（${o.status} ${o.days}天）`).join("、");
+          answer = `共 ${overdueList.length} 个超期订单：${items}${overdueList.length > 5 ? "等" : ""}。建议立即处理。`;
+        }
+      } else if (/平均.*天|交期|周期|周转/.test(q)) {
+        answer = `平均订单天数 ${avgDays} 天（从下单到当前）。待处理平均待确认时间需结合具体数据分析。`;
+      } else if (/待处理|未确认/.test(q)) {
+        const pending = orders.filter(o => o.status === "待处理");
+        const pendingOverdue = pending.filter(o => o.date && (now - o.date) > 3*86400000);
+        answer = `待处理订单 ${pending.length} 个，其中 ${pendingOverdue.length} 个超期（>3天）。`;
+      } else if (/生产中|在产|在做/.test(q)) {
+        const producing = orders.filter(o => o.status === "生产中");
+        const prodOverdue = producing.filter(o => o.date && (now - o.date) > 7*86400000);
+        answer = `生产中订单 ${producing.length} 个，其中 ${prodOverdue.length} 个超期（>7天）。`;
+      } else if (/已发货|发货/.test(q)) {
+        answer = `已发货订单 ${statusCounts["已发货"]||0} 个。`;
+      } else if (/已签收|签收/.test(q)) {
+        answer = `已签收订单 ${statusCounts["已签收"]||0} 个。`;
+      } else {
+        answer = `可以问我：本月订单量多少 / 哪个代理商下单最多 / 哪个SKU卖得最好 / 超期订单有哪些 / 平均交期多少天 / 待处理订单。`;
       }
+
+      jsonRes(res, 200, { question: q, answer });
       return logReq(req, 200, start);
     }
 
