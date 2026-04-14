@@ -7,6 +7,8 @@
     "setup": "node setup_tables.js"
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
+    "puppeteer": "^24.40.0",
     "qrcode": "^1.5.4",
     "undici": "^7.24.6",
     "xlsx": "^0.18.5"

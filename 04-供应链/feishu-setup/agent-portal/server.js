@@ -399,6 +399,26 @@ async function batchCreateLensDetails(records) {
   return batchCreateRecords(TABLES.lens_detail, records);
 }
 
+// ─── 镜片码分配（下单即生成） ─────────────────────────────────────────────────
+
+async function assignLensCodes(orderNo) {
+  const lensDetails = await getLensDetailsByOrder(orderNo);
+  const lensCodes = [];
+  for (const rec of lensDetails) {
+    const existingCode = rec.fields["镜片码"];
+    if (existingCode) { lensCodes.push(existingCode); continue; }
+    const code = genLensCode();
+    await updateRecord(TABLES.lens_detail, rec.record_id, {
+      "镜片码": code,
+      "订单状态": "生产中",
+    });
+    await generateQRPng(code);
+    lensCodes.push(code);
+    console.log(`  镜片码生成: ${orderNo} → ${code}`);
+  }
+  return lensCodes;
+}
+
 async function getLensDetailsByOrder(orderNo) {
   const encoded = encodeURIComponent(`"${orderNo}"`);
   const data = await feishuApi("GET",
@@ -941,6 +961,12 @@ const server = createServer(async (req, res) => {
         }
       }
 
+      // 下单即生成镜片码+QR（不等确认环节）
+      const lensCodes = await assignLensCodes(orderNo);
+      if (lensCodes.length > 0) {
+        console.log(`  镜片码已生成: ${orderNo} → ${lensCodes.join(", ")}`);
+      }
+
       // 通知
       const summary = items.map(i => `${i.skuName}×${i.quantity}(${i.deliveryType})`).join("、");
       sendNotify(agent.name, summary, orderNo);
@@ -1230,48 +1256,14 @@ const server = createServer(async (req, res) => {
       // 确保镜片码字段存在
       await ensureLensCodeField();
 
-      // 从镜片明细表获取该订单所有镜片
-      const lensDetails = await getLensDetailsByOrder(orderNo);
+      // 幂等：调用 assignLensCodes，已有码的自动跳过
+      const lensCodes = await assignLensCodes(orderNo);
 
-      const lensCodes = [];
-
-      if (lensDetails.length > 0) {
-        // 新模式：写入明细表
-        for (const rec of lensDetails) {
-          const existingCode = rec.fields["镜片码"];
-          if (existingCode) { lensCodes.push(existingCode); continue; }
-
-          const lensCode = genLensCode();
-          await updateRecord(TABLES.lens_detail, rec.record_id, {
-            "镜片码": lensCode,
-            "订单状态": "生产中",
-          });
-          await generateQRPng(lensCode);
-          lensCodes.push(lensCode);
-          console.log(`  镜片码生成: ${orderNo} → ${lensCode}`);
-        }
-      } else {
-        // 兼容旧模式：直接写主表
-        for (const rec of data2.items) {
-          const existingCode = rec.fields["镜片码"];
-          if (existingCode) { lensCodes.push(existingCode); continue; }
-
-          const lensCode = genLensCode();
-          await updateRecord(TABLES.order, rec.record_id, {
-            "镜片码": lensCode,
-            "订单状态": "生产中",
-          });
-          await generateQRPng(lensCode);
-          lensCodes.push(lensCode);
-          console.log(`  镜片码生成: ${orderNo} → ${lensCode}`);
-        }
-      }
-
-      // 更新主表镜片码汇总
-      if (lensCodes.length > 0 && data2.items.length > 0) {
+      // 更新主表状态为生产中（无论镜片码是否已存在）
+      if (data2.items.length > 0) {
         await updateRecord(TABLES.order, data2.items[0].record_id, {
-          "镜片码": lensCodes.join(","),
           "订单状态": "生产中",
+          ...(lensCodes.length > 0 ? { "镜片码": lensCodes.join(",") } : {}),
         });
       }
 

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>E2E 报告 — 2026-04-14 Sprint 14</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; max-width: 960px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; background: #fafafa; }
+  h1 { border-bottom: 3px solid #2563eb; padding-bottom: 12px; }
+  h2 { color: #2563eb; margin-top: 36px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: 600; }
+  .pass { background: #dcfce7; color: #166534; }
+  .fail { background: #fee2e2; color: #991b1b; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th, td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #f3f4f6; font-weight: 600; }
+  tr:nth-child(even) { background: #f9fafb; }
+  .summary-box { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 20px; margin: 20px 0; }
+  .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 12px; }
+  .summary-item { text-align: center; }
+  .summary-item .num { font-size: 32px; font-weight: 700; color: #2563eb; }
+  .summary-item .label { font-size: 13px; color: #6b7280; }
+  .section { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 20px; margin: 16px 0; }
+  code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  .eye-left { color: #2563eb; font-weight: 600; }
+  .eye-right { color: #dc2626; font-weight: 600; }
+  .token-url { font-size: 12px; color: #6b7280; word-break: break-all; }
+  .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 13px; color: #9ca3af; }
+</style>
+</head>
+<body>
+
+<h1>E2E 测试报告</h1>
+<p><strong>Sprint 14：代理商管理迁入Bitable + 门户架构切换</strong></p>
+<p>测试时间：2026-04-14 10:27 ~ 10:33 ｜ 总耗时：~6 分钟</p>
+
+<div class="summary-box">
+  <h2 style="margin-top:0">测试总览</h2>
+  <div class="summary-grid">
+    <div class="summary-item"><div class="num">5</div><div class="label">代理商</div></div>
+    <div class="summary-item"><div class="num">10</div><div class="label">订单（10副）</div></div>
+    <div class="summary-item"><div class="num">5</div><div class="label">包裹</div></div>
+  </div>
+  <div class="summary-grid" style="margin-top:20px">
+    <div class="summary-item"><div class="num">6</div><div class="label">阶段</div></div>
+    <div class="summary-item"><div class="num" style="color:#16a34a">6/6</div><div class="label">通过</div></div>
+    <div class="summary-item"><div class="num" style="color:#16a34a">100%</div><div class="label">通过率</div></div>
+  </div>
+</div>
+
+<h2>各阶段结果</h2>
+<div class="section">
+<table>
+  <tr><th>阶段</th><th>说明</th><th>结果</th></tr>
+  <tr><td>代理商验证</td><td>5个代理商从Bitable读取认证</td><td><span class="badge pass">5/5 ✅</span></td></tr>
+  <tr><td>门户下单</td><td>5代理商 × 2单 = 10副镜片</td><td><span class="badge pass">10/10 ✅</span></td></tr>
+  <tr><td>确认（镜片码+QR）</td><td>生成16位hex镜片码，写入镜片明细表</td><td><span class="badge pass">10/10 ✅</span></td></tr>
+  <tr><td>双写验证</td><td>订单主表 + 镜片明细表同时写入</td><td><span class="badge pass">10/10 ✅</span></td></tr>
+  <tr><td>合单发货</td><td>按代理商分组，5包裹（顺丰×4 + 中通×1）</td><td><span class="badge pass">5/5 ✅</span></td></tr>
+  <tr><td>签收</td><td>10单全部签收，飞书DM通知</td><td><span class="badge pass">10/10 ✅</span></td></tr>
+</table>
+</div>
+
+<h2>代理商信息</h2>
+<div class="section">
+<table>
+  <tr><th>代理商ID</th><th>名称</th><th>区域</th><th>订单数</th><th>包裹快递</th></tr>
+  <tr><td>AG-001</td><td>北京澳美雅博医疗器械有限公司</td><td>北京市</td><td>2</td><td>顺丰 SF282316732954</td></tr>
+  <tr><td>AG-002a</td><td>北京东方拓普伟业科技有限公司</td><td>北京市</td><td>2</td><td>顺丰 SF512826747014</td></tr>
+  <tr><td>AG-003</td><td>北京高屋医疗</td><td>北京市</td><td>2</td><td>顺丰 SF398195318233</td></tr>
+  <tr><td>AG-004</td><td>北京捷瑞康成（铂林眼科）</td><td>北京市</td><td>2</td><td>顺丰 SF538977313879</td></tr>
+  <tr><td>AG-005</td><td>尧视共创（北京）科技有限公司</td><td>北京市</td><td>2</td><td>中通 759660852855</td></tr>
+</table>
+</div>
+
+<h2>订单明细</h2>
+<div class="section">
+<table>
+  <tr><th>订单号</th><th>代理商</th><th>顾客</th><th>SKU</th><th>订单状态</th></tr>
+  <tr><td><code>ORD-20260414-Z12M14</code></td><td>AG-001</td><td>北京同仁医院</td><td>Ultra双效 -0.75/-0.50</td><td><span class="badge pass">已签收</span></td></tr>
+  <tr><td><code>ORD-20260414-C8PS9E</code></td><td>AG-001</td><td>北医三院眼科</td><td>D8</td><td><span class="badge pass">已签收</span></td></tr>
+  <tr><td><code>ORD-20260414-GZQZK0</code></td><td>AG-002a</td><td>天津眼科医院</td><td>Ultra双效 -2.25/-0.50</td><td><span class="badge pass">已签收</span></td></tr>
+  <tr><td><code>ORD-20260414-JC4RFP</code></td><td>AG-002a</td><td>天津爱尔眼科</td><td>Ultra -1.25/-0.50</td><td><span class="badge pass">已签收</span></td></tr>
+  <tr><td><code>ORD-20260414-AX2C4A</code></td><td>AG-003</td><td>北京嘉悦眼科</td><td>Ultra</td><td><span class="badge pass">已签收</span></td></tr>
+  <tr><td><code>ORD-20260414-EGO0X6</code></td><td>AG-003</td><td>铂林眼科诊所</td><td>Ultra双效 -0.75/-0.50</td><td><span class="badge pass">已签收</span></td></tr>
+  <tr><td><code>ORD-20260414-4ZU2N4</code></td><td>AG-004</td><td>北京捷瑞康成门诊</td><td>D8</td><td><span class="badge pass">已签收</span></td></tr>
+  <tr><td><code>ORD-20260414-HGDWOI</code></td><td>AG-004</td><td>北京视光中心</td><td>Ultra双效 -2.25/-0.50</td><td><span class="badge pass">已签收</span></td></tr>
+  <tr><td><code>ORD-20260414-S2H3YJ</code></td><td>AG-005</td><td>广州金眼科总店</td><td>Ultra -1.25/-0.50</td><td><span class="badge pass">已签收</span></td></tr>
+  <tr><td><code>ORD-20260414-OE0K8K</code></td><td>AG-005</td><td>广州视康眼镜</td><td>Ultra</td><td><span class="badge pass">已签收</span></td></tr>
+</table>
+</div>
+
+<h2>镜片明细（订单主表 + 镜片明细表双写）</h2>
+<div class="section">
+<table>
+  <tr><th>订单号</th><th>眼别</th><th>SPH</th><th>CYL</th><th>AXIS</th><th>镜片码</th></tr>
+  <tr><td><code>ORD-20260414-Z12M14</code></td><td class="eye-left">左眼</td><td>-3.25</td><td>-0.75</td><td>180</td><td><code>924E46CCA50EC187</code></td></tr>
+  <tr><td><code>ORD-20260414-C8PS9E</code></td><td class="eye-right">右眼</td><td>-2.50</td><td>-1.00</td><td>170</td><td><code>102FBDDC1F16EA7B</code></td></tr>
+  <tr><td><code>ORD-20260414-GZQZK0</code></td><td class="eye-left">左眼</td><td>-4.00</td><td>-0.50</td><td>5</td><td><code>0BA245A406096A45</code></td></tr>
+  <tr><td><code>ORD-20260414-JC4RFP</code></td><td class="eye-right">右眼</td><td>-1.75</td><td>-1.25</td><td>175</td><td><code>7E7CA3D2EB926655</code></td></tr>
+  <tr><td><code>ORD-20260414-AX2C4A</code></td><td class="eye-left">左眼</td><td>-5.00</td><td>-0.75</td><td>10</td><td><code>371D10BCC66F0560</code></td></tr>
+  <tr><td><code>ORD-20260414-EGO0X6</code></td><td class="eye-right">右眼</td><td>-3.50</td><td>-0.50</td><td>90</td><td><code>4C0974FB310DB17C</code></td></tr>
+  <tr><td><code>ORD-20260414-4ZU2N4</code></td><td class="eye-left">左眼</td><td>-2.00</td><td>-1.50</td><td>160</td><td><code>E44397B6B2FC00A2</code></td></tr>
+  <tr><td><code>ORD-20260414-HGDWOI</code></td><td class="eye-right">右眼</td><td>-6.00</td><td>-0.75</td><td>5</td><td><code>FA37F257D6471673</code></td></tr>
+  <tr><td><code>ORD-20260414-S2H3YJ</code></td><td class="eye-left">左眼</td><td>-3.75</td><td>-1.00</td><td>170</td><td><code>9FDCB1535EE1BD22</code></td></tr>
+  <tr><td><code>ORD-20260414-OE0K8K</code></td><td class="eye-right">右眼</td><td>-4.50</td><td>-0.50</td><td>85</td><td><code>DECE92E6AF3D11EA</code></td></tr>
+</table>
+</div>
+
+<h2>包裹信息</h2>
+<div class="section">
+<table>
+  <tr><th>代理商</th><th>包裹号</th><th>快递</th><th>订单数</th><th>镜片数</th></tr>
+  <tr><td>AG-001 北京澳美雅博</td><td>SF282316732954</td><td>顺丰速运</td><td>2</td><td>2</td></tr>
+  <tr><td>AG-002a 北京东方拓普</td><td>SF512826747014</td><td>顺丰速运</td><td>2</td><td>2</td></tr>
+  <tr><td>AG-003 北京高屋医疗</td><td>SF398195318233</td><td>顺丰速运</td><td>2</td><td>2</td></tr>
+  <tr><td>AG-004 北京捷瑞康成</td><td>SF538977313879</td><td>顺丰速运</td><td>2</td><td>2</td></tr>
+  <tr><td>AG-005 尧视共创</td><td>759660852855</td><td>中通快递</td><td>2</td><td>2</td></tr>
+</table>
+</div>
+
+<h2>架构验证要点</h2>
+<div class="section">
+<table>
+  <tr><th>验证项</th><th>方式</th><th>结果</th></tr>
+  <tr><td>代理商从Bitable读取</td><td>server.js loadAgents() → tblHsgGbJWkB31qu</td><td><span class="badge pass">✅</span></td></tr>
+  <tr><td>token认证</td><td>URL参数 ?t=AG-xxx-xxxx</td><td><span class="badge pass">✅</span></td></tr>
+  <tr><td>数据隔离</td><td>每代理商只能看到自己的订单</td><td><span class="badge pass">✅</span></td></tr>
+  <tr><td>订单主表 + 镜片明细双写</td><td>/api/submit 同时写入两张表</td><td><span class="badge pass">✅</span></td></tr>
+  <tr><td>镜片码生成</td><td>16位hex，写入镜片明细表</td><td><span class="badge pass">✅</span></td></tr>
+  <tr><td>合单发货</td><td>按代理商分组，一包一单号</td><td><span class="badge pass">✅</span></td></tr>
+  <tr><td>快递自动分配</td><td>AG-005(广州)→中通，其余→顺丰</td><td><span class="badge pass">✅</span></td></tr>
+  <tr><td>飞书DM通知</td><td>发货蓝色卡 + 签收绿色卡</td><td><span class="badge pass">✅</span></td></tr>
+</table>
+</div>
+
+<div class="footer">
+  <p>Generated by <code>test_e2e_5agents.js</code> — Sprint 14 E2E Test</p>
+  <p>数据源：Bitable代理商表 <code>tblHsgGbJWkB31qu</code> ｜ 供应链App <code>B3xQbbqicaome1sKdZbcwdk8nWg</code></p>
+</div>
+
+</body>
+</html>
