@@ -25,6 +25,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const BASE      = "https://open.feishu.cn/open-apis";
 const APP_TOKEN = "B3xQbbqicaome1sKdZbcwdk8nWg";
 const ORDER_TBL = "tblk9Ch4gk2uQ1zG";
+const LENS_TBL  = "tblC7pve7ObFgIOl";
 const ARGS      = process.argv.slice(2);
 const CMD       = ARGS[0] || "help";
 const ORDER_NO  = ARGS[ARGS.indexOf("--order") + 1] || null;
@@ -36,7 +37,7 @@ const COURIER_ARG = _ci !== -1 ? ARGS[_ci + 1] : null;
 function loadEnv() {
   try {
     const env = {};
-    for (const line of readFileSync(resolve(__dirname, ".env"), "utf-8").split("\n")) {
+    for (const line of readFileSync(resolve(__dirname, "../shared/.env"), "utf-8").split("\n")) {
       const t = line.trim();
       if (!t || t.startsWith("#")) continue;
       const [k, ...v] = t.split("=");
@@ -141,6 +142,14 @@ async function listRecords(filter = "") {
 
 async function updateRecord(recordId, fields) {
   return feishuReq("PUT", `/bitable/v1/apps/${APP_TOKEN}/tables/${ORDER_TBL}/records/${recordId}`, { fields });
+}
+
+async function getLensDetailsByOrder(orderNo) {
+  const encoded = encodeURIComponent(`"${orderNo}"`);
+  const d = await feishuReq("GET",
+    `/bitable/v1/apps/${APP_TOKEN}/tables/${LENS_TBL}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`
+  );
+  return d?.items || [];
 }
 
 // ─── 飞书通知（私信）─────────────────────────────────────────────────────
@@ -502,8 +511,6 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
       <td class="rx">${r.sph || "—"}</td>
       <td class="rx">${r.cyl || "—"}</td>
       <td class="rx">${r.axis || "—"}</td>
-      <td class="rx">${r.pd || "—"}</td>
-      <td class="rx">${r.ph || "—"}</td>
       <td class="lc"><span class="lc-code">${lc}</span></td>
       <td class="qr-cell"><img src="${qr}" alt="QR" width="48" height="48"></td>
     </tr>`;
@@ -607,7 +614,7 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
   <thead>
     <tr>
       <th>订单号 / 顾客</th><th>眼别</th><th>SKU</th>
-      <th>SPH</th><th>CYL</th><th>AXIS</th><th>PD</th><th>PH</th>
+      <th>SPH</th><th>CYL</th><th>AXIS</th>
       <th>镜片码</th><th>溯源</th>
     </tr>
   </thead>
@@ -689,21 +696,26 @@ async function slipBatch() {
   let count = 0;
 
   for (const [key, group] of Object.entries(agentMap)) {
-    // 按订单号聚合
+    // 按订单号聚合，从镜片明细表获取处方数据
     const orderMap = {};
     for (const r of group.records) {
       const no = rawVal(r.fields["订单编号"]);
       if (!orderMap[no]) orderMap[no] = { orderNo: no, customerName: rawVal(r.fields["顾客姓名"]), rows: [] };
-      orderMap[no].rows.push({
-        eye:      rawVal(r.fields["眼别"]) || "—",
-        sku:      rawVal(r.fields["产品型号"]),
-        sph:      rawVal(r.fields["SPH"]),
-        cyl:      rawVal(r.fields["CYL"]),
-        axis:     rawVal(r.fields["AXIS"]),
-        pd:       rawVal(r.fields["PD"]),
-        ph:       rawVal(r.fields["PH"]),
-        lensCode: rawVal(r.fields["镜片码"]),
-      });
+    }
+    // 查每个订单的镜片明细
+    for (const [no, order] of Object.entries(orderMap)) {
+      const lensDetails = await getLensDetailsByOrder(no);
+      for (const ld of lensDetails) {
+        const f = ld.fields;
+        order.rows.push({
+          eye:      rawVal(f["眼别"]) || "—",
+          sku:      rawVal(f["产品型号"]),
+          sph:      f["球镜SPH"] ?? "",
+          cyl:      f["柱镜CYL"] ?? "",
+          axis:     f["轴位AXIS"] ?? "",
+          lensCode: rawVal(f["镜片码"]),
+        });
+      }
     }
 
     // 右眼排前面
@@ -876,8 +888,6 @@ function slipHTML(order) {
       <td class="rx">${r.sph || "—"}</td>
       <td class="rx">${r.cyl || "—"}</td>
       <td class="rx">${r.axis || "—"}</td>
-      <td class="rx">${r.pd || "—"}</td>
-      <td class="rx">${r.ph || "—"}</td>
       <td class="lc"><span class="lc-code">${lc}</span></td>
       <td class="qr-cell"><img src="${qr}" alt="QR" width="52" height="52"></td>
     </tr>`;
@@ -1024,8 +1034,6 @@ function slipHTML(order) {
       <th>SPH 球镜</th>
       <th>CYL 柱镜</th>
       <th>AXIS 轴位</th>
-      <th>PD 瞳距</th>
-      <th>PH 瞳高</th>
       <th>镜片码 Lens Code</th>
       <th>溯源</th>
     </tr>
@@ -1095,16 +1103,19 @@ async function generateSlip() {
   const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
   const f0 = records[0].fields;
 
-  const rows = records.map(r => ({
-    eye:      rawVal(r.fields["眼别"]) || (records.indexOf(r) === 0 ? "右眼" : "左眼"),
-    sku:      rawVal(r.fields["产品型号"]),
-    sph:      rawVal(r.fields["SPH"]),
-    cyl:      rawVal(r.fields["CYL"]),
-    axis:     rawVal(r.fields["AXIS"]),
-    pd:       rawVal(r.fields["PD"]),
-    ph:       rawVal(r.fields["PH"]),
-    lensCode: rawVal(r.fields["镜片码"]),
-  }));
+  // 从镜片明细表获取处方数据
+  const lensDetails = await getLensDetailsByOrder(ORDER_NO);
+  const rows = lensDetails.map(r => {
+    const f = r.fields;
+    return {
+      eye:      rawVal(f["眼别"]) || (lensDetails.indexOf(r) === 0 ? "右眼" : "左眼"),
+      sku:      rawVal(f["产品型号"]),
+      sph:      f["球镜SPH"] ?? "",
+      cyl:      f["柱镜CYL"] ?? "",
+      axis:     f["轴位AXIS"] ?? "",
+      lensCode: rawVal(f["镜片码"]),
+    };
+  });
 
   // 右眼排前面
   rows.sort((a, b) => (a.eye.includes("右") ? -1 : 1));
