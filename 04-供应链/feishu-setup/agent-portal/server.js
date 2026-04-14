@@ -974,6 +974,7 @@ const server = createServer(async (req, res) => {
             "收货地址": address.trim(),
             "订单来源": "代理商门户",
             "客户ID": customerId,
+            "是否装配": assembly !== false ? "是" : "否",
             ...(terminalCustomer?.name ? { "终端客户": terminalCustomer.name } : {}),
             ...(terminalCustomer?.contact ? { "联系人": terminalCustomer.contact } : {}),
             ...(terminalCustomer?.phone ? { "联系电话": terminalCustomer.phone } : {}),
