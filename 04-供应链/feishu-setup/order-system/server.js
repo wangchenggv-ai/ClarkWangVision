@@ -446,7 +446,7 @@ function isAdmin(req) {
 
 async function createLensDetail(orderNo, fields) {
   return createRecord(TABLES.lens_detail, {
-    "来源订单号": orderNo,
+    "订单编号": orderNo,
     ...fields,
   });
 }
@@ -478,7 +478,7 @@ async function assignLensCodes(orderNo) {
 async function getLensDetailsByOrder(orderNo) {
   const encoded = encodeURIComponent(`"${orderNo}"`);
   const data = await feishuApi("GET",
-    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.lens_detail}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encoded}`
+    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.lens_detail}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`
   );
   return data?.items || [];
 }
@@ -510,7 +510,7 @@ function buildFactoryExcel(records, orderNo) {
   const rows = records.map(rec => {
     const f = rec.fields;
     return {
-      "订单号": f["来源订单号"] || "",
+      "订单号": f["订单编号"] || "",
       "顾客": f["顾客姓名"] || "",
       "产品型号": f["产品型号"] || "",
       "数量": Number(f["数量"]) || 1,
@@ -984,7 +984,7 @@ const server = createServer(async (req, res) => {
         for (const eye of eyes) {
           lensRecords.push({
             fields: {
-              "来源订单号": orderNo,
+              "订单编号": orderNo,
               "眼别": eye.side || "",
               "球镜SPH": Number(eye.sph) || 0,
               "柱镜CYL": Number(eye.cyl) || 0,

@@ -3,7 +3,7 @@
  *
  * 功能：
  *   1. 在飞书 Bitable 中创建「镜片明细」表（如不存在）
- *   2. 定义字段：来源订单号、眼别、球镜SPH、柱镜CYL、轴位AXIS、瞳距、瞳高、镜框型号、镜片码、订单状态
+ *   2. 定义字段：订单编号、眼别、球镜SPH、柱镜CYL、轴位AXIS、瞳距、瞳高、镜框型号、镜片码、订单状态
  *   3. 从 order 表读取每行记录，写入明细表
  *   4. 生成订单主表汇总记录（同一订单号合并为 1 行）
  *
@@ -125,7 +125,7 @@ async function findOrCreateLensDetailTable() {
 // ─── 定义镜片明细表字段 ─────────────────────────────────────────────────
 
 const LENS_DETAIL_FIELDS = [
-  { field_name: "来源订单号", type: 1 },  // 文本
+  { field_name: "订单编号", type: 1 },  // 文本
   { field_name: "眼别", type: 3, property: { options: [
     { name: "右眼" },
     { name: "左眼" },
@@ -193,7 +193,7 @@ async function main() {
   for (const rec of orderRecords) {
     const f = rec.fields;
     const fields = {
-      "来源订单号": f["来源订单号"] || "",
+      "订单编号": f["订单编号"] || "",
       "眼别": f["眼别"] || "",
       "镜框型号": f["镜框型号"] || "",
       "镜片码": f["镜片码"] || "",

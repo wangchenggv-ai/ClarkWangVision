@@ -78,12 +78,12 @@ const testAgents = ["AG-028", "AG-005", "AG-003"];
 const todayOrders = allOrders.filter(r => {
   const agentId = val(r.fields["代理商ID"]);
   const status = val(r.fields["订单状态"]);
-  const orderNo = val(r.fields["来源订单号"]);
+  const orderNo = val(r.fields["订单编号"]);
   return testAgents.includes(agentId) && status === "待处理" && orderNo.includes("20260414");
 });
 
 // 按订单号分组
-const orderNos = [...new Set(testAgents.flatMap(() => todayOrders.map(r => val(r.fields["来源订单号"]))))];
+const orderNos = [...new Set(testAgents.flatMap(() => todayOrders.map(r => val(r.fields["订单编号"]))))];
 console.log(`找到 ${orderNos.length} 个订单号，共 ${todayOrders.length} 条记录\n`);
 
 // ─── Step 2: 待处理 → 生产中 ─────────────────────────────────────────────────
@@ -101,7 +101,7 @@ const couriers = ["顺丰速运", "中通快递", "韵达快递"];
 const shipResults = [];
 
 for (const orderNo of orderNos) {
-  const recs = todayOrders.filter(r => val(r.fields["来源订单号"]) === orderNo);
+  const recs = todayOrders.filter(r => val(r.fields["订单编号"]) === orderNo);
   const f = recs[0].fields;
   const courierName = couriers[Math.floor(Math.random() * couriers.length)];
   const trackingNo = courierName === "顺丰速运" ? "SF" + String(Math.random()).slice(2, 14)
@@ -172,7 +172,7 @@ const deliveredGroups = {};
 for (const rec of shippedToday) {
   const agentName = val(rec.fields["代理商名称"]);
   if (!deliveredGroups[agentName]) deliveredGroups[agentName] = {};
-  const orderNo = val(rec.fields["来源订单号"]);
+  const orderNo = val(rec.fields["订单编号"]);
   if (!deliveredGroups[agentName][orderNo]) deliveredGroups[agentName][orderNo] = { recs: [], fields: rec.fields };
   deliveredGroups[agentName][orderNo].recs.push(rec);
 }

@@ -72,7 +72,7 @@ async function fetchLensRecords(filterOrderNo) {
 
   // 过滤：镜片码不为空（已确认的订单）
   const filterParam = filterOrderNo
-    ? `&filter=CurrentValue.[来源订单号]="${filterOrderNo}"`
+    ? `&filter=CurrentValue.[订单编号]="${filterOrderNo}"`
     : `&filter=CurrentValue.[镜片码]!=""`;
 
   while (true) {
@@ -88,7 +88,7 @@ async function fetchLensRecords(filterOrderNo) {
     const f = r.fields;
     const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
     return {
-      orderNo:      rawVal(f["来源订单号"]) || "",
+      orderNo:      rawVal(f["订单编号"]) || "",
       customerName: rawVal(f["顾客姓名"])   || "",
       sku:          rawVal(f["产品型号"])         || "",
       eye:          rawVal(f["眼别"])        || "",
