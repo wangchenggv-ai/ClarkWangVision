@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<title>ORD-20260413-S4ZZYJ 何俊杰 右眼</title>
+<style>
+/* 标签实际打印尺寸：80mm × 50mm */
+@page { size: 80mm 50mm; margin: 0; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  width: 80mm; height: 50mm;
+  font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  font-size: 7pt;
+  background: white;
+  overflow: hidden;
+}
+.label {
+  width: 80mm; height: 50mm;
+  display: flex;
+  flex-direction: column;
+  border: 0.3mm solid #ddd;
+}
+
+/* ── 顶部色带（眼别标识）── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #c0392b;
+  color: white;
+  padding: 1mm 2.5mm;
+  height: 8mm;
+  flex-shrink: 0;
+}
+.eye-badge {
+  font-size: 11pt;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+.brand {
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  opacity: 0.92;
+}
+.order-no {
+  font-size: 5.5pt;
+  opacity: 0.85;
+  font-family: monospace;
+}
+
+/* ── 主体区域 ── */
+.body {
+  display: flex;
+  flex: 1;
+  padding: 1.5mm 2mm 1mm;
+  gap: 2mm;
+  background: #fff5f5;
+}
+
+/* ── 左侧：文字信息 ── */
+.info { flex: 1; display: flex; flex-direction: column; gap: 0.5mm; min-width: 0; }
+
+.customer-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5mm;
+  border-bottom: 0.2mm solid #c0392b44;
+  padding-bottom: 1mm;
+  margin-bottom: 0.5mm;
+}
+.customer-name {
+  font-size: 10pt;
+  font-weight: 800;
+  color: #1a1a2e;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 28mm;
+}
+.sku-name {
+  font-size: 6.5pt;
+  color: #c0392b;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 处方参数表 ── */
+.rx-grid {
+  display: grid;
+  grid-template-columns: auto auto auto auto auto;
+  column-gap: 2.5mm;
+  row-gap: 0.3mm;
+  margin: 0.5mm 0;
+}
+.rx-label {
+  font-size: 5pt;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.rx-value {
+  font-size: 9pt;
+  font-weight: 700;
+  color: #1a1a2e;
+  font-family: "SF Mono", "Consolas", monospace;
+  line-height: 1.1;
+}
+.rx-value.highlight { color: #c0392b; }
+
+/* ── 附加信息行 ── */
+.meta-row {
+  display: flex;
+  gap: 2mm;
+  margin-top: 0.5mm;
+  flex-wrap: wrap;
+}
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.8mm;
+}
+.meta-label { font-size: 5pt; color: #aaa; }
+.meta-value { font-size: 6pt; color: #444; font-weight: 600; }
+
+.remark {
+  font-size: 5.5pt;
+  color: #b7791f;
+  background: #fffbeb;
+  border-left: 0.8mm solid #f6ad55;
+  padding: 0.5mm 1mm;
+  margin-top: 0.5mm;
+}
+
+/* ── 右侧：QR码 ── */
+.qr-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1mm;
+  flex-shrink: 0;
+}
+.qr-col img {
+  width: 18mm;
+  height: 18mm;
+  display: block;
+  border: 0.3mm solid #ddd;
+  border-radius: 1mm;
+}
+.qr-label {
+  font-size: 4pt;
+  color: #bbb;
+  text-align: center;
+}
+
+/* ── 底部：镜片码条 ── */
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8f9fa;
+  border-top: 0.2mm solid #e9ecef;
+  padding: 0.8mm 2.5mm;
+  height: 6.5mm;
+  flex-shrink: 0;
+}
+.lens-code {
+  font-family: "Courier New", monospace;
+  font-size: 6pt;
+  font-weight: 700;
+  color: #495057;
+  letter-spacing: 1px;
+}
+.footer-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.delivery-badge {
+  font-size: 5.5pt;
+  font-weight: 700;
+  color: white;
+  background: #27ae60;
+  border-radius: 1mm;
+  padding: 0.3mm 1.5mm;
+  margin-bottom: 0.3mm;
+}
+.promise-date { font-size: 5pt; color: #aaa; }
+.agent-tag { font-size: 4.5pt; color: #ccc; margin-top: 0.2mm; }
+</style></head><body>
+<div class="label">
+
+  <!-- 顶部色带 -->
+  <div class="header">
+    <div class="eye-badge">R  右眼</div>
+    <div style="text-align:right">
+      <div class="brand">GAUSH | CLEAR</div>
+      <div class="order-no">ORD-20260413-S4ZZYJ</div>
+    </div>
+  </div>
+
+  <!-- 主体 -->
+  <div class="body">
+    <div class="info">
+
+      <!-- 顾客 + SKU -->
+      <div class="customer-row">
+        <div class="customer-name">何俊杰</div>
+        <div class="sku-name">Ultra -2.25</div>
+      </div>
+
+      <!-- 处方参数 -->
+      <div class="rx-grid">
+        <div class="rx-label">SPH</div>
+        <div class="rx-label">CYL</div>
+        <div class="rx-label">AXIS</div>
+        <div class="rx-label">PD</div>
+        <div class="rx-label">PH</div>
+
+        <div class="rx-value highlight">-2.25</div>
+        <div class="rx-value highlight">-0.50</div>
+        <div class="rx-value">180°</div>
+        <div class="rx-value">33mm</div>
+        <div class="rx-value">22mm</div>
+      </div>
+
+      <!-- 镜框 + 代理商 -->
+      <div class="meta-row">
+        <div class="meta-item"><span class="meta-label">镜框</span><span class="meta-value">雷朋 RB3025</span></div>
+        <div class="meta-item"><span class="meta-label">渠道</span><span class="meta-value">AG-006</span></div>
+      </div>
+
+      
+    </div>
+
+    <!-- QR码 -->
+    <div class="qr-col">
+      <img src="data:image/png;base64,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" alt="QR">
+      <div class="qr-label">扫码验真</div>
+    </div>
+  </div>
+
+  <!-- 底部：镜片码 + 交期 -->
+  <div class="footer">
+    <div class="lens-code">258A78B354A11916</div>
+    <div class="footer-meta">
+      <div class="delivery-badge">有货3天</div>
+      <div class="promise-date">承诺 2026/4/16</div>
+      <div class="agent-tag">成都清晰视界</div>
+    </div>
+  </div>
+
+</div>
+</body></html>

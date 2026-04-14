@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>镜片标签 — 设计预览</title>
+<style>
+  body {
+    background: #e8eaf0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    gap: 32px;
+    padding: 40px;
+  }
+  h2 {
+    color: #555;
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ─── 标签容器（屏幕预览：3× 放大）─── */
+  .label-wrap {
+    /* 实际尺寸 80mm×50mm，3× = 240mm×150mm */
+    width: 240mm;
+    height: 150mm;
+    background: white;
+    border-radius: 4mm;
+    box-shadow: 0 8px 40px rgba(0,0,0,.18), 0 2px 8px rgba(0,0,0,.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+  }
+
+  /* ── 顶部：品牌色带 ── */
+  .top-bar {
+    background: linear-gradient(135deg, #c0392b 0%, #e74c3c 100%);
+    height: 36mm;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8mm;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .eye-block {
+    display: flex;
+    flex-direction: column;
+    gap: 1mm;
+  }
+  .eye-side {
+    font-size: 26pt;
+    font-weight: 900;
+    color: white;
+    letter-spacing: 2px;
+    line-height: 1;
+  }
+  .eye-cn {
+    font-size: 10pt;
+    color: rgba(255,255,255,.8);
+    font-weight: 500;
+    letter-spacing: 3px;
+  }
+
+  .brand-block {
+    text-align: right;
+    color: white;
+  }
+  .brand-name {
+    font-size: 15pt;
+    font-weight: 800;
+    letter-spacing: 3px;
+    opacity: .95;
+  }
+  .brand-sub {
+    font-size: 7pt;
+    opacity: .65;
+    letter-spacing: 1.5px;
+    margin-top: 1mm;
+  }
+
+  /* 斜线装饰 */
+  .top-bar::after {
+    content: "";
+    position: absolute;
+    right: 62mm;
+    top: 0; bottom: 0;
+    width: 8mm;
+    background: rgba(255,255,255,.08);
+    transform: skewX(-12deg);
+  }
+
+  /* ── 主体区域 ── */
+  .body {
+    flex: 1;
+    display: flex;
+    padding: 5mm 8mm 4mm;
+    gap: 6mm;
+    background: #fff9f9;
+  }
+
+  /* 左：信息 */
+  .info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3mm;
+    min-width: 0;
+  }
+
+  .customer-row {
+    display: flex;
+    align-items: baseline;
+    gap: 3mm;
+    border-bottom: 0.5mm solid #f0d0d0;
+    padding-bottom: 3mm;
+  }
+  .customer-name {
+    font-size: 18pt;
+    font-weight: 800;
+    color: #1a1a2e;
+  }
+  .order-no {
+    font-size: 6.5pt;
+    color: #aaa;
+    font-family: "Courier New", monospace;
+    letter-spacing: 0.5px;
+  }
+
+  /* SKU */
+  .sku-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 2mm;
+    background: #fdecea;
+    border: 0.4mm solid #f5c6c6;
+    border-radius: 2mm;
+    padding: 1mm 3mm;
+    width: fit-content;
+  }
+  .sku-dot { width: 2.5mm; height: 2.5mm; border-radius: 50%; background: #c0392b; flex-shrink: 0; }
+  .sku-text { font-size: 9pt; font-weight: 700; color: #c0392b; }
+
+  /* 处方参数 */
+  .rx-section { display: flex; flex-direction: column; gap: 1mm; }
+  .rx-title { font-size: 6pt; color: #bbb; letter-spacing: 1.5px; text-transform: uppercase; }
+  .rx-row { display: flex; gap: 4mm; align-items: baseline; }
+  .rx-item { display: flex; flex-direction: column; gap: 0.5mm; }
+  .rx-label { font-size: 5.5pt; color: #999; text-transform: uppercase; letter-spacing: 0.5px; }
+  .rx-value {
+    font-size: 14pt;
+    font-weight: 700;
+    font-family: "SF Mono", "Consolas", "Courier New", monospace;
+    color: #c0392b;
+    line-height: 1;
+  }
+  .rx-value.dim { color: #555; font-size: 12pt; }
+  .rx-sep { font-size: 8pt; color: #ddd; align-self: center; margin-bottom: 1mm; }
+
+  /* 附加信息 */
+  .extra-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3mm;
+    margin-top: auto;
+  }
+  .extra-chip {
+    display: flex;
+    align-items: center;
+    gap: 1.5mm;
+  }
+  .extra-lbl { font-size: 5.5pt; color: #bbb; }
+  .extra-val { font-size: 6.5pt; color: #555; font-weight: 600; }
+
+  /* 右：QR码 */
+  .qr-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2mm;
+    flex-shrink: 0;
+    width: 44mm;
+  }
+  .qr-frame {
+    border: 1mm solid #e8d0d0;
+    border-radius: 2.5mm;
+    padding: 2mm;
+    background: white;
+  }
+  .qr-frame img { display: block; width: 36mm; height: 36mm; }
+  .qr-tip { font-size: 5.5pt; color: #ccc; text-align: center; letter-spacing: 0.5px; }
+
+  /* ── 底部：镜片码条 ── */
+  .footer {
+    height: 22mm;
+    background: #1a1a2e;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8mm;
+    flex-shrink: 0;
+  }
+  .lens-code-block { display: flex; flex-direction: column; gap: 1mm; }
+  .lens-code-label { font-size: 5pt; color: rgba(255,255,255,.4); letter-spacing: 2px; text-transform: uppercase; }
+  .lens-code {
+    font-family: "Courier New", monospace;
+    font-size: 11pt;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 2px;
+  }
+  .barcode-dots {
+    display: flex;
+    gap: 0.8mm;
+    margin-top: 1mm;
+  }
+  .barcode-dots span {
+    height: 3mm;
+    border-radius: 0.3mm;
+    background: rgba(255,255,255,.25);
+  }
+
+  .delivery-block { text-align: right; }
+  .delivery-badge {
+    display: inline-block;
+    background: #27ae60;
+    color: white;
+    font-size: 8pt;
+    font-weight: 700;
+    border-radius: 1.5mm;
+    padding: 1mm 3mm;
+    letter-spacing: 0.5px;
+  }
+  .promise-date { font-size: 6pt; color: rgba(255,255,255,.5); margin-top: 1.5mm; }
+  .agent-info { font-size: 5pt; color: rgba(255,255,255,.3); margin-top: 0.5mm; }
+</style>
+</head>
+<body>
+
+<h2>镜片标签设计预览 — 80mm × 50mm（屏幕3×放大）</h2>
+
+<div class="label-wrap">
+
+  <!-- 顶部色带 -->
+  <div class="top-bar">
+    <div class="eye-block">
+      <div class="eye-side">R</div>
+      <div class="eye-cn">右　眼</div>
+    </div>
+    <div class="brand-block">
+      <div class="brand-name">GAUSH | CLEAR</div>
+      <div class="brand-sub">高视星 · 镜片溯源系统</div>
+    </div>
+  </div>
+
+  <!-- 主体 -->
+  <div class="body">
+    <div class="info">
+
+      <!-- 顾客 + 订单号 -->
+      <div class="customer-row">
+        <div class="customer-name">张明辉</div>
+        <div class="order-no">ORD-20260413-SUNI3I</div>
+      </div>
+
+      <!-- SKU标签 -->
+      <div class="sku-tag">
+        <div class="sku-dot"></div>
+        <div class="sku-text">Ultra -1.25</div>
+      </div>
+
+      <!-- 处方参数 -->
+      <div class="rx-section">
+        <div class="rx-title">处方参数 Prescription</div>
+        <div class="rx-row">
+          <div class="rx-item">
+            <div class="rx-label">SPH</div>
+            <div class="rx-value">-1.25</div>
+          </div>
+          <div class="rx-sep">·</div>
+          <div class="rx-item">
+            <div class="rx-label">CYL</div>
+            <div class="rx-value">-0.75</div>
+          </div>
+          <div class="rx-sep">·</div>
+          <div class="rx-item">
+            <div class="rx-label">AXIS</div>
+            <div class="rx-value dim">180°</div>
+          </div>
+          <div class="rx-sep">·</div>
+          <div class="rx-item">
+            <div class="rx-label">PD</div>
+            <div class="rx-value dim">33</div>
+          </div>
+          <div class="rx-sep">·</div>
+          <div class="rx-item">
+            <div class="rx-label">PH</div>
+            <div class="rx-value dim">23</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 镜框 + 代理商 -->
+      <div class="extra-row">
+        <div class="extra-chip">
+          <span class="extra-lbl">镜框</span>
+          <span class="extra-val">暴龙 BT8090</span>
+        </div>
+        <div class="extra-chip">
+          <span class="extra-lbl">代理商</span>
+          <span class="extra-val">北京明视眼镜</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- QR码 -->
+    <div class="qr-col">
+      <div class="qr-frame">
+        <!-- 用 qrserver API 生成演示二维码 -->
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=144x144&ecc=H&data=http%3A%2F%2F192.168.0.84%3A3210%2Fverify%2F160B6789E499033F" alt="QR">
+      </div>
+      <div class="qr-tip">微信扫码验真</div>
+    </div>
+  </div>
+
+  <!-- 底部镜片码条 -->
+  <div class="footer">
+    <div class="lens-code-block">
+      <div class="lens-code-label">Lens Code / 镜片码</div>
+      <div class="lens-code">160B6789E499033F</div>
+      <div class="barcode-dots">
+        <!-- 装饰性条形码纹理 -->
+        <span style="width:1mm"></span><span style="width:2mm"></span><span style="width:1mm"></span>
+        <span style="width:3mm"></span><span style="width:1mm"></span><span style="width:2mm"></span>
+        <span style="width:1mm"></span><span style="width:1mm"></span><span style="width:3mm"></span>
+        <span style="width:2mm"></span><span style="width:1mm"></span><span style="width:2mm"></span>
+        <span style="width:1mm"></span><span style="width:3mm"></span><span style="width:1mm"></span>
+      </div>
+    </div>
+    <div class="delivery-block">
+      <div class="delivery-badge">✓ 有货 3天</div>
+      <div class="promise-date">承诺交期 2026 / 04 / 16</div>
+      <div class="agent-info">AG-003 · 北京明视眼镜</div>
+    </div>
+  </div>
+
+</div>
+
+<h2 style="color:#aaa;font-size:11px">右眼 · 红色主题 &nbsp;|&nbsp; 左眼将显示蓝色主题</h2>
+
+</body>
+</html>

@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E2E 测试报告 — ORD-20260413-LQ6IW9</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f5f6fa;
+    color: #2c2c2c;
+    line-height: 1.7;
+  }
+  .page { max-width: 860px; margin: 0 auto; padding: 40px 32px; }
+  @media print {
+    body { background: white; }
+    .page { max-width: 100%; padding: 20mm; }
+    .no-print { display: none; }
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a1f4b 0%, #2d3a8c 60%, #4a5fca 100%);
+    color: white;
+    padding: 32px 40px;
+    border-radius: 12px;
+    margin-bottom: 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .header .sub { font-size: 13px; opacity: 0.8; line-height: 1.8; }
+  .brand { font-size: 18px; font-weight: 700; letter-spacing: 2px; opacity: 0.9; }
+
+  /* Flow bar */
+  .flow {
+    display: flex;
+    align-items: center;
+    background: white;
+    border-radius: 10px;
+    padding: 18px 28px;
+    margin-bottom: 28px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    gap: 0;
+    overflow-x: auto;
+  }
+  .flow-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 90px;
+  }
+  .flow-icon { font-size: 22px; margin-bottom: 4px; }
+  .flow-label { font-size: 11px; color: #666; text-align: center; white-space: nowrap; }
+  .flow-arrow { color: #adb5bd; font-size: 18px; margin: 0 8px; padding-bottom: 20px; }
+
+  /* Section */
+  .section {
+    background: white;
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  }
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a1f4b;
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e8eaf6;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .step-badge {
+    background: #1a1f4b;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th {
+    background: #f0f2fc;
+    color: #3d4499;
+    font-weight: 600;
+    padding: 9px 14px;
+    text-align: left;
+    border-bottom: 1px solid #dde0f5;
+  }
+  td { padding: 9px 14px; border-bottom: 1px solid #f0f1f8; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+
+  /* Code */
+  code {
+    background: #f0f2fc;
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: "SF Mono", "Fira Code", monospace;
+    font-size: 12px;
+    color: #3d4499;
+  }
+  pre {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border-radius: 8px;
+    padding: 16px;
+    font-size: 12px;
+    overflow-x: auto;
+    line-height: 1.6;
+    margin-top: 8px;
+  }
+
+  /* QR cards */
+  .qr-grid { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 8px; }
+  .qr-card {
+    border: 1px solid #e8eaf6;
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    flex: 1;
+    min-width: 180px;
+  }
+  .qr-card img { display: block; margin: 0 auto 12px; border-radius: 6px; }
+  .qr-card .eye-label { font-weight: 700; font-size: 13px; color: #1a1f4b; margin-bottom: 4px; }
+  .qr-card .lens-code { font-family: monospace; font-size: 11px; color: #666; word-break: break-all; }
+  .qr-card .verify-url { font-size: 10px; color: #aaa; margin-top: 4px; }
+
+  /* Result tags */
+  .tag-ok {
+    display: inline-block;
+    background: #d4edda;
+    color: #155724;
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .tag-err {
+    display: inline-block;
+    background: #f8d7da;
+    color: #721c24;
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* Status timeline */
+  .timeline { margin-top: 12px; }
+  .tl-item {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 8px 0;
+  }
+  .tl-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #2d3a8c;
+    flex-shrink: 0;
+    margin-top: 5px;
+  }
+  .tl-dot.done { background: #28a745; }
+  .tl-content { flex: 1; }
+  .tl-title { font-weight: 600; font-size: 13.5px; }
+  .tl-sub { font-size: 12px; color: #888; }
+
+  /* Summary table */
+  .result-row td:last-child { font-weight: 600; }
+  .elapsed { text-align: right; font-size: 12px; color: #aaa; margin-top: 12px; }
+  .footer {
+    text-align: center;
+    color: #aaa;
+    font-size: 11px;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>代理商下单全流程 — E2E 测试报告</h1>
+      <div class="sub">
+        测试时间：2026/4/13 14:22:19<br>
+        订单号：ORD-20260413-LQ6IW9<br>
+        代理商：北京明视眼镜（AG-003）
+      </div>
+    </div>
+    <div class="brand">GAUSH<br>CLEAR</div>
+  </div>
+
+  <!-- Flow -->
+  <div class="flow">
+    <div class="flow-step"><div class="flow-icon">📱</div><div class="flow-label">代理商<br>下单</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><div class="flow-icon">✅</div><div class="flow-label">助理<br>确认</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><div class="flow-icon">🔑</div><div class="flow-label">生成<br>镜片码</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><div class="flow-icon">📷</div><div class="flow-label">QR码<br>生成</div></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step"><div class="flow-icon">🔍</div><div class="flow-label">消费者<br>扫码验真</div></div>
+  </div>
+
+  <!-- Step 1: Agent -->
+  <div class="section">
+    <div class="section-title"><div class="step-badge">1</div> 代理商信息确认</div>
+    <table>
+      <tr><th>字段</th><th>值</th></tr>
+      <tr><td>代理商 ID</td><td><code>AG-003</code></td></tr>
+      <tr><td>代理商名称</td><td>北京明视眼镜</td></tr>
+      <tr><td>认证 Token</td><td><code>AG-003-z3t0557ucthgfxep</code></td></tr>
+      <tr><td>状态</td><td><span class="tag-ok">✅ 鉴权通过</span></td></tr>
+    </table>
+  </div>
+
+  <!-- Step 2: Order -->
+  <div class="section">
+    <div class="section-title"><div class="step-badge">2</div> 代理商提交订单</div>
+    <table style="margin-bottom:16px">
+      <tr><th>字段</th><th>值</th></tr>
+      <tr><td>顾客姓名</td><td>李建国</td></tr>
+      <tr><td>产品 SKU</td><td>Ultra -1.25</td></tr>
+      <tr><td>收货地址</td><td>北京市朝阳区建国路88号，恒业眼镜店</td></tr>
+      <tr><td>备注</td><td>急单，优先处理</td></tr>
+      <tr><td>交期类型</td><td>有货3天</td></tr>
+      <tr><td>承诺交期</td><td>2026/04/16</td></tr>
+    </table>
+    <div class="section-title" style="font-size:13px;border-bottom:1px solid #eee;margin-bottom:12px">处方参数</div>
+    <table>
+      <tr><th>眼别</th><th>球镜 SPH</th><th>柱镜 CYL</th><th>轴位 AXIS</th><th>瞳距 PD</th><th>瞳高 PH</th><th>镜框</th></tr>
+      <tr>
+        <td>右眼</td><td>-1.25</td><td>-0.5</td>
+        <td>180°</td><td>32mm</td><td>22mm</td><td>暴龙 BL8090</td>
+      </tr>
+      <tr>
+        <td>左眼</td><td>-1</td><td>-0.25</td>
+        <td>15°</td><td>32mm</td><td>22mm</td><td>暴龙 BL8090</td>
+      </tr>
+    </table>
+    <pre>POST /api/submit?t=AG-003-z3t0557ucthgfxep
+→ { "success": true, "orderNo": "ORD-20260413-LQ6IW9", "totalLenses": 2 }</pre>
+  </div>
+
+  <!-- Step 3: Confirm + Lens codes -->
+  <div class="section">
+    <div class="section-title"><div class="step-badge">3</div> 助理确认订单 → 镜片码生成</div>
+    <div class="timeline">
+      <div class="tl-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-content">
+          <div class="tl-title">订单状态：待处理 → 生产中</div>
+          <div class="tl-sub">飞书多维表同步更新</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-content">
+          <div class="tl-title">镜片码生成：2 个（每眼独立）</div>
+          <div class="tl-sub">crypto.randomBytes(8) → 16位大写十六进制，全球唯一</div>
+        </div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-dot done"></div>
+        <div class="tl-content">
+          <div class="tl-title">QR PNG 写入本地 (400×400, Error Correction H)</div>
+          <div class="tl-sub">agent-portal/public/qrcodes/</div>
+        </div>
+      </div>
+    </div>
+    <table style="margin-top:16px">
+      <tr><th>眼别</th><th>镜片码</th><th>验真 URL</th></tr>
+      <tr>
+        <td>右眼</td>
+        <td><code>C0B68BD86DC77F5C</code></td>
+        <td><code style="font-size:10px">/verify/C0B68BD86DC77F5C</code></td>
+      </tr>
+      <tr>
+        <td>左眼</td>
+        <td><code>048D03C256B64703</code></td>
+        <td><code style="font-size:10px">/verify/048D03C256B64703</code></td>
+      </tr>
+    </table>
+    <pre>POST /api/order/ORD-20260413-LQ6IW9/confirm?t=AG-003-z3t0557ucthgfxep
+→ { "success": true, "lensCodes": ["C0B68BD86DC77F5C","048D03C256B64703"] }</pre>
+  </div>
+
+  <!-- Step 4: QR display -->
+  <div class="section">
+    <div class="section-title"><div class="step-badge">4</div> QR 码展示</div>
+    <div class="qr-grid">
+      
+      <div class="qr-card">
+        <img src="data:image/png;base64,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" width="140" height="140" alt="QR C0B68BD86DC77F5C">
+        <div class="eye-label">右眼</div>
+        <div class="lens-code">C0B68BD86DC77F5C</div>
+        <div class="verify-url">/verify/C0B68BD86DC77F5C</div>
+      </div>
+      <div class="qr-card">
+        <img src="data:image/png;base64,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" width="140" height="140" alt="QR 048D03C256B64703">
+        <div class="eye-label">左眼</div>
+        <div class="lens-code">048D03C256B64703</div>
+        <div class="verify-url">/verify/048D03C256B64703</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5: Verify -->
+  <div class="section">
+    <div class="section-title"><div class="step-badge">5</div> 消费者扫码验真</div>
+    <table>
+      <tr><th>测试项</th><th>镜片码</th><th>HTTP 状态</th><th>结果</th></tr>
+      
+      <tr class="result-row">
+        <td>正品验证</td>
+        <td><code>C0B68BD86DC77F5C</code></td>
+        <td>200</td>
+        <td><span class="tag-ok">✅ 正品验证通过</span></td>
+      </tr>
+      <tr class="result-row">
+        <td>正品验证</td>
+        <td><code>048D03C256B64703</code></td>
+        <td>200</td>
+        <td><span class="tag-ok">✅ 正品验证通过</span></td>
+      </tr>
+      
+      <tr class="result-row">
+        <td>无效码测试</td>
+        <td><code>DEADBEEF12345678</code></td>
+        <td>404</td>
+        <td><span class="tag-err">❌ 未找到记录（正确拒绝）</span></td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Summary -->
+  <div class="section">
+    <div class="section-title">📊 验证结果汇总</div>
+    <table>
+      <tr><th>测试项</th><th>结果</th></tr>
+      <tr class="result-row"><td>代理商 Token 鉴权</td><td><span class="tag-ok">✅ 通过</span></td></tr>
+      <tr class="result-row"><td>双眼订单写入飞书</td><td><span class="tag-ok">✅ 通过</span></td></tr>
+      <tr class="result-row"><td>右眼镜片码生成</td><td><span class="tag-ok">✅ C0B68BD86DC77F5C</span></td></tr>
+      <tr class="result-row"><td>左眼镜片码生成</td><td><span class="tag-ok">✅ 048D03C256B64703</span></td></tr>
+      <tr class="result-row"><td>QR PNG 生成（400×400）</td><td><span class="tag-ok">✅ 通过</span></td></tr>
+      <tr class="result-row"><td>正品扫码验真</td><td><span class="tag-ok">✅ HTTP 200</span></td></tr>
+      <tr class="result-row"><td>无效码拒绝</td><td><span class="tag-ok">✅ HTTP 404</span></td></tr>
+    </table>
+    <div class="elapsed">总耗时：22.3s</div>
+  </div>
+
+  <div class="footer">
+    由高视星供应链自动化系统生成 · GAUSH | CLEAR · 2026/4/13 14:22:19
+  </div>
+
+</div>
+</body>
+</html>

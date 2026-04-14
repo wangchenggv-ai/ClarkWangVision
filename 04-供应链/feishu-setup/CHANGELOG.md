@@ -1,5 +1,37 @@
 # Changelog
 
+## [2026-04-14] 系统拆分：订单交付 + 供应链独立
+
+### 决策
+
+三系统解耦：订单交付系统（6.30前完成）、CRM系统（下半年）、供应链系统（下半年）。共享编码规则，不共享数据库。
+
+### 拆分结构
+
+```
+feishu-setup/
+├── order-system/     订单交付系统（立即开发）
+├── supply-chain/     供应链同步（6.30后启动）
+└── shared/           共享配置（.env、migrate_tables.js）
+```
+
+### 变更
+
+| 操作 | 说明 |
+|------|------|
+| 移动文件 | agent-portal/ → order-system/，sync_*.js → supply-chain/ |
+| 更新路径 | server.js 等 .env 引用从 `../.env` 改为 `../shared/.env` |
+| 新增 README | order-system/README.md、supply-chain/README.md |
+| 更新 README | 顶层 README.md 改为项目概览+目录索引 |
+
+### 原则
+
+- 改订单系统字段只动 `order-system/` 下的文件
+- 供应链同步脚本 6.30 前不维护
+- `migrate_tables.js` 保留在 shared/，迁移时两个系统都会用到
+
+---
+
 ## [2026-04-14] Sprint 15：终端客户选择 + 下单表单改版
 
 ### 需求

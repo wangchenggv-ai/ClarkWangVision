@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>合单随货通行单 — 测试代理商</title>
+<style>
+  @page { size: A4; margin: 10mm 12mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; font-size: 9.5pt; color: #1a1a2e; background:#fff; }
+  .header { display:flex; align-items:flex-end; justify-content:space-between;
+            border-bottom:1.5pt solid #c0392b; padding-bottom:3.5mm; margin-bottom:4mm; }
+  .brand-name { font-size:17pt; font-weight:900; letter-spacing:3px; color:#c0392b; }
+  .brand-sub  { font-size:7pt; color:#888; letter-spacing:1.5px; margin-top:0.8mm; }
+  .doc-title h1 { font-size:15pt; font-weight:800; letter-spacing:4px; text-align:right; }
+  .doc-title p  { font-size:6.5pt; color:#aaa; text-align:right; margin-top:0.8mm; }
+
+  .meta { display:grid; grid-template-columns:repeat(5,1fr); gap:2.5mm;
+          background:#fdf5f5; border:0.5pt solid #f0d0d0; border-radius:2mm;
+          padding:3.5mm 5mm; margin-bottom:4mm; }
+  .meta-label { font-size:5.5pt; color:#aaa; text-transform:uppercase; letter-spacing:1px; margin-bottom:0.5mm; }
+  .meta-value { font-size:9.5pt; font-weight:700; }
+  .meta-value.mono { font-family:"Courier New",monospace; font-size:8.5pt; }
+  .meta-value.red  { color:#c0392b; }
+
+  .rx-title { font-size:7.5pt; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+              color:#c0392b; margin-bottom:2mm; padding-left:2mm; border-left:2pt solid #c0392b; }
+  table { width:100%; border-collapse:collapse; margin-bottom:5mm; font-size:8.5pt; }
+  thead th { background:#1a1a2e; color:#fff; font-size:6.5pt; font-weight:600;
+             padding:2mm 2.5mm; text-align:center; letter-spacing:0.5px; }
+  thead th:first-child { text-align:left; padding-left:3mm; }
+  tbody tr { border-bottom:0.4pt solid #eee; }
+  tbody tr:nth-child(even) { background:#fafafa; }
+  tbody tr:hover { background:#fef5f5; }
+
+  td.order-no { padding:2.5mm 3mm; font-size:7pt; font-family:"Courier New",monospace; white-space:nowrap; }
+  td.order-no .cname { font-family:"PingFang SC","Microsoft YaHei",sans-serif; font-size:8pt; font-weight:700; color:#1a1a2e; }
+  td.eye { width:11mm; font-size:14pt; font-weight:900; text-align:center; padding:2mm 0; line-height:1; }
+  td.eye span { font-size:5.5pt; font-weight:400; display:block; }
+  td.eye-r { color:#c0392b; }
+  td.eye-l { color:#2980b9; }
+  td.sku  { padding:2.5mm; font-size:7.5pt; font-weight:600; }
+  td.rx   { padding:2.5mm; text-align:center; font-family:"Courier New",monospace;
+            font-size:10pt; font-weight:700; color:#c0392b; }
+  td.lc   { padding:2.5mm; }
+  .lc-code { font-family:"Courier New",monospace; font-size:6.5pt; font-weight:700;
+             background:#1a1a2e; color:#fff; padding:0.8mm 1.5mm; border-radius:1mm; letter-spacing:1px; }
+  td.qr-cell { padding:1.5mm; text-align:center; width:16mm; }
+
+  .logistics { display:flex; gap:4mm; margin-bottom:5mm; }
+  .logistics-box { flex:1; border:0.5pt solid #ddd; border-radius:2mm; padding:3.5mm; }
+  .logistics-box h3 { font-size:6.5pt; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#888; margin-bottom:2.5mm; }
+  .tracking-no { font-family:"Courier New",monospace; font-size:13pt; font-weight:900; color:#1a1a2e; letter-spacing:2px; }
+  .courier-name { font-size:8.5pt; color:#555; margin-top:1mm; }
+
+  .sign-section { display:grid; grid-template-columns:1fr 1fr 1fr; gap:4mm; margin-bottom:5mm; }
+  .sign-box { border:0.5pt solid #ddd; border-radius:2mm; padding:3.5mm; min-height:20mm; }
+  .sign-box h3 { font-size:6.5pt; color:#aaa; letter-spacing:1px; text-transform:uppercase; margin-bottom:1.5mm; }
+  .sign-box .sign-line { border-bottom:0.5pt solid #ccc; margin:8mm 2mm 1.5mm; }
+  .sign-box .sign-hint { font-size:5.5pt; color:#ccc; text-align:center; }
+
+  .footer { border-top:0.5pt solid #eee; padding-top:2.5mm; display:flex; justify-content:space-between; align-items:center; }
+  .footer-left  { font-size:6pt; color:#bbb; }
+  .footer-right { font-size:5.5pt; color:#ccc; font-family:"Courier New",monospace; }
+
+  @media print { body{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .no-print{display:none;} }
+  .print-btn { position:fixed; bottom:20px; right:20px; padding:10px 20px; background:#c0392b;
+               color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;
+               box-shadow:0 4px 12px rgba(0,0,0,.2); }
+</style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">打印 / 导出 PDF</button>
+
+<div class="header">
+  <div class="brand">
+    <div class="brand-name">GAUSH | CLEAR</div>
+    <div class="brand-sub">高视星 · 镜片溯源系统</div>
+  </div>
+  <div class="doc-title">
+    <h1>合单随货通行单</h1>
+    <p>CONSOLIDATED PACKING SLIP / DELIVERY NOTE</p>
+  </div>
+</div>
+
+<div class="meta">
+  <div><div class="meta-label">代理商 Agent</div><div class="meta-value red">测试代理商</div><div style="font-size:6pt;color:#aaa;margin-top:0.5mm">AG-002</div></div>
+  <div><div class="meta-label">发货日期 Ship Date</div><div class="meta-value">2026/4/13</div></div>
+  <div><div class="meta-label">订单数 Orders</div><div class="meta-value red">2 单</div></div>
+  <div><div class="meta-label">镜片数量 Qty</div><div class="meta-value red">4 片</div></div>
+  <div><div class="meta-label">快递单号 Tracking</div><div class="meta-value mono">SF018230863264</div></div>
+</div>
+
+<div class="rx-title">处方明细 Prescription Details — 共 4 片</div>
+<table>
+  <thead>
+    <tr>
+      <th>订单号 / 顾客</th><th>眼别</th><th>SKU</th>
+      <th>SPH</th><th>CYL</th><th>AXIS</th><th>PD</th><th>PH</th>
+      <th>镜片码</th><th>溯源</th>
+    </tr>
+  </thead>
+  <tbody>
+    
+    <tr>
+      <td class="order-no">ORD-20260413-M4CQUZ<br><span class="cname">吴思远</span></td>
+      <td class="eye eye-r">R<br><span>右眼</span></td>
+      <td class="sku">Ultra -0.50</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="lc"><span class="lc-code">634BC661A936B4C5</span></td>
+      <td class="qr-cell"><img src="https://api.qrserver.com/v1/create-qr-code/?size=56x56&ecc=M&data=http%3A%2F%2F192.168.0.84%3A3210%2Fverify%2F634BC661A936B4C5" alt="QR" width="48" height="48"></td>
+    </tr>
+
+    <tr>
+      <td class="order-no">ORD-20260413-M4CQUZ<br><span class="cname">吴思远</span></td>
+      <td class="eye eye-l">L<br><span>左眼</span></td>
+      <td class="sku">Ultra -0.50</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="lc"><span class="lc-code">F9C6B31964FC4D00</span></td>
+      <td class="qr-cell"><img src="https://api.qrserver.com/v1/create-qr-code/?size=56x56&ecc=M&data=http%3A%2F%2F192.168.0.84%3A3210%2Fverify%2FF9C6B31964FC4D00" alt="QR" width="48" height="48"></td>
+    </tr>
+
+    <tr>
+      <td class="order-no">ORD-20260413-7O9DTW<br><span class="cname">郑雨婷</span></td>
+      <td class="eye eye-r">R<br><span>右眼</span></td>
+      <td class="sku">Ultra -1.25</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="lc"><span class="lc-code">F5309D3CF5BEA363</span></td>
+      <td class="qr-cell"><img src="https://api.qrserver.com/v1/create-qr-code/?size=56x56&ecc=M&data=http%3A%2F%2F192.168.0.84%3A3210%2Fverify%2FF5309D3CF5BEA363" alt="QR" width="48" height="48"></td>
+    </tr>
+
+    <tr>
+      <td class="order-no">ORD-20260413-7O9DTW<br><span class="cname">郑雨婷</span></td>
+      <td class="eye eye-l">L<br><span>左眼</span></td>
+      <td class="sku">Ultra -1.25</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="lc"><span class="lc-code">717B606C872F4ECD</span></td>
+      <td class="qr-cell"><img src="https://api.qrserver.com/v1/create-qr-code/?size=56x56&ecc=M&data=http%3A%2F%2F192.168.0.84%3A3210%2Fverify%2F717B606C872F4ECD" alt="QR" width="48" height="48"></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="logistics">
+  <div class="logistics-box">
+    <h3>物流信息 Shipping</h3>
+    <div class="tracking-no">SF018230863264</div>
+    <div class="courier-name">顺丰速运</div>
+  </div>
+  <div class="logistics-box" style="flex:3">
+    <h3>订单汇总 Order Summary</h3>
+    <table style="margin:0;font-size:7.5pt">
+      <thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:1.5mm;color:#555;font-weight:600">订单号</th><th style="padding:1.5mm;color:#555;font-weight:600">顾客</th><th style="padding:1.5mm;color:#555;font-weight:600">SKU</th><th style="padding:1.5mm;color:#555;font-weight:600">片数</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:1.5mm;font-family:monospace;font-size:6.5pt">ORD-20260413-M4CQUZ</td><td style="padding:1.5mm;font-weight:600">吴思远</td><td style="padding:1.5mm">Ultra -0.50</td><td style="padding:1.5mm;text-align:center;font-weight:700;color:#c0392b">2</td></tr><tr><td style="padding:1.5mm;font-family:monospace;font-size:6.5pt">ORD-20260413-7O9DTW</td><td style="padding:1.5mm;font-weight:600">郑雨婷</td><td style="padding:1.5mm">Ultra -1.25</td><td style="padding:1.5mm;text-align:center;font-weight:700;color:#c0392b">2</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="sign-section">
+  <div class="sign-box">
+    <h3>发货方签章 Shipper</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">高视星 / GAUSH CLEAR</div>
+  </div>
+  <div class="sign-box">
+    <h3>代理商签收 Agent</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">测试代理商</div>
+  </div>
+  <div class="sign-box">
+    <h3>签收日期 Date</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">　　年　　月　　日</div>
+  </div>
+</div>
+
+<div class="footer">
+  <div class="footer-left">高视星 GAUSH CLEAR Supply Chain v1.0 &nbsp;|&nbsp; 本单据随货附带，请妥善保存 &nbsp;|&nbsp; 测试代理商 专属包裹</div>
+  <div class="footer-right">打印时间 2026/4/13 16:13:59</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>随货通行单 ORD-20260413-WQCO2V</title>
+<style>
+  @page { size: A4; margin: 12mm 14mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; font-size: 10pt; color: #1a1a2e; background: #fff; }
+
+  /* ── 页眉 ── */
+  .header { display: flex; align-items: flex-end; justify-content: space-between;
+            border-bottom: 1.5pt solid #c0392b; padding-bottom: 4mm; margin-bottom: 5mm; }
+  .brand { display: flex; flex-direction: column; gap: 1mm; }
+  .brand-name { font-size: 18pt; font-weight: 900; letter-spacing: 3px; color: #c0392b; }
+  .brand-sub  { font-size: 7.5pt; color: #888; letter-spacing: 1.5px; }
+  .doc-title  { text-align: right; }
+  .doc-title h1 { font-size: 16pt; font-weight: 800; letter-spacing: 4px; color: #1a1a2e; }
+  .doc-title p  { font-size: 7pt; color: #aaa; margin-top: 1mm; letter-spacing: 1px; }
+
+  /* ── 信息栏 ── */
+  .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3mm;
+          background: #fdf5f5; border: 0.5pt solid #f0d0d0; border-radius: 2mm;
+          padding: 4mm 5mm; margin-bottom: 5mm; }
+  .meta-item { display: flex; flex-direction: column; gap: 0.8mm; }
+  .meta-label { font-size: 6pt; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+  .meta-value { font-size: 10pt; font-weight: 700; color: #1a1a2e; }
+  .meta-value.mono { font-family: "Courier New", monospace; font-size: 9pt; }
+  .meta-value.red  { color: #c0392b; }
+
+  /* ── 处方表 ── */
+  .rx-title { font-size: 8pt; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+              color: #c0392b; margin-bottom: 2.5mm; padding-left: 2mm;
+              border-left: 2pt solid #c0392b; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6mm; }
+  thead th { background: #1a1a2e; color: white; font-size: 7pt; font-weight: 600;
+             letter-spacing: 0.5px; padding: 2.5mm 3mm; text-align: center; }
+  thead th:first-child { text-align: left; padding-left: 4mm; }
+  tbody tr { border-bottom: 0.4pt solid #eee; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+
+  td.eye { width: 14mm; font-size: 16pt; font-weight: 900; text-align: center;
+           padding: 3mm 0; line-height: 1; }
+  td.eye span { font-size: 6pt; font-weight: 400; display: block; margin-top: 0.5mm; }
+  td.eye-r { color: #c0392b; }
+  td.eye-l { color: #2980b9; }
+  td.sku  { padding: 3mm; font-size: 8pt; font-weight: 600; }
+  td.rx   { padding: 3mm; text-align: center; font-family: "Courier New",monospace;
+            font-size: 11pt; font-weight: 700; color: #c0392b; }
+  td.lc   { padding: 3mm; }
+  .lc-code { font-family: "Courier New",monospace; font-size: 7.5pt; font-weight: 700;
+             background: #1a1a2e; color: #fff; padding: 1mm 2mm; border-radius: 1mm; letter-spacing: 1px; }
+  td.qr-cell { padding: 2mm; text-align: center; width: 18mm; }
+
+  /* ── 物流栏 ── */
+  .logistics { display: flex; gap: 5mm; margin-bottom: 6mm; }
+  .logistics-box { flex: 1; border: 0.5pt solid #ddd; border-radius: 2mm; padding: 4mm; }
+  .logistics-box h3 { font-size: 7pt; font-weight: 700; letter-spacing: 1.5px;
+                       text-transform: uppercase; color: #888; margin-bottom: 3mm; }
+  .tracking-no { font-family: "Courier New",monospace; font-size: 14pt; font-weight: 900;
+                 color: #1a1a2e; letter-spacing: 2px; }
+  .courier-name { font-size: 9pt; color: #555; margin-top: 1mm; }
+
+  /* ── 签收栏 ── */
+  .sign-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5mm; margin-bottom: 6mm; }
+  .sign-box { border: 0.5pt solid #ddd; border-radius: 2mm; padding: 4mm; min-height: 22mm; }
+  .sign-box h3 { font-size: 7pt; color: #aaa; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2mm; }
+  .sign-box .sign-line { border-bottom: 0.5pt solid #ccc; margin: 10mm 2mm 2mm; }
+  .sign-box .sign-hint { font-size: 6pt; color: #ccc; text-align: center; }
+
+  /* ── 页脚 ── */
+  .footer { border-top: 0.5pt solid #eee; padding-top: 3mm; display: flex;
+            justify-content: space-between; align-items: center; }
+  .footer-left { font-size: 6.5pt; color: #bbb; }
+  .footer-right { font-size: 6pt; color: #ccc; font-family: "Courier New",monospace; }
+
+  /* ── 打印优化 ── */
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .no-print { display: none; }
+  }
+  .print-btn { position: fixed; bottom: 20px; right: 20px; padding: 10px 20px;
+               background: #c0392b; color: white; border: none; border-radius: 6px;
+               font-size: 13px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+</style>
+</head>
+<body>
+
+<!-- 打印按钮（屏幕预览用） -->
+<button class="print-btn no-print" onclick="window.print()">打印 / 导出 PDF</button>
+
+<!-- ── 页眉 ── -->
+<div class="header">
+  <div class="brand">
+    <div class="brand-name">GAUSH | CLEAR</div>
+    <div class="brand-sub">高视星 · 镜片溯源系统</div>
+  </div>
+  <div class="doc-title">
+    <h1>随货通行单</h1>
+    <p>PACKING SLIP / DELIVERY NOTE</p>
+  </div>
+</div>
+
+<!-- ── 基本信息 ── -->
+<div class="meta">
+  <div class="meta-item">
+    <div class="meta-label">订单号 Order No.</div>
+    <div class="meta-value mono red">ORD-20260413-WQCO2V</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">顾客 Customer</div>
+    <div class="meta-value">王建华</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">代理商 Agent</div>
+    <div class="meta-value">测试代理商 <span style="font-size:7pt;color:#aaa">AG-002</span></div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">发货日期 Ship Date</div>
+    <div class="meta-value">2026/4/13</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">承诺交期 Promise Date</div>
+    <div class="meta-value">2026/4/16</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">镜片数量 Qty</div>
+    <div class="meta-value red">2 片</div>
+  </div>
+</div>
+
+<!-- ── 处方参数 ── -->
+<div class="rx-title">处方参数 Prescription</div>
+<table>
+  <thead>
+    <tr>
+      <th>眼别</th>
+      <th>SKU / 型号</th>
+      <th>SPH 球镜</th>
+      <th>CYL 柱镜</th>
+      <th>AXIS 轴位</th>
+      <th>PD 瞳距</th>
+      <th>PH 瞳高</th>
+      <th>镜片码 Lens Code</th>
+      <th>溯源</th>
+    </tr>
+  </thead>
+  <tbody>
+    
+    <tr>
+      <td class="eye eye-r">R<br><span>右眼</span></td>
+      <td class="sku">Ultra -1.00</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="lc"><span class="lc-code">480605A8612DD33C</span></td>
+      <td class="qr-cell"><img src="https://api.qrserver.com/v1/create-qr-code/?size=64x64&ecc=M&data=http%3A%2F%2F192.168.0.84%3A3210%2Fverify%2F480605A8612DD33C" alt="QR" width="52" height="52"></td>
+    </tr>
+
+    <tr>
+      <td class="eye eye-l">L<br><span>左眼</span></td>
+      <td class="sku">Ultra -1.00</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="rx">—</td>
+      <td class="lc"><span class="lc-code">D2D224BA9F9F915B</span></td>
+      <td class="qr-cell"><img src="https://api.qrserver.com/v1/create-qr-code/?size=64x64&ecc=M&data=http%3A%2F%2F192.168.0.84%3A3210%2Fverify%2FD2D224BA9F9F915B" alt="QR" width="52" height="52"></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ── 物流信息 ── -->
+<div class="logistics">
+  <div class="logistics-box">
+    <h3>物流信息 Shipping</h3>
+    <div class="tracking-no">SF866540274550</div>
+    <div class="courier-name">顺丰速运</div>
+  </div>
+  <div class="logistics-box" style="flex:2">
+    <h3>温馨提示 Notes</h3>
+    <p style="font-size:8pt;color:#555;line-height:1.8">
+      1. 请在签收前检查包装完好性，如有破损请拒收并联系代理商。<br>
+      2. 扫描各镜片上的二维码可查询溯源信息及真伪验证。<br>
+      3. 如有疑问请联系：<strong>测试代理商</strong>
+    </p>
+  </div>
+</div>
+
+<!-- ── 签收确认 ── -->
+<div class="sign-section">
+  <div class="sign-box">
+    <h3>发货方签章 Shipper</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">高视星 / GAUSH CLEAR</div>
+  </div>
+  <div class="sign-box">
+    <h3>代理商签章 Agent</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">测试代理商</div>
+  </div>
+  <div class="sign-box">
+    <h3>顾客签收 Customer Sign</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">签收日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;月&nbsp;&nbsp;日</div>
+  </div>
+</div>
+
+<!-- ── 页脚 ── -->
+<div class="footer">
+  <div class="footer-left">
+    高视星镜片溯源系统 GAUSH CLEAR Supply Chain v1.0 &nbsp;|&nbsp; 本单据随货附带，请妥善保存
+  </div>
+  <div class="footer-right">
+    打印时间 2026/4/13 15:45:39 &nbsp;|&nbsp; ORD-20260413-WQCO2V
+  </div>
+</div>
+
+</body>
+</html>
