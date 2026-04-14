@@ -642,42 +642,76 @@ async function buildLabelHtml(record, orderNo) {
 
   const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
   const eye = f["眼别"] || "";
+  const isRight = eye.includes("右");
+  const eyeColor = isRight ? "#c0392b" : "#1a6fb5";
+  const eyeLabel = isRight ? "R  右眼" : "L  左眼";
+  const eyeBg = isRight ? "#fff5f5" : "#f0f7ff";
   const sku = f["产品型号"] || "";
   const sph = f["球镜SPH"] ?? "";
   const cyl = f["柱镜CYL"] ?? "";
   const axis = f["轴位AXIS"] ?? "";
+  const agentName = f["代理商名称"] || "";
+  const agentId = f["代理商ID"] || "";
+
+  const fmt = (v) => {
+    if (v === "" || v === null || v === undefined) return "--";
+    const n = Number(v);
+    if (isNaN(n)) return String(v);
+    return (n >= 0 ? "+" : "") + n.toFixed(2);
+  };
+  const fmtAxis = (v) => (v === "" || v === null || v === undefined || Number(v) === 0) ? "--" : `${v}`;
 
   const qrDataUrl = await QRCode.toDataURL(
     `${getServerBaseUrl()}/verify/${lensCode}`,
-    { errorCorrectionLevel: "H", width: 200, margin: 2 }
+    { errorCorrectionLevel: "H", width: 180, margin: 1 }
   );
 
   const html = `<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8">
 <title>${orderNo} ${customer} ${eye}</title>
 <style>
-@page{size:6cm 3cm;margin:0}
+@page{size:80mm 50mm;margin:0}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:3mm;height:100%}
-.label{display:flex;gap:2mm;align-items:center;height:100%}
-.qr img{width:18mm;height:18mm;display:block}
-.info{flex:1;min-width:0}
-.order{font-size:6pt;color:#999;margin-bottom:1mm}
-.customer{font-weight:700;font-size:9pt;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rx{font-family:"SF Mono",Menlo,monospace;font-size:7pt;line-height:1.4;color:#333}
-.code{font-size:6pt;color:#888;margin-top:1mm;font-family:monospace;word-break:break-all}
-.brand{font-size:5pt;color:#bbb;text-align:right;margin-top:1mm}
-@media print{body{padding:2mm}}
+body{width:80mm;height:50mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:7pt;background:#fff;overflow:hidden}
+.label{width:80mm;height:50mm;display:flex;flex-direction:column;border:.3mm solid #ddd}
+.header{display:flex;align-items:center;justify-content:space-between;background:${eyeColor};color:#fff;padding:1mm 2.5mm;height:8mm;flex-shrink:0}
+.eye-badge{font-size:11pt;font-weight:900;letter-spacing:1px}
+.brand{font-size:7.5pt;font-weight:700;letter-spacing:1.5px;opacity:.92}
+.order-no{font-size:5.5pt;opacity:.85;font-family:monospace}
+.body{display:flex;flex:1;padding:1.5mm 2mm 1mm;gap:2mm;background:${eyeBg}}
+.info{flex:1;display:flex;flex-direction:column;gap:.5mm;min-width:0}
+.customer-row{display:flex;align-items:baseline;gap:1.5mm;border-bottom:.2mm solid ${eyeColor}44;padding-bottom:1mm;margin-bottom:.5mm}
+.customer-name{font-size:10pt;font-weight:800;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28mm}
+.sku-name{font-size:6.5pt;color:${eyeColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rx-grid{display:grid;grid-template-columns:auto auto auto;column-gap:2.5mm;row-gap:.3mm;margin:.5mm 0}
+.rx-label{font-size:5pt;color:#888;text-transform:uppercase;letter-spacing:.3px}
+.rx-value{font-size:9pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas",monospace;line-height:1.1}
+.rx-value.hl{color:${eyeColor}}
+.meta-row{display:flex;gap:2mm;margin-top:.5mm;flex-wrap:wrap}
+.meta-item{display:flex;align-items:center;gap:.8mm}
+.meta-label{font-size:5pt;color:#aaa}
+.meta-value{font-size:6pt;color:#444;font-weight:600}
+.qr-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1mm;flex-shrink:0}
+.qr-col img{width:18mm;height:18mm;display:block;border:.3mm solid #ddd;border-radius:1mm}
+.qr-label{font-size:4pt;color:#bbb;text-align:center}
+.footer{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-top:.2mm solid #e9ecef;padding:.8mm 2.5mm;height:6.5mm;flex-shrink:0}
+.lens-code{font-family:"Courier New",monospace;font-size:6pt;font-weight:700;color:#495057;letter-spacing:1px}
+.footer-meta{display:flex;flex-direction:column;align-items:flex-end}
+.agent-tag{font-size:4.5pt;color:#ccc;margin-top:.2mm}
+@media print{body{padding:0}}
 </style></head><body>
 <div class="label">
-<div class="qr"><img src="${qrDataUrl}"></div>
-<div class="info">
-<div class="order">${orderNo}</div>
-<div class="customer">${f["顾客姓名"]||""} ${eye}</div>
-<div class="rx">${sku} SPH ${sph} CYL ${cyl} ${axis ? "AXIS " + axis : ""}</div>
-<div class="code">${lensCode}</div>
-<div class="brand">GAUSH | CLEAR</div>
-</div></div></body></html>`;
+<div class="header"><div class="eye-badge">${eyeLabel}</div><div style="text-align:right"><div class="brand">GAUSH | CLEAR</div><div class="order-no">${orderNo}</div></div></div>
+<div class="body"><div class="info">
+<div class="customer-row"><div class="customer-name">${f["顾客姓名"]||""}</div><div class="sku-name">${sku}</div></div>
+<div class="rx-grid">
+<div class="rx-label">SPH</div><div class="rx-label">CYL</div><div class="rx-label">AXIS</div>
+<div class="rx-value hl">${fmt(sph)}</div><div class="rx-value hl">${fmt(cyl)}</div><div class="rx-value">${fmtAxis(axis)}</div>
+</div>
+<div class="meta-row"><div class="meta-item"><span class="meta-label">渠道</span><span class="meta-value">${agentId}</span></div></div>
+</div><div class="qr-col"><img src="${qrDataUrl}" alt="QR"><div class="qr-label">扫码验真</div></div></div>
+<div class="footer"><div class="lens-code">${lensCode}</div><div class="footer-meta"><div class="agent-tag">${agentName}</div></div></div>
+</div></body></html>`;
 
   return { name: `labels/${orderNo}_${customer}_${eye}.html`, data: Buffer.from(html, "utf-8") };
 }
@@ -689,42 +723,76 @@ async function buildLabelHtmlFromFields(f, orderNo) {
 
   const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
   const eye = f["眼别"] || "";
+  const isRight = eye.includes("右");
+  const eyeColor = isRight ? "#c0392b" : "#1a6fb5";
+  const eyeLabel = isRight ? "R  右眼" : "L  左眼";
+  const eyeBg = isRight ? "#fff5f5" : "#f0f7ff";
   const sku = f["产品型号"] || "";
   const sph = f["球镜SPH"] ?? "";
   const cyl = f["柱镜CYL"] ?? "";
   const axis = f["轴位AXIS"] ?? "";
+  const agentName = f["代理商名称"] || "";
+  const agentId = f["代理商ID"] || "";
+
+  const fmt = (v) => {
+    if (v === "" || v === null || v === undefined) return "--";
+    const n = Number(v);
+    if (isNaN(n)) return String(v);
+    return (n >= 0 ? "+" : "") + n.toFixed(2);
+  };
+  const fmtAxis = (v) => (v === "" || v === null || v === undefined || Number(v) === 0) ? "--" : `${v}`;
 
   const qrDataUrl = await QRCode.toDataURL(
     `${getServerBaseUrl()}/verify/${lensCode}`,
-    { errorCorrectionLevel: "H", width: 200, margin: 2 }
+    { errorCorrectionLevel: "H", width: 180, margin: 1 }
   );
 
   const html = `<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8">
 <title>${orderNo} ${customer} ${eye}</title>
 <style>
-@page{size:6cm 3cm;margin:0}
+@page{size:80mm 50mm;margin:0}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;padding:3mm;height:100%}
-.label{display:flex;gap:2mm;align-items:center;height:100%}
-.qr img{width:18mm;height:18mm;display:block}
-.info{flex:1;min-width:0}
-.order{font-size:6pt;color:#999;margin-bottom:1mm}
-.customer{font-weight:700;font-size:9pt;margin-bottom:1mm;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rx{font-family:"SF Mono",Menlo,monospace;font-size:7pt;line-height:1.4;color:#333}
-.code{font-size:6pt;color:#888;margin-top:1mm;font-family:monospace;word-break:break-all}
-.brand{font-size:5pt;color:#bbb;text-align:right;margin-top:1mm}
-@media print{body{padding:2mm}}
+body{width:80mm;height:50mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:7pt;background:#fff;overflow:hidden}
+.label{width:80mm;height:50mm;display:flex;flex-direction:column;border:.3mm solid #ddd}
+.header{display:flex;align-items:center;justify-content:space-between;background:${eyeColor};color:#fff;padding:1mm 2.5mm;height:8mm;flex-shrink:0}
+.eye-badge{font-size:11pt;font-weight:900;letter-spacing:1px}
+.brand{font-size:7.5pt;font-weight:700;letter-spacing:1.5px;opacity:.92}
+.order-no{font-size:5.5pt;opacity:.85;font-family:monospace}
+.body{display:flex;flex:1;padding:1.5mm 2mm 1mm;gap:2mm;background:${eyeBg}}
+.info{flex:1;display:flex;flex-direction:column;gap:.5mm;min-width:0}
+.customer-row{display:flex;align-items:baseline;gap:1.5mm;border-bottom:.2mm solid ${eyeColor}44;padding-bottom:1mm;margin-bottom:.5mm}
+.customer-name{font-size:10pt;font-weight:800;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28mm}
+.sku-name{font-size:6.5pt;color:${eyeColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rx-grid{display:grid;grid-template-columns:auto auto auto;column-gap:2.5mm;row-gap:.3mm;margin:.5mm 0}
+.rx-label{font-size:5pt;color:#888;text-transform:uppercase;letter-spacing:.3px}
+.rx-value{font-size:9pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas",monospace;line-height:1.1}
+.rx-value.hl{color:${eyeColor}}
+.meta-row{display:flex;gap:2mm;margin-top:.5mm;flex-wrap:wrap}
+.meta-item{display:flex;align-items:center;gap:.8mm}
+.meta-label{font-size:5pt;color:#aaa}
+.meta-value{font-size:6pt;color:#444;font-weight:600}
+.qr-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1mm;flex-shrink:0}
+.qr-col img{width:18mm;height:18mm;display:block;border:.3mm solid #ddd;border-radius:1mm}
+.qr-label{font-size:4pt;color:#bbb;text-align:center}
+.footer{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-top:.2mm solid #e9ecef;padding:.8mm 2.5mm;height:6.5mm;flex-shrink:0}
+.lens-code{font-family:"Courier New",monospace;font-size:6pt;font-weight:700;color:#495057;letter-spacing:1px}
+.footer-meta{display:flex;flex-direction:column;align-items:flex-end}
+.agent-tag{font-size:4.5pt;color:#ccc;margin-top:.2mm}
+@media print{body{padding:0}}
 </style></head><body>
 <div class="label">
-<div class="qr"><img src="${qrDataUrl}"></div>
-<div class="info">
-<div class="order">${orderNo}</div>
-<div class="customer">${f["顾客姓名"]||""} ${eye}</div>
-<div class="rx">${sku} SPH ${sph} CYL ${cyl} ${axis ? "AXIS " + axis : ""}</div>
-<div class="code">${lensCode}</div>
-<div class="brand">GAUSH | CLEAR</div>
-</div></div></body></html>`;
+<div class="header"><div class="eye-badge">${eyeLabel}</div><div style="text-align:right"><div class="brand">GAUSH | CLEAR</div><div class="order-no">${orderNo}</div></div></div>
+<div class="body"><div class="info">
+<div class="customer-row"><div class="customer-name">${f["顾客姓名"]||""}</div><div class="sku-name">${sku}</div></div>
+<div class="rx-grid">
+<div class="rx-label">SPH</div><div class="rx-label">CYL</div><div class="rx-label">AXIS</div>
+<div class="rx-value hl">${fmt(sph)}</div><div class="rx-value hl">${fmt(cyl)}</div><div class="rx-value">${fmtAxis(axis)}</div>
+</div>
+<div class="meta-row"><div class="meta-item"><span class="meta-label">渠道</span><span class="meta-value">${agentId}</span></div></div>
+</div><div class="qr-col"><img src="${qrDataUrl}" alt="QR"><div class="qr-label">扫码验真</div></div></div>
+<div class="footer"><div class="lens-code">${lensCode}</div><div class="footer-meta"><div class="agent-tag">${agentName}</div></div></div>
+</div></body></html>`;
 
   return { orderNo, customer, eye, lensCode, html };
 }
