@@ -1,5 +1,37 @@
 # Changelog
 
+## [2026-04-14] Sprint 14b：真实订单验证 + SKU 产品目录修复
+
+### 问题
+
+运城眼科医院真实订单（7顾客14片 Ultra双效）首次提交被拒："没有有效的订单数据"。
+
+根因：前端 `order.html` 硬编码 4 个 SKU（Ultra/时空之眼A/B/小旋风），与 Bitable SKU 表的 100 条真实数据完全脱节。前端从未调用 `GET /api/skus`。旧版 submit handler 有 SKU 精确匹配校验，真实产品名"Ultra双效"在硬编码列表中不存在，导致全部订单项被跳过。
+
+### 修复
+
+| 文件 | 改动 | 说明 |
+|------|------|------|
+| `server.js` | 新增 `getModelSkus()` | 过滤产品级 SKU（无空格 = 产品级，有空格 = 处方级） |
+| `server.js` | `/api/skus` 支持 `?models` | 前端调 `?models` 只返回 ~5 个产品级 SKU |
+| `server.js` | submit handler 恢复完整逻辑 | `getSkusWithInventory()` + `estimateDelivery()` + 库存扣减 + 交期字段 |
+| `server.js` | SKU 软校验 | 不匹配则 warn 日志，不拒绝订单 |
+| `order.html` | 动态 SKU 下拉框 | 删除硬编码，从 `/api/skus?models` 加载真实产品目录 |
+| `order.html` | 库存状态标识 | 下拉框显示 ✓有货 / 低库存 / 缺货 |
+
+### 验证结果
+
+```
+运城眼科医院（AG-028 深圳视力康）
+→ 7顾客 / 14片 Ultra双效
+→ 下单即生成14个镜片码 ✅
+→ SKU = "Ultra双效" 匹配 Bitable 产品目录 ✅
+→ 交期估算正常（标准，预计 2026/04/19）✅
+→ 订单主表 7条 + 镜片明细 14条 ✅
+```
+
+---
+
 ## [2026-04-14] Sprint 14：代理商管理迁入Bitable + 门户架构切换
 
 ### 架构决策

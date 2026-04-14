@@ -232,6 +232,12 @@ async function getSkusWithInventory() {
   return skus;
 }
 
+// ─── 产品级 SKU 过滤（无空格 = 产品级，有空格 = 处方级） ──────────────────────
+
+function getModelSkus(allSkus) {
+  return allSkus.filter(s => !s.sku.includes(" "));
+}
+
 // ─── Rule 1 交期逻辑（从 automations.js 移植） ─────────────────────────────
 
 function estimateDelivery(skuInfo, qty) {
@@ -796,8 +802,10 @@ const server = createServer(async (req, res) => {
     if (pathname === "/api/skus") {
       const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
-      const skus = await getSkusWithInventory();
-      jsonRes(res, 200, skus);
+      const allSkus = await getSkusWithInventory();
+      const modelsOnly = url.searchParams.has("models");
+      const result = modelsOnly ? getModelSkus(allSkus) : allSkus;
+      jsonRes(res, 200, result);
       return logReq(req, 200, start);
     }
 
@@ -857,6 +865,7 @@ const server = createServer(async (req, res) => {
       }
 
       const skus = await getSkusWithInventory();
+      const modelSkus = getModelSkus(skus);
       const customerId = await getOrCreateCustomer(agent.name);
       const orderNo = genOrderNo();
       const now = Date.now();
@@ -870,10 +879,13 @@ const server = createServer(async (req, res) => {
         if (!customerName?.trim() || !sku || !quantity || quantity <= 0) continue;
         if (!Array.isArray(eyes) || eyes.length === 0) continue;
 
+        // SKU 软校验：不在产品目录中则 warn，不拒绝
         const skuInfo = skus.find(s => s.sku === sku);
-        if (!skuInfo) continue;
+        if (!skuInfo) {
+          console.warn(`  ⚠️ SKU "${sku}" not in catalog, accepting anyway`);
+        }
 
-        const est = estimateDelivery(skuInfo, quantity);
+        const est = skuInfo ? estimateDelivery(skuInfo, quantity) : { deliveryType: "标准", promiseDate: now + 5 * 86400000 };
         const lensCount = eyes.length;
 
         // 写入订单主表（每笔患者 = 1 行）
@@ -920,7 +932,7 @@ const server = createServer(async (req, res) => {
         }
 
         // 有货时扣减库存
-        if (est.available && skuInfo.currentStock > 0) {
+        if (est.available && skuInfo && skuInfo.currentStock > 0) {
           const invRecords = await listRecords(TABLES.finished_inventory);
           const invRec = invRecords.find(r => r.fields["SKU"] === sku);
           if (invRec) {
@@ -932,7 +944,7 @@ const server = createServer(async (req, res) => {
 
         items.push({
           sku,
-          skuName: skuInfo.name,
+          skuName: skuInfo?.name || sku,
           quantity,
           customerName: customerName.trim(),
           deliveryType: est.deliveryType,

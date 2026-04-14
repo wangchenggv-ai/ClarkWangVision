@@ -136,12 +136,7 @@
 <script>
 const token = new URLSearchParams(location.search).get("t") || "";
 let agentInfo = null;
-const SKU_OPTIONS = [
-  { value: "Ultra", label: "Ultra" },
-  { value: "时空之眼A", label: "时空之眼A" },
-  { value: "时空之眼B", label: "时空之眼B" },
-  { value: "小旋风", label: "小旋风" },
-];
+let SKU_OPTIONS = []; // 从 API 动态加载
 let customerNames = [];
 let patientCount = 0;
 let estimateTimers = {};
@@ -164,6 +159,25 @@ async function init() {
   } catch {
     document.getElementById("agentName").textContent = "验证失败";
     showToast("链接无效或已过期", "error");
+    return;
+  }
+
+  // 加载产品目录
+  try {
+    const skuRes = await fetch(`/api/skus?models&t=${token}`);
+    if (skuRes.ok) {
+      SKU_OPTIONS = (await skuRes.json()).map(s => ({
+        value: s.sku,
+        label: s.name || s.sku,
+        status: s.statusLabel,
+      }));
+      const order = { "有货": 0, "低库存": 1, "缺货": 2, "定制": 3 };
+      SKU_OPTIONS.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+    }
+  } catch (e) { console.error("SKU加载失败:", e); }
+
+  if (SKU_OPTIONS.length === 0) {
+    showToast("产品列表加载失败，请刷新重试", "error");
     return;
   }
 
@@ -190,9 +204,10 @@ function renderCustomerDatalist() {
 }
 
 function renderSkuOptions() {
-  let html = '<option value="">请选择产品</option>';
+  let html = '<option value="">请选择产品型号</option>';
   for (const s of SKU_OPTIONS) {
-    html += `<option value="${s.value}">${s.label}</option>`;
+    const badge = s.status === '有货' ? ' ✓' : s.status === '定制' ? ' (定制)' : s.status === '低库存' ? ' (低库存)' : '';
+    html += `<option value="${s.value}">${s.label}${badge}</option>`;
   }
   return html;
 }
