@@ -59,6 +59,102 @@ function loadEnv() {
 
 const ENV = loadEnv();
 
+// ─── MiMo 大模型 ─────────────────────────────────────────────────────────────
+
+async function callMiMo(systemPrompt, userPrompt) {
+  const url = ENV.MIMO_API_URL + "/chat/completions";
+  const body = {
+    model: "mimo-v2-pro",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature: 0.3,
+    max_tokens: 4096,
+  };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + ENV.MIMO_API_KEY },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
+  return json.choices?.[0]?.message?.content || "";
+}
+
+async function handleExcelUpload(file) {
+  // 1. 解析 Excel
+  const buffer = Buffer.from(file.data, "base64");
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const sheetName = workbook.SheetNames[0];
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
+  if (rows.length < 2) return { patients: [], warnings: ["Excel 内容为空或无数据行"] };
+
+  // 2. 获取产品目录
+  const allSkus = await getSkusWithInventory();
+  const modelSkus = getModelSkus(allSkus);
+  const skuNames = modelSkus.map(s => s.sku).join("、");
+
+  // 3. 构建 prompt
+  const systemPrompt = `你是眼科镜片订单系统的AI助手。从Excel处方数据中提取每位患者的结构化信息。
+
+可选产品型号(SKU)：${skuNames}
+
+提取规则：
+- customerName: 患者姓名
+- sku: 产品型号（必须匹配上述SKU之一，找最接近的）
+- quantity: 镜片数量（默认1）
+- eyes: 数组，每只眼睛 { side(右眼/左眼), sph(球镜), cyl(柱镜), axis(轴位) }
+- assembly: 是否装配（默认true）
+- remark: 备注
+
+数值规范：
+- SPH（球镜）：范围 -20 到 +20，步长 0.25
+- CYL（柱镜）：范围 -6 到 0，步长 0.25
+- AXIS（轴位）：范围 0-180，整数
+- 如果某个值缺失或不确定，设为 0
+
+严格只返回 JSON 数组，不要任何其他文字、不要 markdown 代码块。`;
+
+  const userPrompt = `以下是从Excel文件"${file.name}"中提取的原始数据（前50行）：\n${JSON.stringify(rows.slice(0, 50))}`;
+
+  // 4. 调用 MiMo
+  const text = await callMiMo(systemPrompt, userPrompt);
+
+  // 5. 解析返回
+  let patients;
+  try {
+    // MiMo 可能返回 ```json ... ``` 包裹
+    const cleaned = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    patients = JSON.parse(cleaned);
+  } catch (e) {
+    return { patients: [], warnings: ["AI 解析失败: " + text.slice(0, 200)] };
+  }
+
+  if (!Array.isArray(patients)) return { patients: [], warnings: ["AI 返回格式异常"] };
+
+  // 6. 校验 + 归一化
+  const warnings = [];
+  const skuSet = new Set(modelSkus.map(s => s.sku));
+  for (const p of patients) {
+    if (!p.sku) p.sku = modelSkus[0]?.sku || "";
+    if (!skuSet.has(p.sku)) {
+      warnings.push(`SKU "${p.sku}" 未在产品目录中，已保留原值`);
+    }
+    if (!p.eyes || !Array.isArray(p.eyes)) p.eyes = [];
+    for (const eye of p.eyes) {
+      eye.sph = String(Math.round(Number(eye.sph || 0) * 4) / 4);
+      eye.cyl = String(Math.round(Number(eye.cyl || 0) * 4) / 4);
+      eye.axis = String(Math.min(180, Math.max(0, Math.round(Number(eye.axis || 0)))));
+    }
+    if (typeof p.assembly !== "boolean") p.assembly = true;
+    p.quantity = Number(p.quantity) || 1;
+    p.remark = p.remark || "";
+  }
+
+  return { patients, warnings };
+}
+
 // ─── 代理商管理 ──────────────────────────────────────────────────────────────
 
 let _agentsCache = null;
@@ -1548,6 +1644,28 @@ const server = createServer(async (req, res) => {
       }
 
       jsonRes(res, 200, { labels: allLabels, count: allLabels.length });
+      return logReq(req, 200, start);
+    }
+
+    // ── Excel 处方解析 ─────────────────────────────────────────────────────────
+    if (pathname === "/api/excel-parse" && req.method === "POST") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+
+      const contentLength = parseInt(req.headers["content-length"] || "0");
+      if (contentLength > 5 * 1024 * 1024) {
+        jsonRes(res, 413, { error: "文件过大，请限制在 5MB 以内" });
+        return logReq(req, 413, start);
+      }
+
+      const payload = await readBody(req);
+      if (!payload.file?.data) {
+        jsonRes(res, 400, { error: "请提供 Excel 文件" });
+        return logReq(req, 400, start);
+      }
+
+      const result = await handleExcelUpload(payload.file);
+      jsonRes(res, 200, result);
       return logReq(req, 200, start);
     }
 
