@@ -298,7 +298,7 @@ async function ship() {
 
   // 查找"生产中"且无快递单号的记录
   let filter = `CurrentValue.[订单状态]="生产中"`;
-  if (ORDER_NO) filter += `&&CurrentValue.[来源订单号]="${ORDER_NO}"`;
+  if (ORDER_NO) filter += `&&CurrentValue.[订单编号]="${ORDER_NO}"`;
 
   const records = await listRecords(filter);
   if (!records.length) { console.log("  没有待发货订单。"); return; }
@@ -308,7 +308,7 @@ async function ship() {
   for (const r of records) {
     const f = r.fields;
     const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
-    const no = rawVal(f["来源订单号"]);
+    const no = rawVal(f["订单编号"]);
     if (!no) continue;
     if (!orderMap[no]) orderMap[no] = { records: [], fields: f };
     orderMap[no].records.push(r);
@@ -423,7 +423,7 @@ async function shipBatch() {
   }
 
   const agentCount = Object.keys(agentMap).length;
-  const totalOrders = new Set(records.map(r => rawVal(r.fields["来源订单号"]))).size;
+  const totalOrders = new Set(records.map(r => rawVal(r.fields["订单编号"]))).size;
   console.log(`  待发货：${totalOrders} 单 / ${records.length} 片  →  合并为 ${agentCount} 个包裹\n`);
   console.log(`  ${"代理商".padEnd(16)}${"订单数".padEnd(8)}${"镜片数".padEnd(8)}${"快递"}`);
   console.log("  " + "─".repeat(52));
@@ -441,7 +441,7 @@ async function shipBatch() {
     // 按订单号聚合，统计每单信息
     const orderMap = {};
     for (const r of recs) {
-      const no = rawVal(r.fields["来源订单号"]);
+      const no = rawVal(r.fields["订单编号"]);
       if (!orderMap[no]) orderMap[no] = { records: [], fields: r.fields };
       orderMap[no].records.push(r);
     }
@@ -692,7 +692,7 @@ async function slipBatch() {
     // 按订单号聚合
     const orderMap = {};
     for (const r of group.records) {
-      const no = rawVal(r.fields["来源订单号"]);
+      const no = rawVal(r.fields["订单编号"]);
       if (!orderMap[no]) orderMap[no] = { orderNo: no, customerName: rawVal(r.fields["顾客姓名"]), rows: [] };
       orderMap[no].rows.push({
         eye:      rawVal(r.fields["眼别"]) || "—",
@@ -729,7 +729,7 @@ async function simulateDelivery() {
   if (!ORDER_NO) { console.error("  请指定 --order ORD-xxx"); process.exit(1); }
   console.log(`\n✅ 模拟消费者签收: ${ORDER_NO}\n`);
 
-  const records = await listRecords(`CurrentValue.[来源订单号]="${ORDER_NO}"`);
+  const records = await listRecords(`CurrentValue.[订单编号]="${ORDER_NO}"`);
   if (!records.length) { console.log("  未找到订单。"); return; }
 
   const now = Date.now();
@@ -770,7 +770,7 @@ async function showStatus() {
   const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
   const orderMap = {};
   for (const r of records) {
-    const no = rawVal(r.fields["来源订单号"]);
+    const no = rawVal(r.fields["订单编号"]);
     if (!orderMap[no]) orderMap[no] = r.fields;
   }
 
@@ -809,7 +809,7 @@ async function startWebhookServer() {
         if (!orderNo) { res.writeHead(400); res.end('{"error":"missing orderNo"}'); return; }
 
         console.log(`\n📬 收到签收回调: ${orderNo}`);
-        const records = await listRecords(`CurrentValue.[来源订单号]="${orderNo}"`);
+        const records = await listRecords(`CurrentValue.[订单编号]="${orderNo}"`);
         if (!records.length) { res.writeHead(404); res.end('{"error":"not found"}'); return; }
 
         const now = Date.now();
@@ -1089,7 +1089,7 @@ async function generateSlip() {
   if (!ORDER_NO) { console.error("  请指定 --order ORD-xxx"); process.exit(1); }
   console.log(`\n📄 生成随货通行单: ${ORDER_NO}\n`);
 
-  const records = await listRecords(`CurrentValue.[来源订单号]="${ORDER_NO}"`);
+  const records = await listRecords(`CurrentValue.[订单编号]="${ORDER_NO}"`);
   if (!records.length) { console.log("  未找到订单，请确认订单号。"); return; }
 
   const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");

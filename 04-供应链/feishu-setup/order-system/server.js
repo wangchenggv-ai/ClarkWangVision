@@ -961,13 +961,11 @@ const server = createServer(async (req, res) => {
         // 写入订单主表（每笔患者 = 1 行）
         orderRecords.push({
           fields: {
-            "来源订单号": orderNo,
             "产品型号": sku,
             "数量": quantity * lensCount,
             "订单状态": "待处理",
             "预计交期": est.promiseDate,
             "下单日期": now,
-            "同步时间": now,
             "顾客姓名": customerName.trim(),
             "代理商名称": agent.name,
             "代理商ID": agent.id,
@@ -1097,24 +1095,16 @@ const server = createServer(async (req, res) => {
       let orders = allRecords.map(r => {
         const f = r.fields;
         return {
-          orderNo: f["来源订单号"] || "",
+          orderNo: f["订单编号"] || "",
           sku: f["产品型号"] || "",
           skuDisplay: f["产品型号"] || "",
           quantity: Number(f["数量"]) || 1,
           status: f["订单状态"] || "",
           customerName: f["顾客姓名"] || "",
-          eye: f["眼别"] || "",
-          date: f["同步时间"] || f["下单日期"] || null,
+          date: f["下单日期"] || f["同步时间"] || null,
           promiseDate: f["预计交期"] || null,
           address: f["收货地址"] || "",
           remark: f["备注"] || "",
-          // 处方详情
-          sph: f["球镜SPH"],
-          cyl: f["柱镜CYL"],
-          axis: f["轴位AXIS"],
-          pd: f["瞳距"],
-          ph: f["瞳高"],
-          frame: f["镜框型号"] || "",
         };
       });
 
@@ -1161,7 +1151,7 @@ const server = createServer(async (req, res) => {
 
       const encoded = encodeURIComponent(`"${orderNo}"`);
       const data = await feishuApi("GET",
-        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encoded}`
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`
       );
 
       if (!data?.items?.length) {
@@ -1242,17 +1232,15 @@ const server = createServer(async (req, res) => {
       let rows = allRecords.map(r => {
         const f = r.fields;
         return {
-          orderNo: f["来源订单号"] || "",
+          orderNo: f["订单编号"] || "",
           customer: f["顾客姓名"] || "",
           sku: f["产品型号"] || "",
           qty: Number(f["数量"]) || 1,
-          eye: f["眼别"] || "",
-          sph: f["球镜SPH"] ?? "",
-          cyl: f["柱镜CYL"] ?? "",
-          axis: f["轴位AXIS"] ?? "",
-          pd: f["瞳距"] ?? "",
-          ph: f["瞳高"] ?? "",
-          frame: f["镜框型号"] || "",
+          agent: f["代理商名称"] || "",
+          terminalCustomer: f["终端客户"] || "",
+          contact: f["联系人"] || "",
+          phone: f["联系电话"] || "",
+          assembly: f["是否装配"] || "",
           status: f["订单状态"] || "",
           date: f["下单日期"] ? formatDate(f["下单日期"]) : "",
           address: f["收货地址"] || "",
@@ -1272,10 +1260,10 @@ const server = createServer(async (req, res) => {
 
       rows.sort((a, b) => a.orderNo.localeCompare(b.orderNo));
 
-      const headers = ["订单号","顾客","产品型号","数量","眼别","球镜SPH","柱镜CYL","轴位AXIS","瞳距","瞳高","镜框型号","状态","下单日期","收货地址","备注"];
+      const headers = ["订单号","顾客","终端客户","联系人","电话","产品型号","数量","是否装配","代理商","状态","下单日期","收货地址","备注"];
       const csvRows = [headers.join(",")];
       for (const r of rows) {
-        csvRows.push([r.orderNo, r.customer, r.sku, r.qty, r.eye, r.sph, r.cyl, r.axis, r.pd, r.ph, r.frame, r.status, r.date, r.address, r.remark].map(csvEscape).join(","));
+        csvRows.push([r.orderNo, r.customer, r.terminalCustomer, r.contact, r.phone, r.sku, r.qty, r.assembly, r.agent, r.status, r.date, r.address, r.remark].map(csvEscape).join(","));
       }
 
       const csv = "\uFEFF" + csvRows.join("\n");
@@ -1296,7 +1284,7 @@ const server = createServer(async (req, res) => {
       const orderNo = decodeURIComponent(lensCodesMatch[1]);
       const encodedLC = encodeURIComponent(`"${orderNo}"`);
       const dataLC = await feishuApi("GET",
-        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encodedLC}`
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encodedLC}`
       );
       if (!dataLC?.items?.length) { jsonRes(res, 200, { lensCodes: [] }); return logReq(req, 200, start); }
 
@@ -1320,7 +1308,7 @@ const server = createServer(async (req, res) => {
       // 查飞书订单
       const encoded2 = encodeURIComponent(`"${orderNo}"`);
       const data2 = await feishuApi("GET",
-        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encoded2}`
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded2}`
       );
       if (!data2?.items?.length) { jsonRes(res, 404, { error: "未找到该订单" }); return logReq(req, 404, start); }
 
@@ -1356,7 +1344,7 @@ const server = createServer(async (req, res) => {
       const orderNo = decodeURIComponent(qrMatch[1]);
       const encoded3 = encodeURIComponent(`"${orderNo}"`);
       const data3 = await feishuApi("GET",
-        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encoded3}`
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded3}`
       );
       if (!data3?.items?.length) { jsonRes(res, 404, { error: "未找到该订单" }); return logReq(req, 404, start); }
 
@@ -1379,7 +1367,7 @@ const server = createServer(async (req, res) => {
       const orderNo = decodeURIComponent(zipMatch[1]);
       const encoded4 = encodeURIComponent(`"${orderNo}"`);
       const data4 = await feishuApi("GET",
-        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encoded4}`
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded4}`
       );
       if (!data4?.items?.length) { jsonRes(res, 404, { error: "未找到该订单" }); return logReq(req, 404, start); }
 
@@ -1411,15 +1399,12 @@ const server = createServer(async (req, res) => {
       if (data5?.items?.length > 0) {
         found = true;
         const f = data5.items[0].fields;
-        // 同一来源订单号的所有记录
-        const srcOrderNo = f["来源订单号"] || "";
-        const encodedSrc = encodeURIComponent(`"${srcOrderNo}"`);
-        const allRecs = await feishuApi("GET",
-          `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[来源订单号]=${encodedSrc}`
-        );
-        const allItems = allRecs?.items || [];
-        const leftEye = allItems.find(r => r.fields["眼别"] === "左眼");
-        const rightEye = allItems.find(r => r.fields["眼别"] === "右眼");
+        const srcOrderNo = f["订单编号"] || "";
+
+        // 从镜片明细表获取处方数据
+        const lensDetails = await getLensDetailsByOrder(srcOrderNo);
+        const leftEye = lensDetails.find(r => r.fields["眼别"] === "左眼");
+        const rightEye = lensDetails.find(r => r.fields["眼别"] === "右眼");
 
         orderInfo = {
           orderNo: srcOrderNo,
@@ -1471,7 +1456,7 @@ const server = createServer(async (req, res) => {
       let orders = allRecords.map(r => {
         const f = r.fields;
         return {
-          orderNo: f["来源订单号"] || "",
+          orderNo: f["订单编号"] || "",
           customerName: f["顾客姓名"] || "",
           agentName: f["代理商名称"] || "",
           agentId: f["代理商ID"] || "",
