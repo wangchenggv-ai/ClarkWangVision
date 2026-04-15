@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 · 代理商登录</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --brand: #0066CC;
+  --brand-dark: #1B3A5C;
+  --gold: #E6B422;
+  --text: #2C3E50;
+  --text-muted: #7F8C8D;
+  --bg: #F5F7FA;
+  --border: #E0E6ED;
+  --font: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font-num: "Montserrat", "SF Pro Display", var(--font);
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: -1;
+  background: linear-gradient(135deg, var(--brand-dark), var(--brand));
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.06'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.login-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 44px 36px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  text-align: center;
+}
+
+.brand {
+  font-family: var(--font-num);
+  font-size: 18px;
+  letter-spacing: 4px;
+  margin-bottom: 8px;
+  color: var(--brand-dark);
+}
+.brand .gaush { font-weight: 700; }
+.brand .sep { margin: 0 6px; opacity: 0.4; }
+.brand .clear { font-weight: 400; }
+
+.eye-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 20px;
+  background: linear-gradient(135deg, var(--brand-dark), var(--brand));
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(0,102,204,0.3);
+}
+.eye-icon svg { width: 28px; height: 28px; stroke: #fff; }
+
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--brand-dark);
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+
+.input-group {
+  position: relative;
+  margin-bottom: 20px;
+}
+.input-group input {
+  width: 100%;
+  padding: 14px 16px 14px 44px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: #fff;
+  letter-spacing: 2px;
+  font-family: var(--font-num);
+}
+.input-group input::placeholder {
+  letter-spacing: 0;
+  font-family: var(--font);
+  color: #C0C8D4;
+}
+.input-group input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 4px rgba(0,102,204,0.1);
+}
+.input-group .icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+.input-group .icon svg { width: 20px; height: 20px; }
+
+.login-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--brand), #0052A3);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(0,102,204,0.3);
+}
+.login-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,102,204,0.4); }
+.login-btn:active { transform: scale(0.98); }
+.login-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.error-msg {
+  display: none;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #FDEDEC;
+  border: 1px solid #F5B7B1;
+  border-radius: 8px;
+  color: #922B21;
+  font-size: 13px;
+}
+.error-msg.show { display: block; }
+
+.divider {
+  width: 40px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand), var(--gold));
+  margin: 24px auto 16px;
+  border-radius: 1px;
+}
+
+.footer {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+  position: fixed;
+  bottom: 24px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.footer span { color: rgba(255,255,255,0.9); font-family: var(--font-num); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="hero"></div>
+
+<div class="login-card">
+  <div class="brand">
+    <span class="gaush">GAUSH</span>
+    <span class="sep">|</span>
+    <span class="clear">CLEAR</span>
+  </div>
+
+  <div class="eye-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/>
+    </svg>
+  </div>
+
+  <h1>代理商门户</h1>
+  <p class="subtitle">输入您的专属 Token 进入系统</p>
+
+  <form id="loginForm" onsubmit="return handleLogin(event)">
+    <div class="input-group">
+      <span class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+          <path d="M7 11V7a5 5 0 0110 0v4"/>
+        </svg>
+      </span>
+      <input type="text" id="tokenInput" placeholder="请输入 Token" autocomplete="off" autofocus>
+    </div>
+    <button type="submit" class="login-btn" id="loginBtn">进入系统</button>
+  </form>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;color:var(--text-muted)">忘记 Token？联系客服获取</p>
+</div>
+
+<div class="footer">
+  <span>GAUSH | CLEAR</span> · 高视高清代理商门户
+</div>
+
+<script>
+// 如果 URL 带 ?t=xxx，自动跳转到对应页面
+(function() {
+  const urlToken = new URLSearchParams(location.search).get("t");
+  if (urlToken) {
+    // 验证 token 后跳转到下单页
+    verifyAndRedirect(urlToken);
+  }
+})();
+
+async function verifyAndRedirect(token) {
+  try {
+    const res = await fetch(`/api/agent?t=${encodeURIComponent(token)}`);
+    if (res.ok) {
+      window.location.href = `/order?t=${encodeURIComponent(token)}`;
+    }
+  } catch {}
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const input = document.getElementById("tokenInput");
+  const btn = document.getElementById("loginBtn");
+  const err = document.getElementById("errorMsg");
+  const token = input.value.trim();
+
+  if (!token) {
+    input.classList.add("error");
+    showError("请输入 Token");
+    return false;
+  }
+
+  input.classList.remove("error");
+  err.classList.remove("show");
+  btn.disabled = true;
+  btn.textContent = "验证中...";
+
+  try {
+    const res = await fetch(`/api/agent?t=${encodeURIComponent(token)}`);
+    if (res.ok) {
+      const data = await res.json();
+      // 登录成功，跳转到下单页
+      window.location.href = `/order?t=${encodeURIComponent(token)}`;
+    } else {
+      showError("Token 无效，请检查后重试");
+      btn.disabled = false;
+      btn.textContent = "进入系统";
+    }
+  } catch {
+    showError("网络错误，请稍后重试");
+    btn.disabled = false;
+    btn.textContent = "进入系统";
+  }
+
+  return false;
+}
+
+function showError(msg) {
+  const err = document.getElementById("errorMsg");
+  err.textContent = msg;
+  err.classList.add("show");
+}
+
+// 回车提交
+document.getElementById("tokenInput").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") {
+    document.getElementById("loginForm").dispatchEvent(new Event("submit"));
+  }
+});
+</script>
+</body>
+</html>

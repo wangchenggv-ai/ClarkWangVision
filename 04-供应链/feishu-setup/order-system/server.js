@@ -1140,6 +1140,10 @@ const server = createServer(async (req, res) => {
 
   try {
     // ── 静态页面 ──
+    if (pathname === "/login" || pathname === "/login.html") {
+      serveStatic(res, resolve(__dirname, "public/login.html"));
+      return logReq(req, 200, start);
+    }
     if (pathname === "/" || pathname === "/order" || pathname === "/order.html") {
       serveStatic(res, resolve(__dirname, "public/order.html"));
       return logReq(req, 200, start);
