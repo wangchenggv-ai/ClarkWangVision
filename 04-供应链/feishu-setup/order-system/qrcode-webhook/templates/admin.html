@@ -3,7 +3,12 @@
 {% block content %}
 <div class="admin-panel">
   <div class="admin-header">
-    <h1>管理后台</h1>
+    <div>
+      <div class="v-brand" style="font-size:.9rem;margin-bottom:.25rem;">
+        <span class="v-brand-gaush">GAUSH</span><span class="v-brand-sep">|</span><span class="v-brand-clear">CLEAR</span>
+      </div>
+      <h1>镜片溯源管理后台</h1>
+    </div>
     <a href="{{ url_for('admin_logout') }}" class="btn btn-sm">退出登录</a>
   </div>
 

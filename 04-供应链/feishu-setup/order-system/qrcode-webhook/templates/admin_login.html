@@ -1,13 +1,18 @@
 {% extends "base.html" %}
 {% block title %}管理员登录{% endblock %}
 {% block content %}
-<div class="login-card">
-  <div class="login-logo">&#128065;</div>
-  <h1>管理员登录</h1>
-  <form method="post">
-    <input type="password" name="password" placeholder="请输入管理密码"
-           autocomplete="current-password" required>
-    <button type="submit" class="btn btn-primary btn-full">登录</button>
-  </form>
+<div class="login-wrapper">
+  <div class="login-card">
+    <div class="v-brand" style="font-size:1rem;margin-bottom:1.25rem;">
+      <span class="v-brand-gaush">GAUSH</span><span class="v-brand-sep">|</span><span class="v-brand-clear">CLEAR</span>
+    </div>
+    <div class="login-logo">&#128065;</div>
+    <h2>管理员登录</h2>
+    <form method="post">
+      <input type="password" name="password" placeholder="请输入管理密码"
+             autocomplete="current-password" required>
+      <button type="submit" class="btn btn-primary btn-full">登录</button>
+    </form>
+  </div>
 </div>
 {% endblock %}

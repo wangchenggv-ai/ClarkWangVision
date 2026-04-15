@@ -1,0 +1,9 @@
+services:
+  order-server:
+    build: .
+    ports:
+      - "3212:3210"
+    volumes:
+      - ../shared/.env:/shared/.env:ro
+      - ./public/qrcodes:/app/public/qrcodes
+    restart: unless-stopped

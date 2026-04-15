@@ -1,0 +1,478 @@
+/* GAUSH|CLEAR Brand — Deep navy + gradient accent */
+:root {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface2: #334155;
+  --border: #475569;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --accent: #6366f1;
+  --accent2: #818cf8;
+  --accent-glow: rgba(99,102,241,.25);
+  --green: #22c55e;
+  --red: #ef4444;
+  --orange: #f59e0b;
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* ─── Alert ─── */
+.alert {
+  padding: .75rem 1rem;
+  border-radius: var(--radius-sm);
+  margin-bottom: 1rem;
+  font-size: .9rem;
+  border-left: 4px solid;
+}
+.alert-success { background: rgba(34,197,94,.12); border-color: var(--green); color: var(--green); }
+.alert-error   { background: rgba(239,68,68,.12);  border-color: var(--red);   color: var(--red); }
+.alert-warning { background: rgba(245,158,11,.12); border-color: var(--orange); color: var(--orange); }
+.alert-info    { background: rgba(99,102,241,.12); border-color: var(--accent); color: var(--accent2); }
+
+/* ─── Admin Panel ─── */
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+.admin-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent2), #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ─── Workflow banner ─── */
+.workflow-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.workflow-step {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+.step-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.step-text {
+  font-size: .85rem;
+  color: var(--text2);
+  white-space: nowrap;
+}
+.workflow-arrow {
+  color: var(--border);
+  font-size: 1.1rem;
+}
+
+/* ─── Card ─── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.card h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: var(--text);
+}
+.hint {
+  font-size: .85rem;
+  color: var(--text2);
+  margin-bottom: 1rem;
+  line-height: 1.7;
+}
+.hint code {
+  background: var(--surface2);
+  padding: .15rem .4rem;
+  border-radius: 4px;
+  font-size: .8rem;
+  color: var(--accent2);
+}
+
+/* ─── Upload form ─── */
+.upload-form {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.upload-form input[type="file"] {
+  flex: 1;
+  padding: .6rem .8rem;
+  background: var(--surface2);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: .85rem;
+  cursor: pointer;
+}
+.upload-form input[type="file"]::file-selector-button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  padding: .4rem .8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .8rem;
+  margin-right: .75rem;
+}
+
+/* ─── Buttons ─── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .55rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: .85rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all .15s;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent2); }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.btn-primary:hover { background: var(--accent2); border-color: var(--accent2); }
+
+.btn-factory {
+  background: linear-gradient(135deg, var(--accent), #7c3aed);
+  border: none;
+  color: #fff;
+  font-weight: 600;
+  font-size: .95rem;
+  padding: .7rem 1.5rem;
+  border-radius: var(--radius);
+  width: 100%;
+  justify-content: center;
+  margin-top: .75rem;
+}
+.btn-factory:hover { opacity: .9; }
+
+.btn-sm { padding: .35rem .7rem; font-size: .78rem; }
+.btn-label { background: var(--green); border-color: var(--green); color: #fff; }
+
+/* ─── Factory card ─── */
+.factory-contents {
+  list-style: none;
+  margin-bottom: .5rem;
+}
+.factory-contents li {
+  font-size: .82rem;
+  color: var(--text2);
+  padding: .3rem 0;
+  padding-left: 1rem;
+  position: relative;
+}
+.factory-contents li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--green);
+  font-size: .75rem;
+}
+
+/* ─── Table ─── */
+.table-scroll {
+  overflow-x: auto;
+  margin-top: .5rem;
+}
+.order-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .85rem;
+}
+.order-table thead {
+  background: var(--surface2);
+}
+.order-table th {
+  padding: .65rem .75rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text2);
+  font-size: .78rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+.order-table td {
+  padding: .6rem .75rem;
+  border-bottom: 1px solid rgba(71,85,105,.3);
+  white-space: nowrap;
+}
+.order-table tbody tr:hover {
+  background: rgba(99,102,241,.06);
+}
+.rx-cell { font-family: "SF Mono", "Fira Code", monospace; font-size: .8rem; color: var(--text2); }
+.qr-code-cell { font-family: "SF Mono", "Fira Code", monospace; font-size: .78rem; color: var(--accent2); letter-spacing: .04em; }
+.actions { display: flex; gap: .4rem; }
+
+.empty-hint {
+  color: var(--text2);
+  font-size: .85rem;
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
+/* ─── Login page ─── */
+.login-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+}
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+}
+.login-card h2 {
+  margin-bottom: 1.5rem;
+  font-size: 1.3rem;
+}
+.login-card input[type="password"] {
+  width: 100%;
+  padding: .65rem .85rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: .9rem;
+  margin-bottom: 1rem;
+  outline: none;
+  transition: border-color .15s;
+}
+.login-card input[type="password"]:focus {
+  border-color: var(--accent);
+}
+.login-card .btn-primary { width: 100%; justify-content: center; }
+
+/* ─── Verify page ─── */
+.verify-card {
+  text-align: center;
+  padding: 2.5rem;
+}
+.verify-card img {
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+.verify-status {
+  display: inline-block;
+  padding: .3rem .9rem;
+  border-radius: 20px;
+  font-size: .85rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+.verify-status.valid   { background: rgba(34,197,94,.15); color: var(--green); }
+.verify-status.invalid { background: rgba(239,68,68,.15); color: var(--red); }
+.verify-detail {
+  font-size: .85rem;
+  color: var(--text2);
+  line-height: 2;
+}
+
+/* ─── Brand header ─── */
+.brand {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+.brand h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+.brand .brand-sub {
+  font-size: .8rem;
+  color: var(--text2);
+  margin-top: .25rem;
+}
+
+/* ─── Verify / Index page ─── */
+.v-page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+.v-hero {
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%);
+  border-radius: 20px;
+  padding: 2.5rem 1.5rem 2rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.v-hero-fail {
+  background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 40%, #7c3aed 100%);
+}
+.v-brand {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  margin-bottom: 1rem;
+}
+.v-brand-gaush { color: #fff; }
+.v-brand-sep { color: rgba(255,255,255,.4); margin: 0 .15em; }
+.v-brand-clear { color: #a5b4fc; }
+.v-shield { margin: 0 auto .75rem; }
+.v-status {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: .35rem;
+}
+.v-product-name {
+  font-size: .95rem;
+  color: rgba(255,255,255,.7);
+  margin-bottom: .25rem;
+}
+.v-status-sub {
+  font-size: .8rem;
+  color: rgba(255,255,255,.55);
+  line-height: 1.7;
+}
+.v-glow {
+  position: absolute;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(99,102,241,.35) 0%, transparent 70%);
+  top: -60px; right: -40px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.v-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-top: 1rem;
+}
+.v-card-title {
+  font-size: .9rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: .75rem;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+}
+.v-card-title-icon { display: flex; align-items: center; }
+.v-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: .5rem 0;
+  border-bottom: 1px solid rgba(71,85,105,.3);
+}
+.v-row:last-child { border-bottom: none; }
+.v-label { font-size: .82rem; color: var(--text2); }
+.v-val { font-size: .85rem; color: var(--text); }
+.v-val-bold { font-weight: 600; font-family: "SF Mono", "Fira Code", monospace; }
+.v-rx { margin-top: .25rem; }
+.v-rx-header, .v-rx-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: .5rem;
+  padding: .45rem 0;
+  font-size: .82rem;
+}
+.v-rx-header {
+  color: var(--text2);
+  font-weight: 600;
+  border-bottom: 1px solid rgba(71,85,105,.3);
+  font-size: .75rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.v-rx-row { border-bottom: 1px solid rgba(71,85,105,.15); }
+.v-rx-row:last-child { border-bottom: none; }
+.v-eye-tag {
+  font-size: .75rem;
+  font-weight: 600;
+  padding: .15rem .5rem;
+  border-radius: 4px;
+  display: inline-block;
+  width: fit-content;
+}
+.v-eye-L { background: rgba(99,102,241,.15); color: var(--accent2); }
+.v-eye-R { background: rgba(34,197,94,.15); color: var(--green); }
+.v-rx-num { font-family: "SF Mono", "Fira Code", monospace; color: var(--text); }
+.v-footer {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: .78rem;
+  color: var(--text2);
+  line-height: 2;
+}
+.v-footer-brand {
+  font-weight: 600;
+  letter-spacing: .08em;
+  color: var(--border);
+}
+.v-mono { font-family: "SF Mono", "Fira Code", monospace; color: var(--accent2); font-size: .75rem; }
+
+/* ─── Login page extra ─── */
+.login-logo {
+  font-size: 2.5rem;
+  margin-bottom: .75rem;
+}
+.btn-full { width: 100%; justify-content: center; }
+
+/* ─── Responsive ─── */
+@media (max-width: 640px) {
+  .container { padding: 1rem; }
+  .workflow-banner { flex-direction: column; gap: .5rem; }
+  .workflow-arrow { transform: rotate(90deg); }
+  .upload-form { flex-direction: column; }
+  .actions { flex-wrap: wrap; }
+}
