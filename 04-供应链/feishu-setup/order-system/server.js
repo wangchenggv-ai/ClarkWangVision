@@ -22,14 +22,13 @@ import { createServer } from "http";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve, dirname, extname } from "path";
 import { fileURLToPath } from "url";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import QRCode from "qrcode";
 import XLSX from "xlsx";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
 const BASE = "https://open.feishu.cn/open-apis";
-const APP_TOKEN = "B3xQbbqicaome1sKdZbcwdk8nWg";
 const QR_DIR = resolve(__dirname, "public", "qrcodes");
 
 // 表 ID（与 automations.js 一致）
@@ -45,19 +44,34 @@ const TABLES = {
 // ─── 配置 ──────────────────────────────────────────────────────────────────
 
 function loadEnv() {
-  const envPath = resolve(__dirname, "../shared/.env");
-  if (!existsSync(envPath)) return {};
+  // 依次尝试 shared/.env → ../.env（兼容不同部署目录）
+  const candidates = [
+    resolve(__dirname, "../shared/.env"),
+    resolve(__dirname, "../.env"),
+    resolve(__dirname, ".env"),
+  ];
   const env = {};
-  for (const line of readFileSync(envPath, "utf-8").split("\n")) {
-    const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    const [k, ...v] = t.split("=");
-    env[k.trim()] = v.join("=").trim();
+  for (const envPath of candidates) {
+    if (!existsSync(envPath)) continue;
+    for (const line of readFileSync(envPath, "utf-8").split("\n")) {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) continue;
+      const [k, ...v] = t.split("=");
+      const key = k.trim();
+      if (!(key in env)) env[key] = v.join("=").trim(); // 先找到的优先
+    }
   }
   return env;
 }
 
 const ENV = loadEnv();
+
+// 飞书多维表格 App Token（从环境变量读取，不硬编码在源码）
+const APP_TOKEN = ENV.FEISHU_APP_TOKEN || process.env.FEISHU_APP_TOKEN || "";
+if (!APP_TOKEN) {
+  console.error("❌ 缺少 FEISHU_APP_TOKEN，请在 .env 中配置");
+  process.exit(1);
+}
 
 // ─── MiMo 大模型 ─────────────────────────────────────────────────────────────
 
@@ -353,13 +367,13 @@ function estimateDelivery(skuInfo, qty) {
 
 function genOrderNo() {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const r = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const r = randomBytes(4).toString("hex").toUpperCase();
   return `ORD-${d}-${r}`;
 }
 
 function genCustomerId() {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const r = Math.random().toString(36).slice(2, 6).toUpperCase();
+  const r = randomBytes(2).toString("hex").toUpperCase();
   return `CUS-${d}-${r}`;
 }
 
@@ -562,18 +576,41 @@ function deliveredCard({ orderNo, customerName, sku, agentName, signedAt }) {
 
 // ─── 工具函数 ──────────────────────────────────────────────────────────────
 
+// 允许的跨域来源（从 .env 读取，支持逗号分隔多个）
+const ALLOWED_ORIGINS = (ENV.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean);
+
+function setCorsHeader(req, res) {
+  const origin = req.headers.origin || "";
+  if (ALLOWED_ORIGINS.length === 0 || ALLOWED_ORIGINS.includes(origin)) {
+    // 已配置来源 or 本地开发未配置时允许
+    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  }
+  // 未在白名单内的来源不设 CORS header，浏览器会拒绝
+}
+
 function jsonRes(res, status, data) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Origin": "*",
   });
   res.end(JSON.stringify(data));
 }
 
-function readBody(req) {
+// 默认请求体上限 1MB，Excel 上传端点单独校验 5MB
+const DEFAULT_BODY_LIMIT = 1 * 1024 * 1024;
+
+function readBody(req, limitBytes = DEFAULT_BODY_LIMIT) {
   return new Promise((resolve, reject) => {
+    let received = 0;
     const chunks = [];
-    req.on("data", chunk => chunks.push(chunk));
+    req.on("data", chunk => {
+      received += chunk.length;
+      if (received > limitBytes) {
+        req.destroy();
+        reject(new Error(`请求体过大（限制 ${Math.round(limitBytes / 1024)}KB）`));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => {
       try { resolve(JSON.parse(Buffer.concat(chunks).toString("utf8"))); }
       catch { reject(new Error("无效的 JSON")); }
@@ -581,9 +618,47 @@ function readBody(req) {
   });
 }
 
+// ─── Rate Limiting（基于 IP，内存滑动窗口）────────────────────────────────
+const _rateLimitMap = new Map(); // ip → { count, windowStart }
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 分钟
+const RATE_LIMIT_MAX = 60;              // 通用端点：60次/分钟
+
+// 验真端点专用：防止镜片码枚举
+const VERIFY_RATE_LIMIT_MAX = 20;       // 20次/分钟
+
+function checkRateLimit(ip, maxPerWindow = RATE_LIMIT_MAX) {
+  const now = Date.now();
+  const entry = _rateLimitMap.get(ip) || { count: 0, windowStart: now };
+  if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    // 新窗口
+    _rateLimitMap.set(ip, { count: 1, windowStart: now });
+    return true;
+  }
+  entry.count++;
+  _rateLimitMap.set(ip, entry);
+  return entry.count <= maxPerWindow;
+}
+
+// 定期清理过期条目（每 5 分钟）
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of _rateLimitMap) {
+    if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS * 2) _rateLimitMap.delete(ip);
+  }
+}, 5 * 60 * 1000);
+
 function formatDate(ts) {
   if (!ts) return "";
   return new Date(ts).toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+function escapeHtml(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function csvEscape(val) {
@@ -595,7 +670,14 @@ function isAdmin(req) {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const adminToken = url.searchParams.get("admin") || "";
   const envToken = ENV.ADMIN_TOKEN || "";
-  return envToken && adminToken === envToken;
+  if (!envToken || !adminToken) return false;
+  try {
+    const a = Buffer.from(adminToken.padEnd(64), "utf-8").slice(0, 64);
+    const b = Buffer.from(envToken.padEnd(64), "utf-8").slice(0, 64);
+    return timingSafeEqual(a, b) && adminToken === envToken;
+  } catch {
+    return false;
+  }
 }
 
 // ─── 镜片明细 CRUD ──────────────────────────────────────────────────────
@@ -1037,7 +1119,24 @@ const server = createServer(async (req, res) => {
   const pathname = url.pathname;
   const token = url.searchParams.get("t") || "";
 
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // CORS
+  setCorsHeader(req, res);
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.writeHead(204);
+    res.end();
+    return;
+  }
+
+  // Rate Limiting（全局）
+  const clientIp = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress || "unknown";
+  const verifyLimit = pathname.startsWith("/verify/") ? VERIFY_RATE_LIMIT_MAX : RATE_LIMIT_MAX;
+  if (!checkRateLimit(clientIp, verifyLimit)) {
+    res.writeHead(429, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ error: "请求过于频繁，请稍后再试" }));
+    return logReq(req, 429, start);
+  }
 
   try {
     // ── 静态页面 ──
@@ -1157,6 +1256,24 @@ const server = createServer(async (req, res) => {
 
       const skus = await getSkusWithInventory();
       const modelSkus = getModelSkus(skus);
+
+      // 预校验：收集所有患者错误，有任何错误则整体拒绝
+      const validationErrors = [];
+      for (let i = 0; i < patients.length; i++) {
+        const p = patients[i];
+        const label = `患者${i + 1}（${p.customerName || "未填姓名"}）`;
+        if (!p.customerName?.trim()) { validationErrors.push(`${label}：缺少顾客姓名`); continue; }
+        if (!p.sku) { validationErrors.push(`${label}：缺少产品型号`); continue; }
+        if (!p.quantity || p.quantity <= 0) { validationErrors.push(`${label}：数量必须大于 0`); continue; }
+        if (!Array.isArray(p.eyes) || p.eyes.length === 0) { validationErrors.push(`${label}：请至少填写一只眼的处方`); continue; }
+        const skuMatch = skus.find(s => s.sku === p.sku);
+        if (!skuMatch) { validationErrors.push(`${label}：产品型号 "${p.sku}" 不在产品目录中`); }
+      }
+      if (validationErrors.length > 0) {
+        jsonRes(res, 400, { error: "部分数据无效，请检查后重新提交", details: validationErrors });
+        return logReq(req, 400, start);
+      }
+
       const customerId = await getOrCreateCustomer(agent.name);
       const orderNo = genOrderNo();
       const now = Date.now();
@@ -1167,14 +1284,7 @@ const server = createServer(async (req, res) => {
 
       for (const p of patients) {
         const { customerName, sku, quantity, eyes, assembly, remark } = p;
-        if (!customerName?.trim() || !sku || !quantity || quantity <= 0) continue;
-        if (!Array.isArray(eyes) || eyes.length === 0) continue;
-
-        // SKU 软校验：不在产品目录中则 warn，不拒绝
         const skuInfo = skus.find(s => s.sku === sku);
-        if (!skuInfo) {
-          console.warn(`  ⚠️ SKU "${sku}" not in catalog, accepting anyway`);
-        }
 
         const est = skuInfo ? estimateDelivery(skuInfo, quantity) : { deliveryType: "标准", promiseDate: now + 5 * 86400000 };
         const lensCount = eyes.length;
@@ -1259,24 +1369,39 @@ const server = createServer(async (req, res) => {
         }
       }
 
-      // 镜片码+QR 异步生成（不阻塞下单返回）
-      assignLensCodes(orderNo).then(async codes => {
-        if (codes.length > 0) {
-          console.log(`  镜片码已生成: ${orderNo} → ${codes.join(", ")}`);
-          // 回写镜片码到订单主表
+      // 镜片码+QR 异步生成（不阻塞下单返回），带重试
+      (async () => {
+        const maxRetries = 3;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
-            const encoded = encodeURIComponent(`"${orderNo}"`);
-            const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
-            const recs = d?.items || [];
-            for (const rec of recs) {
-              await updateRecord(TABLES.order, rec.record_id, { "镜片码": codes.join(",") });
+            const codes = await assignLensCodes(orderNo);
+            if (codes.length > 0) {
+              console.log(`  镜片码已生成: ${orderNo} → ${codes.join(", ")}`);
+              // 回写镜片码到订单主表
+              const encoded = encodeURIComponent(`"${orderNo}"`);
+              const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+              const recs = d?.items || [];
+              for (const rec of recs) {
+                await updateRecord(TABLES.order, rec.record_id, { "镜片码": codes.join(",") });
+              }
+              console.log(`  镜片码已回写主表: ${orderNo}`);
             }
-            console.log(`  镜片码已回写主表: ${orderNo}`);
+            break; // 成功则退出重试
           } catch (e) {
-            console.error(`  镜片码回写主表失败: ${orderNo}`, e.message);
+            console.error(`  镜片码生成失败 (尝试 ${attempt}/${maxRetries}): ${orderNo}`, e.message);
+            if (attempt === maxRetries) {
+              // 全部重试失败：在订单主表标记错误状态
+              try {
+                const encoded = encodeURIComponent(`"${orderNo}"`);
+                const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+                for (const rec of d?.items || []) {
+                  await updateRecord(TABLES.order, rec.record_id, { "备注": `[系统] 镜片码生成失败，请人工处理` });
+                }
+              } catch { /* 标记失败不影响主流程 */ }
+            }
           }
         }
-      }).catch(e => console.error(`  镜片码生成失败: ${orderNo}`, e.message));
+      })();
 
       // 通知
       const summary = items.map(i => `${i.skuName}×${i.quantity}(${i.deliveryType})`).join("、");
@@ -1349,20 +1474,7 @@ const server = createServer(async (req, res) => {
       };
 
       // 筛选
-      if (filterStatus) orders = orders.filter(o => o.status === filterStatus);
-      if (filterSku) orders = orders.filter(o => o.sku === filterSku);
-      if (filterFrom) {
-        const fromTs = new Date(filterFrom).getTime();
-        if (!isNaN(fromTs)) orders = orders.filter(o => o.date && o.date >= fromTs);
-      }
-      if (filterTo) {
-        const toTs = new Date(filterTo + "T23:59:59").getTime();
-        if (!isNaN(toTs)) orders = orders.filter(o => o.date && o.date <= toTs);
-      }
-      if (filterSearch) {
-        const s = filterSearch.trim().toLowerCase();
-        orders = orders.filter(o => o.orderNo.toLowerCase() === s || (o.customerName || "").toLowerCase().includes(s));
-      }
+      orders = applyOrderFilters(orders, { filterStatus, filterSku, filterFrom, filterTo, filterSearch });
 
       // 排序（最新的在前）
       orders.sort((a, b) => (b.date || 0) - (a.date || 0));
@@ -1494,15 +1606,11 @@ const server = createServer(async (req, res) => {
         };
       });
 
-      if (filterStatus) rows = rows.filter(r => r.status === filterStatus);
-      if (filterSku) rows = rows.filter(r => r.sku === filterSku);
-      if (filterFrom) {
-        const fromTs = new Date(filterFrom).getTime();
-        if (!isNaN(fromTs)) rows = rows.filter(r => r.date >= filterFrom);
-      }
-      if (filterTo) {
-        rows = rows.filter(r => r.date <= filterTo);
-      }
+      // rows 中 date 已格式化为字符串，转换回时间戳以复用过滤函数
+      rows = rows.map(r => ({ ...r, date: r.date ? new Date(r.date).getTime() || null : null }));
+      rows = applyOrderFilters(rows, { filterStatus, filterSku, filterFrom, filterTo });
+      // 还原 date 为格式化字符串
+      rows = rows.map(r => ({ ...r, date: r.date ? formatDate(r.date) : "" }));
 
       rows.sort((a, b) => a.orderNo.localeCompare(b.orderNo));
 
@@ -1665,20 +1773,20 @@ const server = createServer(async (req, res) => {
         };
       }
 
-      // 读取 verify.html 模板并渲染
+      // 读取 verify.html 模板并渲染（所有动态值均做 HTML 转义防注入）
       let html = readFileSync(resolve(__dirname, "public/verify.html"), "utf-8");
       html = html.replace("{{FOUND}}", found ? "true" : "false");
       html = html.replace("{{HERO_CLASS}}", found ? "hero-ok" : "hero-fail");
-      html = html.replace("{{LENS_CODE}}", lensCode);
-      html = html.replace("{{ORDER_NO}}", orderInfo.orderNo || "");
-      html = html.replace("{{CUSTOMER_NAME}}", orderInfo.customerName || "");
-      html = html.replace("{{SKU}}", orderInfo.sku || "");
-      html = html.replace("{{DATE}}", orderInfo.date || "");
-      html = html.replace("{{LEFT_SPH}}", String(orderInfo.leftSph ?? "—"));
-      html = html.replace("{{LEFT_CYL}}", String(orderInfo.leftCyl ?? "—"));
-      html = html.replace("{{RIGHT_SPH}}", String(orderInfo.rightSph ?? "—"));
-      html = html.replace("{{RIGHT_CYL}}", String(orderInfo.rightCyl ?? "—"));
-      html = html.replace("{{NOW}}", new Date().toLocaleString("zh-CN"));
+      html = html.replace("{{LENS_CODE}}", escapeHtml(lensCode));
+      html = html.replace("{{ORDER_NO}}", escapeHtml(orderInfo.orderNo || ""));
+      html = html.replace("{{CUSTOMER_NAME}}", escapeHtml(orderInfo.customerName || ""));
+      html = html.replace("{{SKU}}", escapeHtml(orderInfo.sku || ""));
+      html = html.replace("{{DATE}}", escapeHtml(orderInfo.date || ""));
+      html = html.replace("{{LEFT_SPH}}", escapeHtml(String(orderInfo.leftSph ?? "—")));
+      html = html.replace("{{LEFT_CYL}}", escapeHtml(String(orderInfo.leftCyl ?? "—")));
+      html = html.replace("{{RIGHT_SPH}}", escapeHtml(String(orderInfo.rightSph ?? "—")));
+      html = html.replace("{{RIGHT_CYL}}", escapeHtml(String(orderInfo.rightCyl ?? "—")));
+      html = html.replace("{{NOW}}", escapeHtml(new Date().toLocaleString("zh-CN")));
 
       res.writeHead(found ? 200 : 404, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
@@ -1727,17 +1835,7 @@ const server = createServer(async (req, res) => {
       };
 
       // 筛选
-      if (filterStatus) orders = orders.filter(o => o.status === filterStatus);
-      if (filterAgent) orders = orders.filter(o => o.agentName === filterAgent);
-      if (filterQ) orders = orders.filter(o => o.orderNo.includes(filterQ) || o.customerName.includes(filterQ));
-      if (filterFrom) {
-        const fromTs = new Date(filterFrom).getTime();
-        if (!isNaN(fromTs)) orders = orders.filter(o => o.date && o.date >= fromTs);
-      }
-      if (filterTo) {
-        const toTs = new Date(filterTo + "T23:59:59").getTime();
-        if (!isNaN(toTs)) orders = orders.filter(o => o.date && o.date <= toTs);
-      }
+      orders = applyOrderFilters(orders, { filterStatus, filterAgent, filterFrom, filterTo, filterQ });
 
       orders.sort((a, b) => (b.date || 0) - (a.date || 0));
       const totalPages = Math.ceil(orders.length / pageSize) || 1;
@@ -1902,7 +2000,8 @@ const server = createServer(async (req, res) => {
       function genTrackingNoWeb(key) {
         const prefix = { sf: "SF", zt: "75", yd: "YD", jd: "JD" };
         const p = prefix[key] || "SF";
-        const digits = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10)).join("");
+        // 用 randomBytes 生成 6 字节（48bit），转为 12 位十进制数字
+        const digits = String(parseInt(randomBytes(6).toString("hex"), 16)).slice(0, 12).padStart(12, "0");
         return p + digits;
       }
       function autoSelectCourierWeb(agentId) {
@@ -2394,6 +2493,30 @@ const server = createServer(async (req, res) => {
     logReq(req, 500, start);
   }
 });
+
+// ─── 公共订单过滤函数（避免三处重复逻辑）────────────────────────────────────
+function applyOrderFilters(orders, { filterStatus, filterSku, filterFrom, filterTo, filterSearch, filterAgent, filterQ } = {}) {
+  if (filterStatus) orders = orders.filter(o => o.status === filterStatus);
+  if (filterSku) orders = orders.filter(o => o.sku === filterSku);
+  if (filterAgent) orders = orders.filter(o => o.agentName === filterAgent);
+  if (filterFrom) {
+    const fromTs = new Date(filterFrom).getTime();
+    if (!isNaN(fromTs)) orders = orders.filter(o => o.date && o.date >= fromTs);
+  }
+  if (filterTo) {
+    const toTs = new Date(filterTo + "T23:59:59").getTime();
+    if (!isNaN(toTs)) orders = orders.filter(o => o.date && o.date <= toTs);
+  }
+  const q = filterSearch || filterQ || "";
+  if (q) {
+    const s = q.trim().toLowerCase();
+    orders = orders.filter(o =>
+      o.orderNo.toLowerCase().includes(s) ||
+      (o.customerName || "").toLowerCase().includes(s)
+    );
+  }
+  return orders;
+}
 
 function logReq(req, status, start) {
   console.log(`  ${req.method} ${req.url} → ${status} (${Date.now() - start}ms)`);
