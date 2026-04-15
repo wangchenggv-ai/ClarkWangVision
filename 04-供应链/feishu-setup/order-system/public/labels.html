@@ -6,20 +6,41 @@
 <title>高视高清 · 订单管理中心</title>
 <link rel="stylesheet" href="/css/common.css">
 <style>
-body { background: #f5f6fa; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+body { background: var(--bg); margin: 0; font-family: var(--font); }
 
 /* Header */
 .admin-header {
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  background: linear-gradient(135deg, var(--brand-dark), var(--brand));
   color: #fff;
   padding: 16px 24px;
   display: flex;
   align-items: center;
   gap: 12px;
+  box-shadow: 0 4px 20px rgba(27,58,92,0.3);
+  position: relative;
 }
-.admin-header h1 { font-size: 18px; font-weight: 600; margin: 0; }
-.admin-header .badge { background: #e74c3c; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
-.admin-header .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.admin-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+.admin-header .brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  z-index: 1;
+}
+.admin-header .brand-logo .sep { opacity: 0.5; margin: 0 2px; }
+.admin-header .brand-logo .clear { font-weight: 400; opacity: 0.9; }
+.admin-header h1 { font-size: 18px; font-weight: 600; margin: 0; z-index: 1; }
+.admin-header .badge { background: var(--gold); color: var(--brand-dark); font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+.admin-header .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; z-index: 1; }
 .admin-header .clock { font-size: 12px; opacity: 0.7; }
 
 .admin-container { max-width: 1200px; margin: 0 auto; padding: 20px; }
@@ -32,21 +53,22 @@ body { background: #f5f6fa; margin: 0; font-family: -apple-system, BlinkMacSyste
 }
 .stat-card {
   background: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius);
   padding: 14px 20px;
   flex: 1;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-sm);
   border-left: 4px solid #d9d9d9;
   transition: all 0.2s;
   user-select: none;
   position: relative;
   overflow: hidden;
+  border: 1px solid rgba(0,102,204,0.04);
 }
-.stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-.stat-card.active { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: translateY(-2px); }
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+.stat-card.active { box-shadow: var(--shadow); transform: translateY(-2px); }
 .stat-card .icon { position: absolute; right: 12px; top: 10px; font-size: 22px; opacity: 0.15; }
-.stat-card .val { font-size: 24px; font-weight: 700; line-height: 1.2; }
+.stat-card .val { font-family: var(--font-num); font-size: 24px; font-weight: 700; line-height: 1.2; }
 .stat-card .lbl { font-size: 12px; color: #888; margin-top: 2px; }
 .stat-card .avg-days { font-size: 11px; color: #aaa; margin-top: 2px; }
 .stat-card[data-status="all"] { border-left-color: #595959; }
@@ -199,18 +221,19 @@ body { background: #f5f6fa; margin: 0; font-family: -apple-system, BlinkMacSyste
 /* ─── 表格 ─── */
 .admin-table {
   background: #fff;
-  border-radius: 10px;
+  border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(0,102,204,0.04);
 }
 .admin-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .admin-table th {
-  background: #fafafa;
+  background: var(--brand-light);
   padding: 10px 12px;
   text-align: left;
   font-weight: 600;
-  color: #666;
-  border-bottom: 2px solid #f0f0f0;
+  color: var(--brand-dark);
+  border-bottom: 2px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 1;
@@ -218,19 +241,19 @@ body { background: #f5f6fa; margin: 0; font-family: -apple-system, BlinkMacSyste
 }
 .admin-table td {
   padding: 10px 12px;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid #F0F4F8;
   vertical-align: middle;
 }
 .admin-table tr.data-row { border-left: 3px solid transparent; transition: background 0.15s; }
-.admin-table tr.data-row:nth-child(4n+1) { background: #fafbfc; }
-.admin-table tr.data-row:hover { background: #f0f5ff; }
-.admin-table tr.data-row[data-status="待处理"] { border-left-color: #d46b08; }
-.admin-table tr.data-row[data-status="生产中"] { border-left-color: #0958d9; }
-.admin-table tr.data-row[data-status="已发货"] { border-left-color: #389e0d; }
-.admin-table tr.data-row[data-status="已签收"] { border-left-color: #237804; }
-.admin-table tr.data-row[data-status="完成"] { border-left-color: #237804; }
-.admin-table tr.data-row.overdue { background: #fff5f5 !important; }
-.admin-table tr.data-row.overdue:hover { background: #ffe8e8 !important; }
+.admin-table tr.data-row:nth-child(4n+1) { background: #FAFBFC; }
+.admin-table tr.data-row:hover { background: #F0F7FF; }
+.admin-table tr.data-row[data-status="待处理"] { border-left-color: var(--gold); }
+.admin-table tr.data-row[data-status="生产中"] { border-left-color: var(--brand); }
+.admin-table tr.data-row[data-status="已发货"] { border-left-color: var(--success); }
+.admin-table tr.data-row[data-status="已签收"] { border-left-color: #00875A; }
+.admin-table tr.data-row[data-status="完成"] { border-left-color: #00875A; }
+.admin-table tr.data-row.overdue { background: var(--error-light) !important; }
+.admin-table tr.data-row.overdue:hover { background: #FADBD8 !important; }
 .admin-table input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
 
 /* 展开按钮 */

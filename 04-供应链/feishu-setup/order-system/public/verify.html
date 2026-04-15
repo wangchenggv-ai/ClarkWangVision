@@ -4,55 +4,186 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>高视高清 · 镜片真伪验证</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f8f9fc; color: #333; min-height: 100vh; }
 
-.hero { padding: 48px 20px 32px; text-align: center; }
-.hero-ok { background: linear-gradient(135deg, #e8f5e9, #c8e6c9); }
-.hero-fail { background: linear-gradient(135deg, #ffebee, #ffcdd2); }
+:root {
+  --brand: #0066CC;
+  --brand-dark: #1B3A5C;
+  --success: #00B894;
+  --error: #E74C3C;
+  --gold: #E6B422;
+  --text: #2C3E50;
+  --text-muted: #7F8C8D;
+  --bg: #F5F7FA;
+  --font: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-num: 'Montserrat', 'SF Pro Display', var(--font);
+  --font-mono: 'SF Mono', 'Menlo', monospace;
+}
 
-.brand { font-size: 14px; color: #666; letter-spacing: 3px; margin-bottom: 24px; }
-.brand span:first-child { font-weight: 700; color: #0066cc; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
 
-.shield { width: 56px; height: 56px; margin: 0 auto 16px; }
-.shield svg { width: 100%; height: 100%; }
+.hero {
+  padding: 56px 20px 40px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.06'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+.hero-ok {
+  background: linear-gradient(135deg, #00B894, #00CEC9);
+}
+.hero-fail {
+  background: linear-gradient(135deg, #E74C3C, #C0392B);
+}
 
-.hero-ok .shield svg { stroke: #2e7d32; }
-.hero-fail .shield svg { stroke: #c62828; }
+.brand {
+  font-family: var(--font-num);
+  font-size: 16px;
+  letter-spacing: 4px;
+  margin-bottom: 28px;
+  color: rgba(255,255,255,0.95);
+}
+.brand .gaush { font-weight: 700; }
+.brand .sep { margin: 0 6px; opacity: 0.5; }
+.brand .clear { font-weight: 400; }
 
-.status { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-.hero-ok .status { color: #2e7d32; }
-.hero-fail .status { color: #c62828; }
+.shield {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 20px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.shield svg { width: 36px; height: 36px; }
 
-.status-sub { font-size: 14px; color: #666; line-height: 1.6; }
+.hero-ok .shield svg { stroke: #fff; }
+.hero-fail .shield svg { stroke: #fff; }
 
-.card { background: #fff; border-radius: 12px; margin: 16px 20px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-.card-title { font-size: 15px; font-weight: 600; color: #0066cc; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
+.status {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
 
-.row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 14px; }
-.row .label { color: #999; }
-.row .value { font-weight: 500; color: #333; }
+.status-sub {
+  font-size: 14px;
+  color: rgba(255,255,255,0.85);
+  line-height: 1.6;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  margin: 16px 20px;
+  padding: 22px;
+  box-shadow: 0 4px 24px rgba(0,102,204,0.08);
+  border: 1px solid rgba(0,102,204,0.04);
+}
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand-dark);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #E0E6ED;
+  border-left: 3px solid var(--brand);
+  padding-left: 10px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  font-size: 14px;
+}
+.row .label { color: var(--text-muted); }
+.row .value { font-weight: 500; color: var(--text); font-family: var(--font-num); }
 
 .rx-table { width: 100%; font-size: 14px; border-collapse: collapse; }
-.rx-table th { text-align: left; color: #999; font-weight: 500; padding: 6px 0; }
-.rx-table td { padding: 8px 0; font-weight: 500; }
-.rx-table .eye-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-.eye-L { background: #e3f2fd; color: #0066cc; }
-.eye-R { background: #fce4ec; color: #c62828; }
-.rx-num { color: #2e7d32; font-weight: 600; }
+.rx-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 8px 0;
+  font-size: 13px;
+}
+.rx-table td { padding: 10px 0; font-weight: 500; }
+.rx-table .eye-tag {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.eye-L { background: #E8F2FF; color: var(--brand); }
+.eye-R { background: #FDEDEC; color: var(--error); }
+.rx-num {
+  font-family: var(--font-num);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+}
 
-.footer { text-align: center; padding: 24px 20px 32px; font-size: 12px; color: #999; line-height: 2; }
-.footer .mono { font-family: 'SF Mono', 'Menlo', monospace; color: #666; }
-.footer .brand-name { letter-spacing: 2px; color: #0066cc; font-weight: 600; }
+.footer {
+  text-align: center;
+  padding: 32px 20px 40px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 2.2;
+}
+.footer .mono {
+  font-family: var(--font-mono);
+  color: var(--text);
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+.footer .brand-name {
+  font-family: var(--font-num);
+  letter-spacing: 3px;
+  color: var(--brand);
+  font-weight: 600;
+  font-size: 13px;
+}
+.footer .divider {
+  width: 40px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand), var(--gold));
+  margin: 12px auto;
+  border-radius: 1px;
+}
 </style>
 </head>
 <body>
 
 <div class="hero {{HERO_CLASS}}">
-  <div class="brand"><span>GAUSH</span> <span style="color:#ccc">|</span> <span>CLEAR</span></div>
+  <div class="brand">
+    <span class="gaush">GAUSH</span>
+    <span class="sep">|</span>
+    <span class="clear">CLEAR</span>
+  </div>
   <div class="shield">
-    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       <polyline class="check" points="9 12 11 14 15 10"/>
       <line class="cross1" x1="15" y1="9" x2="9" y2="15"/>
@@ -92,6 +223,7 @@ body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 <div class="footer">
   <p>镜片码 <span class="mono">{{LENS_CODE}}</span></p>
   <p>验证时间 {{NOW}}</p>
+  <div class="divider"></div>
   <p class="brand-name">GAUSH | CLEAR &middot; 高视高清</p>
 </div>
 
@@ -107,13 +239,13 @@ if (found) {
   cross1.style.display = 'none';
   cross2.style.display = 'none';
   document.getElementById('statusText').textContent = '正品验证通过';
-  document.getElementById('statusSub').textContent = '该镜片已通过溯源系统认证';
+  document.getElementById('statusSub').textContent = '该镜片已通过高视高清溯源系统认证';
   document.getElementById('foundContent').style.display = '';
 } else {
   hero.classList.add('hero-fail');
   checkEl.style.display = 'none';
   document.getElementById('statusText').textContent = '未找到记录';
-  document.getElementById('statusSub').innerHTML = '此镜片码未在系统中登记<br>请联系销售商确认产品真伪';
+  document.getElementById('statusSub').innerHTML = '此镜片码未在系统中登记<br>请联系授权销售商确认产品真伪';
 }
 </script>
 </body>

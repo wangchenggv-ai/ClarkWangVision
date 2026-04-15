@@ -7,12 +7,12 @@
 <link rel="stylesheet" href="/css/common.css">
 <style>
 .patient-card {
-  border: 1px solid #e8e8e8;
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
   padding: 16px;
   margin-bottom: 14px;
-  background: #fafafa;
-  border-left: 3px solid #1677ff;
+  background: #FAFBFC;
+  border-left: 3px solid var(--brand);
   position: relative;
 }
 .patient-header {
@@ -21,12 +21,12 @@
   justify-content: space-between;
   margin-bottom: 14px;
 }
-.patient-no { font-size: 14px; font-weight: 600; color: #1677ff; }
+.patient-no { font-size: 14px; font-weight: 600; color: var(--brand); }
 
 .eye-block {
   background: #fff;
-  border: 1px solid #e0e7ff;
-  border-radius: 8px;
+  border: 1px solid #E0E6ED;
+  border-radius: 10px;
   padding: 12px;
   margin-bottom: 10px;
 }
@@ -40,7 +40,7 @@
 .eye-header label {
   font-size: 13px;
   font-weight: 600;
-  color: #4f46e5;
+  color: var(--brand-dark);
   margin: 0;
   cursor: pointer;
 }
@@ -48,41 +48,51 @@
 .eye-fields.disabled { opacity: 0.35; pointer-events: none; }
 
 .rx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.rx-field label { font-size: 11px; color: #888; margin-bottom: 3px; }
+.rx-field label { font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
 .rx-field input { padding: 8px; font-size: 14px; }
 
 .copy-eye-btn {
-  background: #f0f7ff; color: #1677ff; border: 1px dashed #91caff;
-  padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;
-  width: 100%; margin-top: 6px;
+  background: var(--brand-light); color: var(--brand); border: 1px dashed #B3D4FF;
+  padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+  width: 100%; margin-top: 6px; transition: all 0.2s;
 }
-.copy-eye-btn:hover { background: #d6e8ff; }
+.copy-eye-btn:hover { background: #CCE0FF; }
 
 .excel-upload-btn {
   display: inline-flex; align-items: center; gap: 6px;
-  background: #f0f7ff; color: #1677ff; border: 1px solid #91caff;
-  padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
-  font-weight: 500;
+  background: var(--brand-light); color: var(--brand); border: 1px solid #B3D4FF;
+  padding: 6px 14px; border-radius: 8px; font-size: 13px; cursor: pointer;
+  font-weight: 500; transition: all 0.2s;
 }
-.excel-upload-btn:hover { background: #d6e8ff; }
+.excel-upload-btn:hover { background: #CCE0FF; }
 .excel-upload-btn input { display: none; }
 
 .excel-preview-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
-.excel-preview-table th { background: #f5f5f5; padding: 8px 6px; text-align: left; font-weight: 600; border-bottom: 2px solid #e0e0e0; }
-.excel-preview-table td { padding: 8px 6px; border-bottom: 1px solid #f0f0f0; }
-.excel-preview-table tr:hover td { background: #f8faff; }
-.excel-warning { color: #d46b08; font-size: 12px; margin-top: 8px; padding: 8px; background: #fff7e6; border-radius: 6px; }
+.excel-preview-table th { background: var(--brand-light); color: var(--brand-dark); padding: 8px 6px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); }
+.excel-preview-table td { padding: 8px 6px; border-bottom: 1px solid #F0F4F8; }
+.excel-preview-table tr:hover td { background: #F0F7FF; }
+.excel-warning { color: #B8860B; font-size: 12px; margin-top: 8px; padding: 8px; background: #FFF8E1; border-radius: 8px; }
 
 .submit-bar {
   position: sticky; bottom: 0; background: #fff;
-  padding: 12px 16px; box-shadow: 0 -2px 8px rgba(0,0,0,0.08); z-index: 50;
+  padding: 12px 16px; box-shadow: 0 -4px 20px rgba(0,102,204,0.1); z-index: 50;
+  border-top: 1px solid var(--border);
 }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>高视高清 · 订单提交</h1>
+  <div class="brand-logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/>
+      <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/>
+    </svg>
+    <span class="gaush">GAUSH</span>
+    <span class="sep">|</span>
+    <span class="clear">CLEAR</span>
+  </div>
+  <h1>订单提交</h1>
   <div class="agent-name" id="agentName">加载中...</div>
 </div>
 
@@ -107,7 +117,7 @@
     <h2>订单提交成功</h2>
     <p>订单已进入处理流程，系统将自动分配交期。</p>
     <div class="success-detail" id="successDetail"></div>
-    <div id="successDelivery" style="margin-top:8px;font-size:14px;color:#1677ff;font-weight:500"></div>
+    <div id="successDelivery" style="margin-top:8px;font-size:14px;color:#0066CC;font-weight:500"></div>
     <div class="success-actions">
       <button class="btn btn-outline" onclick="resetForm()">再下一单</button>
       <a class="btn btn-primary" id="viewOrderBtn" href="#">查看订单</a>
@@ -512,10 +522,10 @@ function addPatient() {
     <div style="margin-top:4px;display:flex;align-items:center;gap:4px;font-size:13px">
       <span style="color:#666">装配：</span>
       <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #e0e0e0;border-radius:4px;background:#fff" id="assy-yes-${id}">
-        <input type="radio" name="assembly-${id}" value="yes" style="width:auto;margin:0;accent-color:#1677ff" onchange="toggleAssemblyStyle(${id})"> 是
+        <input type="radio" name="assembly-${id}" value="yes" style="width:auto;margin:0;accent-color:#0066CC" onchange="toggleAssemblyStyle(${id})"> 是
       </label>
-      <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #1677ff;border-radius:4px;background:#f0f7ff" id="assy-no-${id}">
-        <input type="radio" name="assembly-${id}" value="no" checked style="width:auto;margin:0;accent-color:#1677ff" onchange="toggleAssemblyStyle(${id})"> 否
+      <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #0066CC;border-radius:4px;background:#f0f7ff" id="assy-no-${id}">
+        <input type="radio" name="assembly-${id}" value="no" checked style="width:auto;margin:0;accent-color:#0066CC" onchange="toggleAssemblyStyle(${id})"> 否
       </label>
     </div>
     <div class="field" style="margin-top:8px">
@@ -532,8 +542,8 @@ function toggleAssemblyStyle(id) {
   const checked = document.querySelector(`input[name="assembly-${id}"]:checked`)?.value;
   const yesLabel = document.getElementById(`assy-yes-${id}`);
   const noLabel = document.getElementById(`assy-no-${id}`);
-  if (yesLabel) { yesLabel.style.borderColor = checked === 'yes' ? '#1677ff' : '#e0e0e0'; yesLabel.style.background = checked === 'yes' ? '#f0f7ff' : '#fff'; }
-  if (noLabel) { noLabel.style.borderColor = checked === 'no' ? '#1677ff' : '#e0e0e0'; noLabel.style.background = checked === 'no' ? '#f0f7ff' : '#fff'; }
+  if (yesLabel) { yesLabel.style.borderColor = checked === 'yes' ? '#0066CC' : '#e0e0e0'; yesLabel.style.background = checked === 'yes' ? '#f0f7ff' : '#fff'; }
+  if (noLabel) { noLabel.style.borderColor = checked === 'no' ? '#0066CC' : '#e0e0e0'; noLabel.style.background = checked === 'no' ? '#f0f7ff' : '#fff'; }
 }
 
 function removePatient(id) {
@@ -659,7 +669,7 @@ function showConfirm() {
     html += `<div style="background:#fff;border:1px solid #e8e8e8;border-radius:8px;padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <strong style="font-size:14px">${p.customerName}</strong>
-        <span style="font-size:12px;color:${p.assembly ? '#1677ff' : '#999'};background:${p.assembly ? '#f0f7ff' : '#f5f5f5'};padding:2px 8px;border-radius:3px">${p.assembly ? '装配' : '不装配'}</span>
+        <span style="font-size:12px;color:${p.assembly ? '#0066CC' : '#999'};background:${p.assembly ? '#f0f7ff' : '#f5f5f5'};padding:2px 8px;border-radius:3px">${p.assembly ? '装配' : '不装配'}</span>
       </div>
       <div style="font-size:13px;color:#888;margin-bottom:6px">${p.sku} × ${p.eyes.length}片</div>`;
     for (const eye of p.eyes) {
@@ -713,7 +723,7 @@ async function doSubmit() {
       let d = `<div style="text-align:left;margin-bottom:20px">
         <div style="background:#f0f5ff;border:1px solid #d6e4ff;border-radius:8px;padding:14px 16px;margin-bottom:16px">
           <div style="font-size:12px;color:#5b8def;margin-bottom:4px">订单编号</div>
-          <div style="font-size:18px;font-weight:700;color:#1677ff;font-family:monospace">${json.orderNo}</div>
+          <div style="font-size:18px;font-weight:700;color:#0066CC;font-family:monospace">${json.orderNo}</div>
         </div>`;
       let totalQty = 0;
       for (const item of json.items) {
@@ -824,7 +834,7 @@ function renderExcelPreview(patients, warnings) {
   let totalLenses = 0;
   patients.forEach(p => totalLenses += (p.eyes?.length || 0));
   let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <span style="font-size:14px;color:#666">共 <strong style="color:#1677ff">${patients.length}</strong> 位患者，<strong style="color:#1677ff">${totalLenses}</strong> 片镜片</span>
+    <span style="font-size:14px;color:#666">共 <strong style="color:#0066CC">${patients.length}</strong> 位患者，<strong style="color:#0066CC">${totalLenses}</strong> 片镜片</span>
   </div>`;
 
   for (const p of patients) {
