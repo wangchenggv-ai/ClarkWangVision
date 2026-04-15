@@ -1145,6 +1145,8 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
   <div class="admin-filter">
     <input type="text" id="filterQ" placeholder="订单号 / 顾客名">
     <select id="filterAgent"><option value="">全部代理商</option></select>
+    <select id="filterSku"><option value="">全部型号</option></select>
+    <select id="filterAssembly"><option value="">全部装配</option><option value="是">已装配</option><option value="否">未装配</option></select>
     <div class="date-quick-btns">
       <button class="date-btn" onclick="quickDate('today')">今日</button>
       <button class="date-btn" onclick="quickDate('yesterday')">昨日</button>
@@ -1188,10 +1190,11 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
           <th>代理商</th>
           <th>SKU</th>
           <th>数量</th>
+          <th>装配</th>
           <th>状态</th>
           <th>下单日期</th>
           <th>天数</th>
-          <th>镜片码</th>
+          <th>备注</th>
           <th style="width:70px">操作</th>
         </tr>
       </thead>
@@ -1287,6 +1290,10 @@ function showConfirmModal({ title, body, confirmText = "确定", cancelText = "�
 
 // ─── 工具函数 ───────────────────────────────────────────────────────
 
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function statusBadge(s) {
   const dotMap = { "待处理":"pending","生产中":"producing","已发货":"shipped","已签收":"received","完成":"done" };
   const clsMap = { "待处理":"badge-pending","生产中":"badge-producing","已发货":"badge-shipped","已签收":"badge-received","完成":"badge-done" };
@@ -1354,6 +1361,10 @@ async function loadOrders() {
 
   if (q) params.set("q", q);
   if (agent) params.set("agent", agent);
+  const sku = document.getElementById("filterSku")?.value;
+  const assembly = document.getElementById("filterAssembly")?.value;
+  if (sku) params.set("sku", sku);
+  if (assembly) params.set("assembly", assembly);
   if (from && activeQuickFilter === "all") params.set("from", from);
   if (to && activeQuickFilter === "all") params.set("to", to);
   params.set("page", currentPage);
@@ -1386,9 +1397,15 @@ async function loadOrders() {
 
   // 更新代理商下拉
   const agentSelect = document.getElementById("filterAgent");
-  const currentVal = agentSelect.value;
+  const currentAgent = agentSelect.value;
   const agents = data.agents || [];
-  agentSelect.innerHTML = '<option value="">全部代理商</option>' + agents.map(a => `<option value="${a}" ${a===currentVal?'selected':''}>${a}</option>`).join("");
+  agentSelect.innerHTML = '<option value="">全部代理商</option>' + agents.map(a => `<option value="${a}" ${a===currentAgent?'selected':''}>${a}</option>`).join("");
+
+  // 更新型号下拉
+  const skuSelect = document.getElementById("filterSku");
+  const currentSku = skuSelect.value;
+  const skus = [...new Set(allOrdersRaw.map(o => o.sku).filter(Boolean))].sort();
+  skuSelect.innerHTML = '<option value="">全部型号</option>' + skus.map(s => `<option value="${s}" ${s===currentSku?'selected':''}>${s}</option>`).join("");
 
   renderOrders();
   renderPagination(data.page, data.totalPages);
@@ -1483,12 +1500,11 @@ function renderOrders() {
       <td>${o.agentName}</td>
       <td>${o.sku}</td>
       <td>${o.quantity}</td>
+      <td>${o.assembly === '是' ? '<span class="badge badge-instock">是</span>' : o.assembly === '否' ? '<span class="badge badge-done">否</span>' : '-'}</td>
       <td>${statusBadge(o.status)}</td>
       <td>${fmtDate(o.date)}</td>
       <td>${daysBadge(o.status, o.date)}</td>
-      <td class="lens-code-cell">
-        ${o.lensCode ? `<span class="short">${o.lensCode.substring(0,16)}…</span><div class="full-tooltip">${o.lensCode}</div>` : '-'}
-      </td>
+      <td class="remark-cell" title="${escapeHtml(o.remark || '')}">${o.remark ? `<span style="display:inline-block;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(o.remark)}</span>` : '-'}</td>
       <td>${quickAction}</td>
     </tr>
     <tr class="detail-row" id="detail-${i}" style="display:none"><td colspan="12"><div class="detail-panel" id="detail-panel-${i}"></div></td></tr>
@@ -1613,6 +1629,8 @@ function changePage(delta) {
 function resetFilter() {
   document.getElementById("filterQ").value = "";
   document.getElementById("filterAgent").value = "";
+  if (document.getElementById("filterSku")) document.getElementById("filterSku").value = "";
+  if (document.getElementById("filterAssembly")) document.getElementById("filterAssembly").value = "";
   document.getElementById("filterFrom").value = "";
   document.getElementById("filterTo").value = "";
   activeStatusFilter = "all";

@@ -105,12 +105,6 @@ function statusBadge(status) {
   return `<span class="badge ${map[status] || 'badge-pending'}">${status || '未知'}</span>`;
 }
 
-function deliveryBadge(dt) {
-  if (!dt) return "";
-  const cls = dt.startsWith("有货") ? "badge-instock-delivery" : "badge-custom-delivery";
-  return `<span class="badge ${cls}">${dt}</span>`;
-}
-
 function formatDate(ts) {
   if (!ts) return "-";
   return new Date(ts).toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
@@ -240,24 +234,11 @@ function renderOrderList(orders) {
   let html = "";
   for (const [orderNo, items] of Object.entries(groups)) {
     const date = formatDate(items[0].date);
-    const promiseDate = items[0].promiseDate;
-    const isOverdue = promiseDate && new Date(promiseDate).getTime() < now &&
-      !["已签收"].includes(items[0].status);
 
-    // 交期标签
-    let promiseHtml = "";
-    if (promiseDate) {
-      const pd = new Date(promiseDate);
-      const month = pd.getMonth() + 1;
-      const day = pd.getDate();
-      const cls = isOverdue ? "overdue" : "on-time";
-      promiseHtml = `<span class="promise-date ${cls}">预计${month}月${day}日</span>`;
-    }
-
-    html += `<div class="order-group ${isOverdue ? 'overdue' : ''}" onclick="showDetail('${orderNo}')">
+    html += `<div class="order-group" onclick="showDetail('${orderNo}')">
       <div class="order-group-header">
         <span class="order-no">${orderNo}</span>
-        <span class="meta">${date} · ${items.length}片 ${promiseHtml}</span>
+        <span class="meta">${date} · ${items.length}片</span>
       </div>
       <div class="order-group-body">`;
 
@@ -268,7 +249,6 @@ function renderOrderList(orders) {
           <span class="sku-info">${item.sku} × ${item.quantity}</span>
         </div>
         <div class="right">
-          ${deliveryBadge(item.deliveryType)}
           ${statusBadge(item.status)}
         </div>
       </div>`;
@@ -317,26 +297,10 @@ async function showDetail(orderNo) {
 
     document.getElementById("detailTitle").textContent = `订单 ${data.orderNo}`;
 
-    // 获取镜片码
-    let lensCodes = [];
-    try {
-      const qrRes = await fetch(`/api/order/${encodeURIComponent(orderNo)}/lens-codes?t=${token}`);
-      if (qrRes.ok) {
-        const qrData = await qrRes.json();
-        lensCodes = qrData.lensCodes || [];
-      }
-    } catch {}
-
     let html = `<div style="margin-bottom:16px;font-size:14px">`;
     html += `<div style="margin-bottom:6px"><strong>下单时间：</strong>${formatDate(data.date)}</div>`;
     html += `<div style="margin-bottom:6px"><strong>收货地址：</strong>${data.address || '-'}</div>`;
     html += `<div style="margin-bottom:6px"><strong>订单状态：</strong>${statusBadge(data.status)}</div>`;
-    if (data.promiseDate) {
-      const pd = new Date(data.promiseDate);
-      const isOverdue = pd.getTime() < Date.now() && !["已签收"].includes(data.status);
-      html += `<div style="margin-bottom:6px"><strong>预计交期：</strong><span class="${isOverdue ? 'overdue' : ''}">${formatDate(data.promiseDate)}${isOverdue ? '（已超期）' : ''}</span></div>`;
-    }
-    if (data.remark) html += `<div style="margin-bottom:6px"><strong>备注：</strong>${data.remark}</div>`;
     html += `</div>`;
 
     // 物流信息
@@ -355,33 +319,27 @@ async function showDetail(orderNo) {
       <thead><tr>
         <th>顾客</th><th>SKU</th><th>眼别</th>
         <th>SPH</th><th>CYL</th><th>AXIS</th>
+        <th>备注</th>
       </tr></thead><tbody>`;
 
     for (const item of data.items) {
+      const eyeBadge = item.eye?.includes("右")
+        ? '<span style="background:#fff1f0;color:#cf1322;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">右</span>'
+        : item.eye?.includes("左")
+        ? '<span style="background:#e6f7ff;color:#096dd9;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">左</span>'
+        : item.eye || '-';
       html += `<tr>
         <td>${item.customerName || '-'}</td>
         <td>${item.sku}</td>
-        <td>${item.eye}</td>
+        <td>${eyeBadge}</td>
         <td>${item.sph ?? '-'}</td>
         <td>${item.cyl ?? '-'}</td>
         <td>${item.axis ?? '-'}</td>
+        <td>${item.remark || '-'}</td>
       </tr>`;
     }
 
     html += `</tbody></table>`;
-
-    // 镜片码展示（代理商只看码，不操作）
-    if (lensCodes.length > 0) {
-      html += `<div style="margin-top:12px;padding:12px;background:#f8f9fc;border-radius:8px">`;
-      html += `<div style="font-size:13px;color:#666;margin-bottom:8px">镜片码</div>`;
-      for (const lc of lensCodes) {
-        html += `<div style="display:inline-block;margin:4px;text-align:center">`;
-        html += `<img src="/qrcodes/${lc}.png" style="width:100px;height:100px;border:1px solid #e8eaef;border-radius:4px" onerror="this.style.display='none'">`;
-        html += `<div style="font-size:10px;color:#999;font-family:monospace;margin-top:2px">${lc}</div>`;
-        html += `</div>`;
-      }
-      html += `</div>`;
-    }
 
     content.innerHTML = html;
 

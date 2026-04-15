@@ -315,6 +315,8 @@ const HARDCODED_SKUS = [
   { sku: "D8", name: "D8", type: "备货品", currentStock: 100, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
   { sku: "时空之眼A", name: "时空之眼A", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
   { sku: "时空之眼B", name: "时空之眼B", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
+  { sku: "时空之眼PRO", name: "时空之眼PRO", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
+  { sku: "时空之眼MAX", name: "时空之眼MAX", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
   { sku: "小旋风", name: "小旋风", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
 ];
 
@@ -744,7 +746,7 @@ async function generateQRPng(lensCode) {
 }
 
 // 生成工厂 Excel 文件
-function buildFactoryExcel(records, orderNo) {
+function buildFactoryExcel(records, orderNo, orderRemark) {
   const rows = records.map(rec => {
     const f = rec.fields;
     return {
@@ -757,7 +759,9 @@ function buildFactoryExcel(records, orderNo) {
       "柱镜CYL": f["柱镜CYL"] ?? "",
       "轴位AXIS": f["轴位AXIS"] ?? "",
       "镜片码": f["镜片码"] || "",
+      "是否装配": f["是否装配"] || "",
       "收货地址": f["收货地址"] || "",
+      "备注": orderRemark || f["备注"] || "",
     };
   });
 
@@ -766,8 +770,7 @@ function buildFactoryExcel(records, orderNo) {
   ws["!cols"] = [
     { wch: 20 }, { wch: 10 }, { wch: 20 }, { wch: 6 },
     { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
-    { wch: 8 }, { wch: 8 }, { wch: 16 }, { wch: 18 },
-    { wch: 10 }, { wch: 30 },
+    { wch: 16 }, { wch: 8 }, { wch: 18 }, { wch: 30 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`);
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
@@ -1530,6 +1533,7 @@ const server = createServer(async (req, res) => {
           sku: f["产品型号"] || "",
           quantity: Number(f["数量"]) || 1,
           status: f["订单状态"] || "",
+          remark: f["备注"] || "",
         };
       });
 
@@ -1549,19 +1553,24 @@ const server = createServer(async (req, res) => {
         };
       });
 
-      // 如果有镜片明细，用镜片明细替换 items（含处方数据）
-      const displayItems = lenses.length > 0 ? lenses : items;
+      // 如果有镜片明细，用镜片明细替换 items（含处方数据），并合并备注
+      const remarkMap = {};
+      for (const it of items) {
+        if (it.customerName && it.remark) remarkMap[it.customerName] = it.remark;
+      }
+      const displayItems = lenses.length > 0 ? lenses.map(l => ({
+        ...l,
+        remark: remarkMap[l.customerName] || "",
+      })) : items;
 
       jsonRes(res, 200, {
         orderNo,
         date: firstItem.fields["下单日期"] || firstItem.fields["同步时间"],
         address: firstItem.fields["收货地址"] || "",
-        remark: firstItem.fields["备注"] || "",
         status: firstItem.fields["订单状态"] || "",
         courier: firstItem.fields["物流公司"] || "",
         trackingNo: firstItem.fields["快递单号"] || "",
         shipTime: firstItem.fields["发货时间"] || null,
-        promiseDate: firstItem.fields["预计交期"] || null,
         items: displayItems,
         lenses,
       });
@@ -1809,6 +1818,8 @@ const server = createServer(async (req, res) => {
 
       const filterStatus = url.searchParams.get("status") || "";
       const filterAgent = url.searchParams.get("agent") || "";
+      const filterSku = url.searchParams.get("sku") || "";
+      const filterAssembly = url.searchParams.get("assembly") || "";
       const filterQ = url.searchParams.get("q") || "";
       const filterFrom = url.searchParams.get("from") || "";
       const filterTo = url.searchParams.get("to") || "";
@@ -1829,6 +1840,8 @@ const server = createServer(async (req, res) => {
           status: f["订单状态"] || "",
           date: f["下单日期"] || f["同步时间"] || null,
           lensCode: f["镜片码"] || "",
+          assembly: f["是否装配"] || "",
+          remark: f["备注"] || "",
         };
       });
 
@@ -1843,7 +1856,8 @@ const server = createServer(async (req, res) => {
       };
 
       // 筛选
-      orders = applyOrderFilters(orders, { filterStatus, filterAgent, filterFrom, filterTo, filterQ });
+      orders = applyOrderFilters(orders, { filterStatus, filterAgent, filterSku, filterFrom, filterTo, filterQ });
+      if (filterAssembly) orders = orders.filter(o => o.assembly === filterAssembly);
 
       orders.sort((a, b) => (b.date || 0) - (a.date || 0));
       const totalPages = Math.ceil(orders.length / pageSize) || 1;
@@ -1917,9 +1931,16 @@ const server = createServer(async (req, res) => {
         const details = await getLensDetailsByOrder(orderNo);
         if (!details.length) continue;
 
+        // 获取订单主表备注
+        const orderEnc = encodeURIComponent(`"${orderNo}"`);
+        const orderData = await feishuApi("GET",
+          `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[订单编号]=${orderEnc}`
+        );
+        const orderRemark = orderData?.items?.[0]?.fields?.["备注"] || "";
+
         // 每个订单一个子目录
         const prefix = orderNos.length > 1 ? `${orderNo}/` : "";
-        const excelBuf = buildFactoryExcel(details, orderNo);
+        const excelBuf = buildFactoryExcel(details, orderNo, orderRemark);
         allFiles.push({ name: `${prefix}订单_${orderNo}.xlsx`, data: excelBuf });
 
         for (const rec of details) {

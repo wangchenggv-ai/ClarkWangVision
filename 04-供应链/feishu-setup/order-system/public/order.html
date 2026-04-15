@@ -29,6 +29,15 @@
   border-radius: 10px;
   padding: 12px;
   margin-bottom: 10px;
+  border-left: 3px solid var(--brand);
+}
+.eye-block.eye-right {
+  border-left-color: #cf1322;
+  background: linear-gradient(90deg, #fff1f0 0%, #fff 30%);
+}
+.eye-block.eye-left {
+  border-left-color: #096dd9;
+  background: linear-gradient(90deg, #e6f7ff 0%, #fff 30%);
 }
 .eye-header {
   display: flex;
@@ -117,7 +126,6 @@
     <h2>订单提交成功</h2>
     <p>订单已进入处理流程，系统将自动分配交期。</p>
     <div class="success-detail" id="successDetail"></div>
-    <div id="successDelivery" style="margin-top:8px;font-size:14px;color:#0066CC;font-weight:500"></div>
     <div class="success-actions">
       <button class="btn btn-outline" onclick="resetForm()">再下一单</button>
       <a class="btn btn-primary" id="viewOrderBtn" href="#">查看订单</a>
@@ -475,20 +483,19 @@ function addPatient() {
     </div>
     <div class="field">
       <label>产品型号 <span class="req">*</span></label>
-      <select id="sku-${id}" onchange="onSkuChange(${id})">${skuOptions}</select>
-      <div class="delivery-estimate-inline" id="delivery-${id}" style="display:none"></div>
+      <select id="sku-${id}">${skuOptions}</select>
       <div class="error-tip">请选择产品型号</div>
     </div>
     <div class="field">
       <label>数量 <span class="req">*</span></label>
-      <input type="number" id="qty-${id}" min="1" max="100" value="1" inputmode="numeric" onchange="onSkuChange(${id})">
+      <input type="number" id="qty-${id}" min="1" max="100" value="1" inputmode="numeric">
       <div class="error-tip">数量需在 1-100 之间</div>
     </div>
 
-    <div class="eye-block">
+    <div class="eye-block eye-right">
       <div class="eye-header">
         <input type="checkbox" id="eye-check-${id}-right" checked onchange="toggleEye(${id},'right')">
-        <label for="eye-check-${id}-right">右眼</label>
+        <label for="eye-check-${id}-right" style="color:#cf1322">右眼</label>
       </div>
       <div class="eye-fields" id="eye-fields-${id}-right">
         <div class="rx-grid">
@@ -502,10 +509,10 @@ function addPatient() {
       </div>
     </div>
 
-    <div class="eye-block">
+    <div class="eye-block eye-left">
       <div class="eye-header">
         <input type="checkbox" id="eye-check-${id}-left" checked onchange="toggleEye(${id},'left')">
-        <label for="eye-check-${id}-left">左眼</label>
+        <label for="eye-check-${id}-left" style="color:#096dd9">左眼</label>
       </div>
       <div class="eye-fields" id="eye-fields-${id}-left">
         <div class="rx-grid">
@@ -739,15 +746,6 @@ async function doSubmit() {
       d += `<div style="text-align:right;padding-top:10px;font-size:13px;color:#999">共 ${json.items.length} 项，${totalQty} 片</div></div>`;
       document.getElementById("successDetail").innerHTML = d;
 
-      // 显示预计交期
-      const deliveryEl = document.getElementById("successDelivery");
-      const firstDelivery = json.items?.find(i => i.deliveryType);
-      if (firstDelivery) {
-        deliveryEl.textContent = `预计 ${firstDelivery.promiseDateFormatted || ''} 交付（${firstDelivery.deliveryType}）`;
-      } else {
-        deliveryEl.textContent = "";
-      }
-
       document.getElementById("successPage").style.display = "block";
 
       // 清除草稿
@@ -911,9 +909,6 @@ function importToForm(mode) {
     toggleAssemblyStyle(id);
     const remarkEl = document.getElementById(`remark-${id}`);
     if (remarkEl && p.remark) remarkEl.value = p.remark;
-
-    // 交期预估
-    onSkuChange(id);
   }
 
   updateSummary();
