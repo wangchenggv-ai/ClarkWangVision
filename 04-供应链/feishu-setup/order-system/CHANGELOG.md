@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-04-15 — 修复二维码 localhost 问题
+
+- **根因**：`shared/.env` 缺少 `SERVER_BASE_URL`，QR 码生成 fallback 到 `http://localhost:3210`，手机扫码无法访问
+- **修复**：`.env` 添加 `SERVER_BASE_URL=https://villain-bacon-supervise.ngrok-free.dev`（ngrok 公网地址）
+- **注意**：ngrok 重启后地址会变，需同步更新 `.env`；已生成的 localhost 二维码需重新下单生成
+
+---
+
 ## 2026-04-15 — 安全加固 + UI 品牌化 + 验真修复 + Docker 部署
 
 ### 安全加固 (4caed49)
