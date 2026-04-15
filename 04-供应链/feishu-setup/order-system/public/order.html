@@ -360,7 +360,7 @@ async function init() {
     return;
   }
 
-  // 加载产品目录
+  // 加载产品目录（必须，阻塞）
   try {
     const skuRes = await fetch(`/api/skus?models&t=${token}`);
     if (skuRes.ok) {
@@ -379,30 +379,21 @@ async function init() {
     return;
   }
 
-  try {
-    const custRes = await fetch(`/api/customers?t=${token}`);
-    if (custRes.ok) {
-      const custData = await custRes.json();
-      customerNames = custData.customers || [];
-    }
-  } catch (e) { console.error("客户数据加载失败:", e); }
-
-  // 加载终端客户（含联系人/电话/地址）
-  try {
-    const tcRes = await fetch(`/api/terminal-customers?t=${token}`);
-    if (tcRes.ok) {
-      const tcData = await tcRes.json();
-      terminalCustomers = tcData.customers || [];
-    }
-  } catch (e) { console.error("终端客户数据加载失败:", e); }
-
-  renderCustomerDatalist();
-  renderTerminalCustomerDatalist();
-  renderAddressDatalist();
+  // 页面立即可交互
   addPatient();
-
-  // 检查草稿
   checkDraft();
+
+  // 客户数据后台并行加载，完成后更新 datalist
+  Promise.all([
+    fetch(`/api/customers?t=${token}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(`/api/terminal-customers?t=${token}`).then(r => r.ok ? r.json() : null).catch(() => null),
+  ]).then(([custData, tcData]) => {
+    if (custData) customerNames = custData.customers || [];
+    if (tcData) terminalCustomers = tcData.customers || [];
+    renderCustomerDatalist();
+    renderTerminalCustomerDatalist();
+    renderAddressDatalist();
+  }).catch(e => console.error("客户数据加载失败:", e));
 }
 
 function renderCustomerDatalist() {
@@ -648,7 +639,6 @@ function validate() {
   }
 
   // 处方校验
-  const patients = collectPatients();
   const rxWarnings = validatePrescription(patients);
   if (rxWarnings.length > 0) {
     showToast(rxWarnings[0], "info");
