@@ -1668,6 +1668,7 @@ const server = createServer(async (req, res) => {
       // 读取 verify.html 模板并渲染
       let html = readFileSync(resolve(__dirname, "public/verify.html"), "utf-8");
       html = html.replace("{{FOUND}}", found ? "true" : "false");
+      html = html.replace("{{HERO_CLASS}}", found ? "hero-ok" : "hero-fail");
       html = html.replace("{{LENS_CODE}}", lensCode);
       html = html.replace("{{ORDER_NO}}", orderInfo.orderNo || "");
       html = html.replace("{{CUSTOMER_NAME}}", orderInfo.customerName || "");
