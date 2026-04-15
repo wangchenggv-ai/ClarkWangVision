@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 · 管理后台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --brand: #0066CC;
+  --brand-dark: #1B3A5C;
+  --gold: #E6B422;
+  --text: #2C3E50;
+  --text-muted: #7F8C8D;
+  --bg: #F5F7FA;
+  --border: #E0E6ED;
+  --font: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font-num: "Montserrat", "SF Pro Display", var(--font);
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: -1;
+  background: linear-gradient(135deg, #0a1628, var(--brand-dark), #0d2137);
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+
+.login-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 44px 36px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  text-align: center;
+}
+
+.brand {
+  font-family: var(--font-num);
+  font-size: 18px;
+  letter-spacing: 4px;
+  margin-bottom: 8px;
+  color: var(--brand-dark);
+}
+.brand .gaush { font-weight: 700; }
+.brand .sep { margin: 0 6px; opacity: 0.4; }
+.brand .clear { font-weight: 400; }
+
+.shield-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 20px;
+  background: linear-gradient(135deg, #0a1628, var(--brand-dark));
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(27,58,92,0.4);
+}
+.shield-icon svg { width: 28px; height: 28px; stroke: #fff; }
+
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--brand-dark);
+  margin-bottom: 6px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+  line-height: 1.5;
+}
+
+.input-group {
+  position: relative;
+  margin-bottom: 20px;
+}
+.input-group input {
+  width: 100%;
+  padding: 14px 16px 14px 44px;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: #fff;
+}
+.input-group input::placeholder {
+  color: #C0C8D4;
+}
+.input-group input:focus {
+  border-color: var(--brand-dark);
+  box-shadow: 0 0 0 4px rgba(27,58,92,0.1);
+}
+.input-group .icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+.input-group .icon svg { width: 20px; height: 20px; }
+
+.login-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--brand-dark), #0d2137);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(27,58,92,0.3);
+}
+.login-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(27,58,92,0.4); }
+.login-btn:active { transform: scale(0.98); }
+.login-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.error-msg {
+  display: none;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #FDEDEC;
+  border: 1px solid #F5B7B1;
+  border-radius: 8px;
+  color: #922B21;
+  font-size: 13px;
+}
+.error-msg.show { display: block; }
+
+.divider {
+  width: 40px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--brand-dark), var(--gold));
+  margin: 24px auto 16px;
+  border-radius: 1px;
+}
+
+.footer {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+  position: fixed;
+  bottom: 24px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.footer span { color: rgba(255,255,255,0.8); font-family: var(--font-num); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="hero"></div>
+
+<div class="login-card">
+  <div class="brand">
+    <span class="gaush">GAUSH</span>
+    <span class="sep">|</span>
+    <span class="clear">CLEAR</span>
+  </div>
+
+  <div class="shield-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <path d="M9 12l2 2 4-4"/>
+    </svg>
+  </div>
+
+  <h1>管理后台</h1>
+  <p class="subtitle">输入管理员 Token 进入系统</p>
+
+  <form id="loginForm" onsubmit="return handleLogin(event)">
+    <div class="input-group">
+      <span class="icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </span>
+      <input type="password" id="tokenInput" placeholder="请输入管理员 Token" autocomplete="off" autofocus>
+    </div>
+    <button type="submit" class="login-btn" id="loginBtn">进入后台</button>
+  </form>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <div class="divider"></div>
+  <p style="font-size:12px;color:var(--text-muted)">仅限授权管理员访问</p>
+</div>
+
+<div class="footer">
+  <span>GAUSH | CLEAR</span> · 内部运营系统
+</div>
+
+<script>
+// 如果 URL 带 ?admin=xxx，自动验证跳转
+(function() {
+  const urlAdmin = new URLSearchParams(location.search).get("admin");
+  if (urlAdmin) {
+    verifyAndRedirect(urlAdmin);
+  }
+})();
+
+async function verifyAndRedirect(admin) {
+  try {
+    const res = await fetch(`/api/admin/orders?admin=${encodeURIComponent(admin)}&pageSize=1`);
+    if (res.ok) {
+      window.location.href = `/labels?admin=${encodeURIComponent(admin)}`;
+    }
+  } catch {}
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const input = document.getElementById("tokenInput");
+  const btn = document.getElementById("loginBtn");
+  const err = document.getElementById("errorMsg");
+  const admin = input.value.trim();
+
+  if (!admin) {
+    input.classList.add("error");
+    showError("请输入 Token");
+    return false;
+  }
+
+  input.classList.remove("error");
+  err.classList.remove("show");
+  btn.disabled = true;
+  btn.textContent = "验证中...";
+
+  try {
+    const res = await fetch(`/api/admin/orders?admin=${encodeURIComponent(admin)}&pageSize=1`);
+    if (res.ok) {
+      window.location.href = `/labels?admin=${encodeURIComponent(admin)}`;
+    } else {
+      showError("Token 无效，请检查后重试");
+      btn.disabled = false;
+      btn.textContent = "进入后台";
+    }
+  } catch {
+    showError("网络错误，请稍后重试");
+    btn.disabled = false;
+    btn.textContent = "进入后台";
+  }
+
+  return false;
+}
+
+function showError(msg) {
+  const err = document.getElementById("errorMsg");
+  err.textContent = msg;
+  err.classList.add("show");
+}
+
+document.getElementById("tokenInput").addEventListener("keydown", function(e) {
+  if (e.key === "Enter") {
+    document.getElementById("loginForm").dispatchEvent(new Event("submit"));
+  }
+});
+</script>
+</body>
+</html>

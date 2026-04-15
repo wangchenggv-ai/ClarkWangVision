@@ -1144,6 +1144,10 @@ const server = createServer(async (req, res) => {
       serveStatic(res, resolve(__dirname, "public/login.html"));
       return logReq(req, 200, start);
     }
+    if (pathname === "/admin" || pathname === "/admin-login" || pathname === "/admin-login.html") {
+      serveStatic(res, resolve(__dirname, "public/admin-login.html"));
+      return logReq(req, 200, start);
+    }
     if (pathname === "/" || pathname === "/order" || pathname === "/order.html") {
       serveStatic(res, resolve(__dirname, "public/order.html"));
       return logReq(req, 200, start);
