@@ -1,5 +1,46 @@
 # CHANGELOG
 
+## 2026-04-15 — 安全加固 + UI 品牌化 + 验真修复 + Docker 部署
+
+### 安全加固 (4caed49)
+- **APP_TOKEN 环境变量化**：敏感配置移入 `.env`，不再硬编码
+- **loadEnv 多路径查找**：支持 `shared/.env`、项目根目录、上级目录
+- **timingSafeEqual**：管理员认证改用恒定时间比较，防时序攻击
+- **crypto.randomBytes**：订单号、镜片码等 ID 改用密码学安全随机数
+- **输入校验**：手机号、度数、轴位等参数范围验证
+- **CORS 白名单**：仅允许已知域名跨域访问
+- **请求限流**：API 添加速率限制，防暴力请求
+- **请求体大小限制**：限制 POST body 防内存攻击
+- **escapeHtml**：XSS 防护，HTML 输出转义
+- **applyOrderFilters 重构**：订单查询过滤逻辑提取为独立函数
+
+### UI 品牌化改造 (995c642)
+- **统一设计系统**：CSS 变量体系（`--brand: #0066CC`、`--brand-dark: #1B3A5C`、`--gold: #E6B422`）
+- **字体规范**：Montserrat 数字、SF Mono 等宽、PingFang SC 正文
+- **4 个页面全部改造**：
+  - `order.html` — 代理商下单页，品牌 header + 金色 CTA
+  - `track.html` — 订单追踪页，品牌 header + 统一 badge
+  - `labels.html` — 管理后台，品牌渐变 header + SVG 网格纹理 + 金色运营标签
+  - `verify.html` — 消费者验真页，全品牌化重写（盾牌图标 + 磨砂玻璃 + 蓝金分割线）
+- **common.css 全面重写**：361 行变更，卡片 16px 圆角、统一阴影、按钮系统、badge 色板
+
+### 验真修复 (ccbcdf0 + 222d2c0)
+- **验真接口改查镜片明细表**：从查订单表改为查 `lens_detail` 表，修复验真 404
+- **HERO_CLASS 模板变量**：补充 `{{HERO_CLASS}}` 替换，验真页正确显示绿色/红色主题
+
+### Docker 部署 (ac4424d)
+- **Dockerfile + docker-compose.yml**：一键部署，端口 3212:3210
+- **volumes**：`.env` 和 `qrcodes` 持久化
+
+### E2E 测试 (4cb3dde)
+- **e2e_full_sim.mjs**：完整端到端测试脚本（下单→确认→发货→签收→验真）
+- **QR 码批量生成**：100+ 个镜片 QR PNG 自动落地到 `public/qrcodes/`
+
+### 基础设施 (015dc9a)
+- **Tailscale + VNC 远程桌面指南**：跨设备部署和调试文档
+
+---
+
 ## 2026-04-15 — 订单管理中心 AI 全面升级
 
 ### 管理页 labels.html 优化
