@@ -1635,28 +1635,29 @@ const server = createServer(async (req, res) => {
     const verifyMatch = pathname.match(/^\/verify\/([A-Fa-f0-9]+)$/);
     if (verifyMatch) {
       const lensCode = verifyMatch[1].toUpperCase();
-      const encoded5 = encodeURIComponent(`"${lensCode}"`);
-      const data5 = await feishuApi("GET",
-        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[镜片码]=${encoded5}`
+      // 先从镜片明细表精确匹配镜片码（每行一个码）
+      const encodedLc = encodeURIComponent(`"${lensCode}"`);
+      const lcData = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.lens_detail}/records?page_size=1&filter=CurrentValue.[镜片码]=${encodedLc}`
       );
 
       let found = false;
       let orderInfo = {};
-      if (data5?.items?.length > 0) {
+      if (lcData?.items?.length > 0) {
         found = true;
-        const f = data5.items[0].fields;
-        const srcOrderNo = f["订单编号"] || "";
+        const lf = lcData.items[0].fields;
+        const srcOrderNo = lf["订单编号"] || "";
 
-        // 从镜片明细表获取处方数据
-        const lensDetails = await getLensDetailsByOrder(srcOrderNo);
-        const leftEye = lensDetails.find(r => r.fields["眼别"] === "左眼");
-        const rightEye = lensDetails.find(r => r.fields["眼别"] === "右眼");
+        // 用订单编号拉同组所有镜片明细
+        const allLens = await getLensDetailsByOrder(srcOrderNo);
+        const leftEye = allLens.find(r => r.fields["眼别"] === "左眼");
+        const rightEye = allLens.find(r => r.fields["眼别"] === "右眼");
 
         orderInfo = {
           orderNo: srcOrderNo,
-          customerName: f["顾客姓名"] || "",
-          sku: f["产品型号"] || "",
-          date: formatDate(f["下单日期"]),
+          customerName: lf["顾客姓名"] || "",
+          sku: lf["产品型号"] || "",
+          date: formatDate(lf["下单日期"] || lcData.items[0].fields["创建时间"]),
           leftSph: leftEye?.fields["球镜SPH"] ?? "",
           leftCyl: leftEye?.fields["柱镜CYL"] ?? "",
           rightSph: rightEye?.fields["球镜SPH"] ?? "",
