@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-04-16 — 远程 MAC 部署修复：FEISHU_APP_ID/SECRET 配置错误
+
+- **根因**：远程 `shared/.env` 中 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET` 错误写成了通知应用的凭证（`cli_a958c5e372b85cb0`），而非多维表格应用的凭证（`cli_a94dfd3512f9dbd9`），导致 `tenant_access_token` 获取失败（code 9499），`loadAgents()` 返回空数组，所有代理商 token 验证均返回"无效链接"
+- **修复**：将 `FEISHU_APP_ID` 改为 `cli_a94dfd3512f9dbd9`，`FEISHU_APP_SECRET` 改为 `9oqRw6FermZa9KC34m7gKeHLYwiLICeA`
+- **附注**：远程 MAC 的 `Downloads/` 目录受 macOS TCC 隐私保护，SSH 无法访问，需从有权限的终端重启 node 服务
+
+---
+
 ## 2026-04-15 — 订单系统功能迭代（管理端+代理商端）
 
 ### 管理端 labels.html
