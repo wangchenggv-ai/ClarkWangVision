@@ -1494,7 +1494,7 @@ function renderOrders() {
     return `
     <tr class="data-row ${overdue ? 'overdue' : ''}" data-status="${o.status}" id="${rowId}">
       <td><input type="checkbox" data-order="${o.orderNo}" data-customer="${escapeHtml(o.customerName)}" ${selectedOrders.has(o.orderNo+'|'+o.customerName)?'checked':''} onchange="toggleOrder('${o.orderNo}','${escapeHtml(o.customerName)}')"></td>
-      <td><button class="expand-btn" onclick="toggleRowExpand('${i}', '${o.orderNo}')" title="展开详情">&#9654;</button></td>
+      <td><button class="expand-btn" onclick="toggleRowExpand('${i}', '${o.orderNo}', '${escapeHtml(o.customerName)}')" title="展开详情">&#9654;</button></td>
       <td style="font-family:monospace;font-size:12px">${o.orderNo}</td>
       <td>${o.customerName}</td>
       <td>${o.agentName}</td>
@@ -1524,7 +1524,7 @@ function getQuickAction(o) {
 
 // ─── 展开行详情 ─────────────────────────────────────────────────────
 
-async function toggleRowExpand(idx, orderNo) {
+async function toggleRowExpand(idx, orderNo, customerName) {
   const detailRow = document.getElementById(`detail-${idx}`);
   const btn = document.querySelector(`#row-${idx} .expand-btn`);
 
@@ -1539,15 +1539,20 @@ async function toggleRowExpand(idx, orderNo) {
 
   const panel = document.getElementById(`detail-panel-${idx}`);
 
-  if (detailCache[orderNo]) {
-    renderDetail(panel, detailCache[orderNo]);
+  const cacheKey = orderNo + '|' + customerName;
+  if (detailCache[cacheKey]) {
+    renderDetail(panel, detailCache[cacheKey]);
     return;
   }
 
   panel.innerHTML = '<div class="no-data">加载中...</div>';
   try {
     const data = await api(`/api/admin/order/${orderNo}/lens-details`);
-    detailCache[orderNo] = data;
+    // 按客户名过滤（②-1）
+    if (customerName && data?.lenses) {
+      data.lenses = data.lenses.filter(l => l.customerName === customerName);
+    }
+    detailCache[cacheKey] = data;
     renderDetail(panel, data);
   } catch (e) {
     panel.innerHTML = '<div class="no-data">加载失败</div>';
@@ -1910,7 +1915,15 @@ function printLabels() {
 
 function downloadZip(customer) {
   if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
-  const orderNos = [...new Set([...selectedOrders].map(k => k.split('|')[0]))].join(",");
+  const keys = [...selectedOrders];
+  const orderNos = [...new Set(keys.map(k => k.split('|')[0]))].join(",");
+  // 如果每个订单号只选了一个客户，自动传 customer 过滤（④-6）
+  if (!customer) {
+    const byOrder = {};
+    keys.forEach(k => { const [no, cn] = k.split('|'); (byOrder[no] = byOrder[no] || new Set()).add(cn); });
+    const singleCustomers = [...new Set(Object.values(byOrder).filter(s => s.size === 1).map(s => [...s][0]))];
+    if (singleCustomers.length === 1) customer = singleCustomers[0];
+  }
   let url = `/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNos)}`;
   if (customer) url += `&customer=${encodeURIComponent(customer)}`;
   window.open(url, "_blank");

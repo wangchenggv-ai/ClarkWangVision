@@ -137,6 +137,7 @@ async function handleExcelUpload(file) {
   const warnings = [];
   const patients = [];
   let lastCustomerName = "";
+  let orderContact = "", orderPhone = "", orderAddress = "";
 
   for (const row of dataRows) {
     // 跳过空行
@@ -150,17 +151,25 @@ async function handleExcelUpload(file) {
     const customerName = String(get("顾客姓名") || "").trim();
     const eye = String(get("眼别") || "").trim();
     const productModel = String(get("产品型号") || "").trim();
-    const sph = get("球镜");
-    const cyl = get("柱镜");
-    const axis = get("轴位");
+    const sph = get("球镜") ?? get("SPH") ?? get("球镜SPH");
+    const cyl = get("柱镜") ?? get("CYL") ?? get("柱镜CYL");
+    const axis = get("轴位") ?? get("AXIS") ?? get("轴位AXIS");
     const qty = get("数量（副）") || get("数量") || 1;
     const remark = String(get("备注") || "").trim();
+    const contact = String(get("联系人") || "").trim();
+    const phone = String(get("联系电话") || "").trim();
+    const address = String(get("收货地址") || "").trim();
 
     // 填充顾客姓名（Excel 中同组可能只填第一行）
     const name = customerName || lastCustomerName;
     if (customerName) lastCustomerName = customerName;
 
     if (!name) continue;
+
+    // 收集订单级联系信息（取第一个非空值）
+    if (!orderContact && contact) orderContact = contact;
+    if (!orderPhone && phone) orderPhone = phone;
+    if (!orderAddress && address) orderAddress = address;
 
     // 查找已有患者或新建
     let patient = patients.find(p => p.customerName === name);
@@ -211,7 +220,7 @@ async function handleExcelUpload(file) {
     warnings.push("未找到有效数据行，请检查列名是否包含「顾客姓名」「眼别」「球镜」等");
   }
 
-  const result = { patients, warnings };
+  const result = { patients, warnings, contact: orderContact, phone: orderPhone, address: orderAddress };
   if (_excelCache.size >= 50) _excelCache.delete(_excelCache.keys().next().value);
   _excelCache.set(fileHash, result);
   return result;
@@ -798,7 +807,7 @@ function buildFactoryExcel(records, orderNo, orderInfo = {}) {
     { wch: 16 }, { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`.slice(0, 31));
-  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  return Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
 }
 
 // 生成可打印 HTML 标签（QR 内嵌为 base64 data URL）
@@ -970,7 +979,9 @@ async function buildFactoryZip(records, orderNo, orderInfo = {}) {
   const files = [];
 
   // Excel 文件
-  files.push({ name: `订单_${orderNo}.xlsx`, data: buildFactoryExcel(records, orderNo, orderInfo) });
+  try {
+    files.push({ name: `订单_${orderNo}.xlsx`, data: buildFactoryExcel(records, orderNo, orderInfo) });
+  } catch (e) { console.error("⚠️ Excel 生成失败:", e.message); }
 
   // QR + 标签
   for (const rec of records) {
@@ -1331,7 +1342,7 @@ const server = createServer(async (req, res) => {
           fields: {
             "订单编号": orderNo,
             "产品型号": sku,
-            "数量": quantity * 2,
+            "数量": quantity * lensCount,
             "订单状态": "待处理",
             "预计交期": est.promiseDate,
             "下单日期": now,
@@ -2024,11 +2035,13 @@ const server = createServer(async (req, res) => {
 
       // 合并所有订单到一个 Excel（④-5）
       if (allDetails.length > 0) {
-        const mergedRemark = [...new Set(Object.values(orderInfoMap).map(i => i.remark).filter(Boolean))].join("；");
-        const firstInfo = Object.values(orderInfoMap)[0] || {};
-        const mergedInfo = { ...firstInfo, remark: mergedRemark };
-        const excelName = orderNos.length > 1 ? `订单_合并_${orderNos.length}单.xlsx` : `订单_${orderNos[0]}.xlsx`;
-        allFiles.push({ name: excelName, data: buildFactoryExcel(allDetails, orderNos.join("+"), mergedInfo) });
+        try {
+          const mergedRemark = [...new Set(Object.values(orderInfoMap).map(i => i.remark).filter(Boolean))].join("；");
+          const firstInfo = Object.values(orderInfoMap)[0] || {};
+          const mergedInfo = { ...firstInfo, remark: mergedRemark };
+          const excelName = orderNos.length > 1 ? `订单_合并_${orderNos.length}单.xlsx` : `订单_${orderNos[0]}.xlsx`;
+          allFiles.push({ name: excelName, data: buildFactoryExcel(allDetails, orderNos.join("+"), mergedInfo) });
+        } catch (e) { console.error("⚠️ Excel 生成失败:", e.message); }
       }
 
       if (!allFiles.length) { jsonRes(res, 404, { error: "所选订单无镜片数据" }); return logReq(req, 404, start); }

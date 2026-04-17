@@ -808,6 +808,7 @@ document.getElementById("phone")?.addEventListener("input", function() { this.cl
 
 // ─── Excel 解析 ──────────────────────────────────────────────────────────
 let excelParsedPatients = null;
+let excelParsedOrder = null; // { contact, phone, address }
 
 async function handleExcelSelect(event) {
   const file = event.target.files[0];
@@ -835,6 +836,7 @@ async function handleExcelSelect(event) {
 
     if (json.patients && json.patients.length > 0) {
       excelParsedPatients = json.patients;
+      excelParsedOrder = { contact: json.contact || "", phone: json.phone || "", address: json.address || "" };
       renderExcelPreview(json.patients, json.warnings || []);
       document.getElementById("excelModal").classList.add("show");
     } else {
@@ -934,10 +936,18 @@ function importToForm(mode) {
     if (remarkEl && p.remark) remarkEl.value = p.remark;
   }
 
+  // 填充订单级联系信息
+  if (excelParsedOrder) {
+    if (excelParsedOrder.contact) document.getElementById("contact").value = excelParsedOrder.contact;
+    if (excelParsedOrder.phone) document.getElementById("phone").value = excelParsedOrder.phone;
+    if (excelParsedOrder.address) document.getElementById("address").value = excelParsedOrder.address;
+  }
+
   updateSummary();
   const action = mode === "replace" ? "替换" : "追加";
   showToast(`已${action}导入 ${excelParsedPatients.length} 位患者处方`, "success");
   excelParsedPatients = null;
+  excelParsedOrder = null;
 }
 
 function closeExcelModal() { document.getElementById("excelModal").classList.remove("show"); }

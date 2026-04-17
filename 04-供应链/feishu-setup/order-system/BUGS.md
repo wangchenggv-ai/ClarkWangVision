@@ -3,7 +3,7 @@
 > **来源：** 飞书知识库 [系统架构图](https://gausheyetech.feishu.cn/wiki/CzF5wUlWViGNmMk6qPjcMCzinth)
 > **测试周期：** 4月17日（周四）~ 4月20日（周日）
 > **迭代节奏：** 每天汇总 → 程序修复 → 次日验证
-> **抓取时间：** 2026-04-17
+> **抓取时间：** 2026-04-17, 更新 2026-04-17 (Day2 修复)
 
 ## 严重度说明
 
@@ -79,6 +79,21 @@
 | ⑧-2 | 二维码验证，扫出来的参数不对，混入同订单其他人参数 | 3 | 已修复 | `server.js` | `samePerson` 按姓名过滤同名混入；去掉二次查找，直接用镜片码对应记录 | | 已验证 |
 
 ---
+
+---
+
+## Day2 修复记录（2026-04-17）
+
+| # | Bug 描述 | 严重度 | 状态 | 涉及文件 | 根因 | 修复内容 |
+|---|---------|--------|------|----------|------|----------|
+| ①-1 (Day2) | PL 度数识别为 0 | 3 | 已修复 | `server.js` | `findCol` 列名匹配不够灵活，SPH/CYL/AXIS 全称列名未匹配 | `toRx` 输入加 `get("SPH")`/`get("CYL")`/`get("AXIS")` 兜底 |
+| ①-2 (Day2) | 联系人/电话/地址/备注未导入 | 2 | 已修复 | `server.js` `public/order.html` | `handleExcelUpload` 未解析联系人/电话/地址列；`importToForm` 未填充 | 解析三列返回 order 级字段，前端填充到表单 |
+| ①-3 (Day2) | 单眼勾选数量默认 2 片 | 3 | 已修复 | `server.js` | `"数量": quantity * 2` 不区分眼数 | 改为 `quantity * lensCount` |
+| ②-1 | 确认页一个人名显示整个订单参数 | — | 已修复 | `public/labels.html` | `toggleRowExpand` 按 orderNo 查镜片明细，混入同订单其他客户 | 加 customerName 过滤，展开行缓存改为 orderNo+customerName 复合键 |
+| ④-1 (Day2) | 勾选多项导出 ZIP 无 Excel | 1 | 已修复 | `server.js` | `XLSX.write({ type: "buffer" })` 返回 Uint8Array，与手写 ZIP builder 不兼容 | 改为 `Buffer.from(XLSX.write({ type: "array" }))`；加 try-catch |
+| ④-2 (Day2) | ZIP 内 Excel 格式不对 | 3 | 已修复 | `server.js` | 同 ④-1 根因 | 同 ④-1 修复 |
+| ④-3 (Day2) | 选 2 订单导出含未勾选订单 | 3 | 待验证 | `public/labels.html` | 前端 selectedOrders 可能有残留状态 | 后端过滤正确，需验证前端选择管理 |
+| ④-6 | 按人名导出未解决 | — | 已修复 | `public/labels.html` | `downloadZip` 不传 customer 参数，同订单多客户时导出全部 | 自动检测：每订单只选一个客户时自动传 customer 过滤 |
 
 ## 汇总
 
