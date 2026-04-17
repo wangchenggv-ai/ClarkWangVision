@@ -153,7 +153,8 @@ async function handleExcelUpload(file) {
     const sph = get("球镜");
     const cyl = get("柱镜");
     const axis = get("轴位");
-    const qty = get("数量（片）") || get("数量") || 1;
+    const qty = get("数量（副）") || get("数量") || 1;
+    const remark = String(get("备注") || "").trim();
 
     // 填充顾客姓名（Excel 中同组可能只填第一行）
     const name = customerName || lastCustomerName;
@@ -168,14 +169,29 @@ async function handleExcelUpload(file) {
       patients.push(patient);
     }
     if (productModel) patient.sku = productModel;
+    if (remark && !patient.remark.includes(remark)) {
+      patient.remark = patient.remark ? patient.remark + "；" + remark : remark;
+    }
 
     // 添加眼别
     if (eye) {
+      const toRx = (v) => {
+        if (v == null || v === "") return "0";
+        const s = String(v).trim().toUpperCase();
+        if (s === "PL" || s === "PLANO" || s.includes("平光")) return "0";
+        const n = Number(v);
+        return isNaN(n) ? "0" : String(Math.round(n * 4) / 4);
+      };
+      const toAxis = (v) => {
+        if (v == null || v === "") return "0";
+        const n = Number(v);
+        return isNaN(n) ? "0" : String(Math.min(180, Math.max(0, Math.round(n))));
+      };
       patient.eyes.push({
         side: eye.includes("右") ? "右眼" : eye.includes("左") ? "左眼" : eye,
-        sph: sph != null && sph !== "" ? String(Math.round(Number(sph) * 4) / 4) : "0",
-        cyl: cyl != null && cyl !== "" ? String(Math.round(Number(cyl) * 4) / 4) : "0",
-        axis: axis != null && axis !== "" ? String(Math.min(180, Math.max(0, Math.round(Number(axis))))) : "0",
+        sph: toRx(sph),
+        cyl: toRx(cyl),
+        axis: toAxis(axis),
       });
     }
   }
@@ -697,8 +713,12 @@ async function batchCreateLensDetails(records) {
 
 // ─── 镜片码分配（下单即生成） ─────────────────────────────────────────────────
 
-async function assignLensCodes(orderNo) {
-  const lensDetails = await getLensDetailsByOrder(orderNo);
+async function assignLensCodes(orderNo, customerName) {
+  let lensDetails = await getLensDetailsByOrder(orderNo);
+  // 按客户名过滤（②-1）
+  if (customerName) {
+    lensDetails = lensDetails.filter(r => (r.fields["顾客姓名"] || "") === customerName);
+  }
   const lensCodes = [];
   for (const rec of lensDetails) {
     const existingCode = rec.fields["镜片码"];
@@ -746,8 +766,11 @@ async function generateQRPng(lensCode) {
 }
 
 // 生成工厂 Excel 文件
-function buildFactoryExcel(records, orderNo, orderRemark) {
-  const rows = records.map(rec => {
+// orderInfo: { remark, address, contact, phone } 来自订单主表，lens records 没有这些字段
+function buildFactoryExcel(records, orderNo, orderInfo = {}) {
+  const { remark: orderRemark = "", address = "", contact = "", phone = "" } = orderInfo;
+  const sorted = [...records].sort((a, b) => String(a.fields["顾客姓名"] || "").localeCompare(String(b.fields["顾客姓名"] || ""), "zh-CN"));
+  const rows = sorted.map(rec => {
     const f = rec.fields;
     return {
       "订单号": f["订单编号"] || "",
@@ -760,8 +783,10 @@ function buildFactoryExcel(records, orderNo, orderRemark) {
       "轴位AXIS": f["轴位AXIS"] ?? "",
       "镜片码": f["镜片码"] || "",
       "是否装配": f["是否装配"] || "",
-      "收货地址": f["收货地址"] || "",
-      "备注": orderRemark || f["备注"] || "",
+      "联系人": contact,
+      "联系电话": phone,
+      "收货地址": address,
+      "备注": f["备注"] || "",
     };
   });
 
@@ -770,7 +795,7 @@ function buildFactoryExcel(records, orderNo, orderRemark) {
   ws["!cols"] = [
     { wch: 20 }, { wch: 10 }, { wch: 20 }, { wch: 6 },
     { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
-    { wch: 16 }, { wch: 8 }, { wch: 18 }, { wch: 30 },
+    { wch: 16 }, { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`);
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
@@ -940,11 +965,12 @@ body{width:80mm;height:50mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sa
 }
 
 // 构建工厂导出 ZIP
-async function buildFactoryZip(records, orderNo) {
+// orderInfo: { remark, address, contact, phone } 来自订单主表
+async function buildFactoryZip(records, orderNo, orderInfo = {}) {
   const files = [];
 
   // Excel 文件
-  files.push({ name: `订单_${orderNo}.xlsx`, data: buildFactoryExcel(records, orderNo) });
+  files.push({ name: `订单_${orderNo}.xlsx`, data: buildFactoryExcel(records, orderNo, orderInfo) });
 
   // QR + 标签
   for (const rec of records) {
@@ -1305,7 +1331,7 @@ const server = createServer(async (req, res) => {
           fields: {
             "订单编号": orderNo,
             "产品型号": sku,
-            "数量": quantity * lensCount,
+            "数量": quantity * 2,
             "订单状态": "待处理",
             "预计交期": est.promiseDate,
             "下单日期": now,
@@ -1352,7 +1378,7 @@ const server = createServer(async (req, res) => {
           sku,
           skuName: skuInfo?.name || sku,
           quantity,
-          lensCount: quantity * lensCount,
+          lensCount: quantity * 2,
           customerName: customerName.trim(),
           deliveryType: est.deliveryType,
           promiseDate: est.promiseDate,
@@ -1738,7 +1764,7 @@ const server = createServer(async (req, res) => {
       const orderNo = decodeURIComponent(zipMatch[1]);
       const encoded4 = encodeURIComponent(`"${orderNo}"`);
       const data4 = await feishuApi("GET",
-        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded4}`
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[订单编号]=${encoded4}`
       );
       if (!data4?.items?.length) { jsonRes(res, 404, { error: "未找到该订单" }); return logReq(req, 404, start); }
 
@@ -1746,7 +1772,15 @@ const server = createServer(async (req, res) => {
         jsonRes(res, 403, { error: "无权操作此订单" }); return logReq(req, 403, start);
       }
 
-      const zipBuf = await buildFactoryZip(data4.items, orderNo);
+      const of4 = data4.items[0].fields;
+      const orderInfo4 = {
+        remark: of4["备注"] || "",
+        address: of4["收货地址"] || "",
+        contact: of4["联系人"] || "",
+        phone: of4["联系电话"] || "",
+      };
+      const lensRecords4 = await getLensDetailsByOrder(orderNo);
+      const zipBuf = await buildFactoryZip(lensRecords4, orderNo, orderInfo4);
 
       res.writeHead(200, {
         "Content-Type": "application/zip",
@@ -1772,21 +1806,18 @@ const server = createServer(async (req, res) => {
         found = true;
         const lf = lcData.items[0].fields;
         const srcOrderNo = lf["订单编号"] || "";
+        const srcCustomer = lf["顾客姓名"] || "";
 
-        // 用订单编号拉同组所有镜片明细
-        const allLens = await getLensDetailsByOrder(srcOrderNo);
-        const leftEye = allLens.find(r => r.fields["眼别"] === "左眼");
-        const rightEye = allLens.find(r => r.fields["眼别"] === "右眼");
-
+        // 直接用本镜片码记录的数据，不做姓名二次匹配（防同订单同名客户混入）
         orderInfo = {
           orderNo: srcOrderNo,
-          customerName: lf["顾客姓名"] || "",
+          customerName: srcCustomer,
           sku: lf["产品型号"] || "",
           date: formatDate(lf["下单日期"] || lcData.items[0].fields["创建时间"]),
-          leftSph: leftEye?.fields["球镜SPH"] ?? "",
-          leftCyl: leftEye?.fields["柱镜CYL"] ?? "",
-          rightSph: rightEye?.fields["球镜SPH"] ?? "",
-          rightCyl: rightEye?.fields["柱镜CYL"] ?? "",
+          eyeSide: lf["眼别"] || "",
+          sph: lf["球镜SPH"] ?? "",
+          cyl: lf["柱镜CYL"] ?? "",
+          axis: lf["轴位AXIS"] ?? "",
         };
       }
 
@@ -1799,10 +1830,10 @@ const server = createServer(async (req, res) => {
       html = html.replace("{{CUSTOMER_NAME}}", escapeHtml(orderInfo.customerName || ""));
       html = html.replace("{{SKU}}", escapeHtml(orderInfo.sku || ""));
       html = html.replace("{{DATE}}", escapeHtml(orderInfo.date || ""));
-      html = html.replace("{{LEFT_SPH}}", escapeHtml(String(orderInfo.leftSph ?? "—")));
-      html = html.replace("{{LEFT_CYL}}", escapeHtml(String(orderInfo.leftCyl ?? "—")));
-      html = html.replace("{{RIGHT_SPH}}", escapeHtml(String(orderInfo.rightSph ?? "—")));
-      html = html.replace("{{RIGHT_CYL}}", escapeHtml(String(orderInfo.rightCyl ?? "—")));
+      html = html.replace("{{EYE_SIDE}}", escapeHtml(orderInfo.eyeSide || "—"));
+      html = html.replace("{{SPH}}", escapeHtml(String(orderInfo.sph ?? "—")));
+      html = html.replace("{{CYL}}", escapeHtml(String(orderInfo.cyl ?? "—")));
+      html = html.replace("{{AXIS}}", escapeHtml(String(orderInfo.axis ?? "—")));
       html = html.replace("{{NOW}}", escapeHtml(new Date().toLocaleString("zh-CN")));
 
       res.writeHead(found ? 200 : 404, { "Content-Type": "text/html; charset=utf-8" });
@@ -1925,24 +1956,40 @@ const server = createServer(async (req, res) => {
       if (!orderNosParam) { jsonRes(res, 400, { error: "请提供 orderNos 参数" }); return logReq(req, 400, start); }
 
       const orderNos = orderNosParam.split(",").map(s => s.trim()).filter(Boolean);
+      const customerFilter = url.searchParams.get("customer") || "";
       const allFiles = [];
+      const allDetails = [];   // 合并所有订单的镜片记录
+      const orderInfoMap = {}; // orderNo → orderInfo
 
       for (const orderNo of orderNos) {
-        const details = await getLensDetailsByOrder(orderNo);
+        let details = await getLensDetailsByOrder(orderNo);
         if (!details.length) continue;
 
-        // 获取订单主表备注
-        const orderEnc = encodeURIComponent(`"${orderNo}"`);
-        const orderData = await feishuApi("GET",
-          `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[订单编号]=${orderEnc}`
-        );
-        const orderRemark = orderData?.items?.[0]?.fields?.["备注"] || "";
+        // 按顾客姓名过滤（④-6）
+        if (customerFilter) {
+          details = details.filter(r => (r.fields["顾客姓名"] || "") === customerFilter);
+        }
+        if (!details.length) continue;
 
-        // 每个订单一个子目录
+        // 获取订单主表：备注、收货地址、联系人、联系电话
+        if (!orderInfoMap[orderNo]) {
+          const orderEnc = encodeURIComponent(`"${orderNo}"`);
+          const orderData = await feishuApi("GET",
+            `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[订单编号]=${orderEnc}`
+          );
+          const of = orderData?.items?.[0]?.fields || {};
+          orderInfoMap[orderNo] = {
+            remark: of["备注"] || "",
+            address: of["收货地址"] || "",
+            contact: of["联系人"] || "",
+            phone: of["联系电话"] || "",
+          };
+        }
+
+        allDetails.push(...details);
+
+        // QR + 标签按订单分子目录
         const prefix = orderNos.length > 1 ? `${orderNo}/` : "";
-        const excelBuf = buildFactoryExcel(details, orderNo, orderRemark);
-        allFiles.push({ name: `${prefix}订单_${orderNo}.xlsx`, data: excelBuf });
-
         for (const rec of details) {
           const f = rec.fields;
           const lensCode = f["镜片码"];
@@ -1958,6 +2005,15 @@ const server = createServer(async (req, res) => {
             allFiles.push({ name: `${prefix}${labelEntry.name}`, data: labelEntry.data });
           }
         }
+      }
+
+      // 合并所有订单到一个 Excel（④-5）
+      if (allDetails.length > 0) {
+        const mergedRemark = [...new Set(Object.values(orderInfoMap).map(i => i.remark).filter(Boolean))].join("；");
+        const firstInfo = Object.values(orderInfoMap)[0] || {};
+        const mergedInfo = { ...firstInfo, remark: mergedRemark };
+        const excelName = orderNos.length > 1 ? `订单_合并_${orderNos.length}单.xlsx` : `订单_${orderNos[0]}.xlsx`;
+        allFiles.push({ name: excelName, data: buildFactoryExcel(allDetails, orderNos.join("+"), mergedInfo) });
       }
 
       if (!allFiles.length) { jsonRes(res, 404, { error: "所选订单无镜片数据" }); return logReq(req, 404, start); }
@@ -1976,11 +2032,12 @@ const server = createServer(async (req, res) => {
       return logReq(req, 200, start);
     }
 
-    // POST /api/admin/confirm — 确认订单（批量）
+    // POST /api/admin/confirm — 确认订单（批量，可按客户维度）
     if (pathname === "/api/admin/confirm" && req.method === "POST") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const payload = await readBody(req);
       const orderNos = payload.orderNos || [];
+      const customerName = payload.customerName || ""; // 可选：只确认该客户
       if (!orderNos.length) { jsonRes(res, 400, { error: "请提供 orderNos" }); return logReq(req, 400, start); }
 
       const results = [];
@@ -1989,11 +2046,17 @@ const server = createServer(async (req, res) => {
           // 查订单主表记录
           const encoded = encodeURIComponent(`"${orderNo}"`);
           const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
-          const records = d?.items || [];
+          let records = d?.items || [];
           if (!records.length) { results.push({ orderNo, ok: false, error: "未找到" }); continue; }
 
-          // 生成镜片码（幂等）
-          const lensCodes = await assignLensCodes(orderNo);
+          // 按客户名过滤（②-1）
+          if (customerName) {
+            records = records.filter(r => (r.fields["顾客姓名"] || "") === customerName);
+            if (!records.length) { results.push({ orderNo, ok: false, error: `未找到客户 "${customerName}"` }); continue; }
+          }
+
+          // 生成镜片码（幂等，按客户过滤）
+          const lensCodes = await assignLensCodes(orderNo, customerName);
 
           // 更新状态为生产中 + 回写镜片码
           for (const rec of records) {
@@ -2011,11 +2074,12 @@ const server = createServer(async (req, res) => {
       return logReq(req, 200, start);
     }
 
-    // POST /api/admin/ship — 发货（逐单或批量）
+    // POST /api/admin/ship — 发货（逐单或批量，可按客户维度）
     if (pathname === "/api/admin/ship" && req.method === "POST") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const payload = await readBody(req);
       const orderNos = payload.orderNos || [];
+      const customerName = payload.customerName || ""; // 可选：只发该客户
       const courierKey = payload.courier || ""; // 可选指定快递
       if (!orderNos.length) { jsonRes(res, 400, { error: "请提供 orderNos" }); return logReq(req, 400, start); }
 
@@ -2029,7 +2093,6 @@ const server = createServer(async (req, res) => {
       function genTrackingNoWeb(key) {
         const prefix = { sf: "SF", zt: "75", yd: "YD", jd: "JD" };
         const p = prefix[key] || "SF";
-        // 用 randomBytes 生成 6 字节（48bit），转为 12 位十进制数字
         const digits = String(parseInt(randomBytes(6).toString("hex"), 16)).slice(0, 12).padStart(12, "0");
         return p + digits;
       }
@@ -2045,8 +2108,14 @@ const server = createServer(async (req, res) => {
         try {
           const encoded = encodeURIComponent(`"${orderNo}"`);
           const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
-          const records = d?.items || [];
+          let records = d?.items || [];
           if (!records.length) { results.push({ orderNo, ok: false, error: "未找到" }); continue; }
+
+          // 按客户名过滤（③-1）
+          if (customerName) {
+            records = records.filter(r => (r.fields["顾客姓名"] || "") === customerName);
+            if (!records.length) { results.push({ orderNo, ok: false, error: `未找到客户 "${customerName}"` }); continue; }
+          }
 
           const f0 = records[0].fields;
           const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
@@ -2066,11 +2135,11 @@ const server = createServer(async (req, res) => {
           }
 
           // 飞书发货卡片
-          const customerName = rawVal(f0["顾客姓名"]) || "";
+          const custName = rawVal(f0["顾客姓名"]) || "";
           const sku = rawVal(f0["产品型号"]) || "";
           const agentName = rawVal(f0["代理商名称"]) || "";
           sendFeishuCard(shipCard({
-            orderNo, customerName, sku, agentName,
+            orderNo, customerName: custName, sku, agentName,
             courierName: courier.name, trackingNo,
             lensCount: Number(f0["数量"]) || 0,
           })).catch(e => console.error("发货通知失败:", e.message));
@@ -2084,11 +2153,12 @@ const server = createServer(async (req, res) => {
       return logReq(req, 200, start);
     }
 
-    // POST /api/admin/deliver — 签收（批量）
+    // POST /api/admin/deliver — 签收（批量，可按客户维度）
     if (pathname === "/api/admin/deliver" && req.method === "POST") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const payload = await readBody(req);
       const orderNos = payload.orderNos || [];
+      const customerName = payload.customerName || ""; // 可选：只签收该客户
       if (!orderNos.length) { jsonRes(res, 400, { error: "请提供 orderNos" }); return logReq(req, 400, start); }
 
       const now = Date.now();
@@ -2098,8 +2168,14 @@ const server = createServer(async (req, res) => {
         try {
           const encoded = encodeURIComponent(`"${orderNo}"`);
           const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
-          const records = d?.items || [];
+          let records = d?.items || [];
           if (!records.length) { results.push({ orderNo, ok: false, error: "未找到" }); continue; }
+
+          // 按客户名过滤
+          if (customerName) {
+            records = records.filter(r => (r.fields["顾客姓名"] || "") === customerName);
+            if (!records.length) { results.push({ orderNo, ok: false, error: `未找到客户 "${customerName}"` }); continue; }
+          }
 
           for (const rec of records) {
             await updateRecord(TABLES.order, rec.record_id, {

@@ -205,16 +205,12 @@ body {
   <div class="card">
     <div class="card-title">处方参数</div>
     <table class="rx-table">
-      <tr><th></th><th>球镜 SPH</th><th>柱镜 CYL</th></tr>
+      <tr><th></th><th>球镜 SPH</th><th>柱镜 CYL</th><th>轴位 AXIS</th></tr>
       <tr>
-        <td><span class="eye-tag eye-L">L 左眼</span></td>
-        <td class="rx-num">{{LEFT_SPH}}</td>
-        <td class="rx-num">{{LEFT_CYL}}</td>
-      </tr>
-      <tr>
-        <td><span class="eye-tag eye-R">R 右眼</span></td>
-        <td class="rx-num">{{RIGHT_SPH}}</td>
-        <td class="rx-num">{{RIGHT_CYL}}</td>
+        <td><span class="eye-tag" id="eyeTag">{{EYE_SIDE}}</span></td>
+        <td class="rx-num">{{SPH}}</td>
+        <td class="rx-num">{{CYL}}</td>
+        <td class="rx-num">{{AXIS}}</td>
       </tr>
     </table>
   </div>
@@ -241,6 +237,9 @@ if (found) {
   document.getElementById('statusText').textContent = '正品验证通过';
   document.getElementById('statusSub').textContent = '该镜片已通过高视高清溯源系统认证';
   document.getElementById('foundContent').style.display = '';
+  var tag = document.getElementById('eyeTag');
+  if (tag.textContent.indexOf('左') >= 0) { tag.className = 'eye-tag eye-L'; }
+  else if (tag.textContent.indexOf('右') >= 0) { tag.className = 'eye-tag eye-R'; }
 } else {
   hero.classList.add('hero-fail');
   checkEl.style.display = 'none';

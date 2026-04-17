@@ -487,7 +487,7 @@ function addPatient() {
       <div class="error-tip">请选择产品型号</div>
     </div>
     <div class="field">
-      <label>数量 <span class="req">*</span></label>
+      <label>数量（副）<span class="req">*</span></label>
       <input type="number" id="qty-${id}" min="1" max="100" value="1" inputmode="numeric">
       <div class="error-tip">数量需在 1-100 之间</div>
     </div>
@@ -576,9 +576,27 @@ function copyEye(id, from, to) {
 
 // ─── 订单摘要 ──────────────────────────────────────────────────────────────
 function updateSummary() {
-  const patients = collectPatients();
   const card = document.getElementById("summaryCard");
   const content = document.getElementById("summaryContent");
+  // 直接遍历所有患者卡片，不过滤 eyes 为空的情况
+  const cards = document.querySelectorAll(".patient-card");
+  const patients = [];
+  for (const c of cards) {
+    const id = c.id.replace("patient-", "");
+    const name = document.getElementById(`name-${id}`)?.value.trim();
+    const sku = document.getElementById(`sku-${id}`)?.value;
+    if (!name) continue;
+    const eyes = [];
+    for (const [side, label] of [["right", "右眼"], ["left", "左眼"]]) {
+      if (!document.getElementById(`eye-check-${id}-${side}`)?.checked) continue;
+      eyes.push({ side: label,
+        sph: document.getElementById(`sph-${id}-${side}`)?.value || "0",
+        cyl: document.getElementById(`cyl-${id}-${side}`)?.value || "0",
+        axis: document.getElementById(`axis-${id}-${side}`)?.value || "0",
+      });
+    }
+    patients.push({ customerName: name, sku: sku || "未选择", eyes });
+  }
   if (patients.length === 0) { card.style.display = "none"; return; }
 
   card.style.display = "";
@@ -888,6 +906,11 @@ function importToForm(mode) {
     if (skuEl) skuEl.value = p.sku || "";
     if (qtyEl) qtyEl.value = p.quantity || 1;
 
+    // 先取消所有眼别勾选，只保留 Excel 里有数据的眼
+    for (const s of ["right", "left"]) {
+      const ckEl = document.getElementById(`eye-check-${id}-${s}`);
+      if (ckEl && ckEl.checked) { ckEl.checked = false; toggleEye(id, s); }
+    }
     if (p.eyes) {
       for (const eye of p.eyes) {
         const side = eye.side === "右眼" ? "right" : "left";
@@ -895,9 +918,9 @@ function importToForm(mode) {
         const cylEl = document.getElementById(`cyl-${id}-${side}`);
         const axisEl = document.getElementById(`axis-${id}-${side}`);
         const checkEl = document.getElementById(`eye-check-${id}-${side}`);
-        if (sphEl) sphEl.value = eye.sph || "0";
-        if (cylEl) cylEl.value = eye.cyl || "0";
-        if (axisEl) axisEl.value = eye.axis || "0";
+        if (sphEl) sphEl.value = eye.sph ?? "0";
+        if (cylEl) cylEl.value = eye.cyl ?? "0";
+        if (axisEl) axisEl.value = eye.axis ?? "0";
         if (checkEl && !checkEl.checked) { checkEl.checked = true; toggleEye(id, side); }
       }
     }

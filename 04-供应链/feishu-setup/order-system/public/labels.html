@@ -1493,7 +1493,7 @@ function renderOrders() {
     const overdue = isOverdue(o.status, getOrderDays(o.date));
     return `
     <tr class="data-row ${overdue ? 'overdue' : ''}" data-status="${o.status}" id="${rowId}">
-      <td><input type="checkbox" data-order="${o.orderNo}" ${selectedOrders.has(o.orderNo)?'checked':''} onchange="toggleOrder('${o.orderNo}')"></td>
+      <td><input type="checkbox" data-order="${o.orderNo}" data-customer="${escapeHtml(o.customerName)}" ${selectedOrders.has(o.orderNo+'|'+o.customerName)?'checked':''} onchange="toggleOrder('${o.orderNo}','${escapeHtml(o.customerName)}')"></td>
       <td><button class="expand-btn" onclick="toggleRowExpand('${i}', '${o.orderNo}')" title="展开详情">&#9654;</button></td>
       <td style="font-family:monospace;font-size:12px">${o.orderNo}</td>
       <td>${o.customerName}</td>
@@ -1515,9 +1515,10 @@ function renderOrders() {
 }
 
 function getQuickAction(o) {
-  if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}')">确认</button>`;
-  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}')" title="导出ZIP给工厂">导出</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}')">发货</button>`;
-  if (o.status === "已发货") return `<button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}')">签收</button>`;
+  const cn = escapeHtml(o.customerName);
+  if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}')">确认</button>`;
+  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}')" title="导出ZIP给工厂">导出</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}')">发货</button>`;
+  if (o.status === "已发货") return `<button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">签收</button>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
 }
 
@@ -1576,28 +1577,31 @@ function renderDetail(panel, data) {
 
 // ─── 选择逻辑 ───────────────────────────────────────────────────────
 
-function toggleOrder(orderNo) {
-  if (selectedOrders.has(orderNo)) selectedOrders.delete(orderNo);
-  else selectedOrders.add(orderNo);
+function toggleOrder(orderNo, customerName) {
+  const key = orderNo + '|' + customerName;
+  if (selectedOrders.has(key)) selectedOrders.delete(key);
+  else selectedOrders.add(key);
   updateSelectedCount();
   updateContextualActions();
 }
 
 function toggleSelectAll() {
   const checked = document.getElementById("selectAll").checked;
-  if (checked) allOrders.forEach(o => selectedOrders.add(o.orderNo));
-  else allOrders.forEach(o => selectedOrders.delete(o.orderNo));
+  if (checked) allOrders.forEach(o => selectedOrders.add(o.orderNo + '|' + o.customerName));
+  else allOrders.forEach(o => selectedOrders.delete(o.orderNo + '|' + o.customerName));
   renderOrders();
 }
 
 function updateSelectedCount() {
-  document.getElementById("selectedCount").textContent = `已选 ${selectedOrders.size} 个订单`;
+  document.getElementById("selectedCount").textContent = `已选 ${selectedOrders.size} 项`;
 }
 
 function updateContextualActions() {
   const statuses = new Set();
-  selectedOrders.forEach(no => {
-    const o = allOrders.find(x => x.orderNo === no);
+  selectedOrders.forEach(key => {
+    const [orderNo, ...rest] = key.split('|');
+    const customerName = rest.join('|');
+    const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName);
     if (o) statuses.add(o.status);
   });
 
@@ -1703,77 +1707,93 @@ function quickZip(orderNo) {
   downloadZip();
 }
 
-async function quickConfirm(orderNo) {
-  const ok = await showConfirmModal({ title: "确认订单", body: `确认订单 <b>${orderNo}</b>？<br>状态将变为"生产中"并生成镜片码。` });
+async function quickConfirm(orderNo, customerName) {
+  const ok = await showConfirmModal({ title: "确认订单", body: `确认 <b>${orderNo}</b> · <b>${customerName}</b>？<br>状态将变为"生产中"并生成镜片码。` });
   if (!ok) return;
-  const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo] });
+  const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName });
   const r = data.results[0];
-  if (r.ok) { showToast(`订单 ${orderNo} 已确认`, "success"); loadOrders(); }
+  if (r.ok) { showToast(`${orderNo} ${customerName} 已确认`, "success"); loadOrders(); }
   else showToast(`确认失败: ${r.error}`, "error");
 }
 
-async function quickShip(orderNo) {
-  const ok = await showConfirmModal({ title: "确认发货", body: `发货订单 <b>${orderNo}</b>？<br>将自动生成快递单号。` });
+async function quickShip(orderNo, customerName) {
+  const ok = await showConfirmModal({ title: "确认发货", body: `发货 <b>${orderNo}</b> · <b>${customerName}</b>？<br>将自动生成快递单号。` });
   if (!ok) return;
-  const data = await adminApi("/api/admin/ship", { orderNos: [orderNo] });
+  const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName });
   const r = data.results[0];
   if (r.ok) {
-    showToast(`${orderNo} 已发货: ${r.courier} ${r.trackingNo}`, "success");
+    showToast(`${orderNo} ${customerName} 已发货: ${r.courier} ${r.trackingNo}`, "success");
     loadOrders();
   } else showToast(`发货失败: ${r.error}`, "error");
 }
 
-async function quickDeliver(orderNo) {
-  const ok = await showConfirmModal({ title: "标记签收", body: `标记订单 <b>${orderNo}</b> 为"已签收"？` });
+async function quickDeliver(orderNo, customerName) {
+  const ok = await showConfirmModal({ title: "标记签收", body: `标记 <b>${orderNo}</b> · <b>${customerName}</b> 为"已签收"？` });
   if (!ok) return;
-  const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo] });
+  const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName });
   const r = data.results[0];
-  if (r.ok) { showToast(`${orderNo} 已签收`, "success"); loadOrders(); }
+  if (r.ok) { showToast(`${orderNo} ${customerName} 已签收`, "success"); loadOrders(); }
   else showToast(`签收失败: ${r.error}`, "error");
 }
 
 // ─── 批量操作 ───────────────────────────────────────────────────────
 
 async function confirmOrders() {
-  const orderNos = getSelectedByStatus("待处理");
-  if (orderNos.length === 0) { showToast("没有待处理的订单可确认", "info"); return; }
-  const ok = await showConfirmModal({ title: "批量确认", body: `确认 <b>${orderNos.length}</b> 个订单？<br>状态将变为"生产中"并生成镜片码。` });
+  const keys = getSelectedByStatus("待处理");
+  if (keys.length === 0) { showToast("没有待处理的订单可确认", "info"); return; }
+  const ok = await showConfirmModal({ title: "批量确认", body: `确认 <b>${keys.length}</b> 项？<br>状态将变为"生产中"并生成镜片码。` });
   if (!ok) return;
-  const data = await adminApi("/api/admin/confirm", { orderNos });
-  const done = data.results.filter(r => r.ok).length;
-  const fail = data.results.filter(r => !r.ok).length;
-  showToast(`确认完成：成功 ${done} 单${fail ? "，失败 " + fail + " 单" : ""}`, fail ? "error" : "success");
+  let done = 0, fail = 0;
+  for (const key of keys) {
+    const [orderNo, ...rest] = key.split('|');
+    const customerName = rest.join('|');
+    const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName });
+    if (data.results?.[0]?.ok) done++; else fail++;
+  }
+  showToast(`确认完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
   loadOrders();
 }
 
 async function shipOrders() {
-  const orderNos = getSelectedByStatus("生产中");
-  if (orderNos.length === 0) { showToast("没有生产中的订单可发货", "info"); return; }
-  const ok = await showConfirmModal({ title: "批量发货", body: `发货 <b>${orderNos.length}</b> 个订单？<br>将自动生成快递单号。` });
+  const keys = getSelectedByStatus("生产中");
+  if (keys.length === 0) { showToast("没有生产中的订单可发货", "info"); return; }
+  const ok = await showConfirmModal({ title: "批量发货", body: `发货 <b>${keys.length}</b> 项？<br>将自动生成快递单号。` });
   if (!ok) return;
-  const data = await adminApi("/api/admin/ship", { orderNos });
-  const okResults = data.results.filter(r => r.ok);
-  const fail = data.results.filter(r => !r.ok).length;
-  let html = okResults.map(r => `${r.orderNo}: ${r.courier} ${r.trackingNo}`).join("<br>");
-  await showConfirmModal({ title: "发货完成", body: `成功 ${okResults.length} 单${fail ? "，失败 " + fail + " 单" : ""}`, confirmText: "关闭", cancelText: "", resultHtml: html });
+  let done = 0, fail = 0;
+  const details = [];
+  for (const key of keys) {
+    const [orderNo, ...rest] = key.split('|');
+    const customerName = rest.join('|');
+    const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName });
+    if (data.results?.[0]?.ok) { done++; details.push(`${orderNo} ${customerName}: ${data.results[0].courier} ${data.results[0].trackingNo}`); }
+    else fail++;
+  }
+  let html = details.join("<br>");
+  await showConfirmModal({ title: "发货完成", body: `成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, confirmText: "关闭", cancelText: "", resultHtml: html });
   loadOrders();
 }
 
 async function deliverOrders() {
-  const orderNos = getSelectedByStatus("已发货");
-  if (orderNos.length === 0) { showToast("没有已发货的订单可签收", "info"); return; }
-  const ok = await showConfirmModal({ title: "批量签收", body: `标记 <b>${orderNos.length}</b> 个订单为"已签收"？` });
+  const keys = getSelectedByStatus("已发货");
+  if (keys.length === 0) { showToast("没有已发货的订单可签收", "info"); return; }
+  const ok = await showConfirmModal({ title: "批量签收", body: `标记 <b>${keys.length}</b> 项为"已签收"？` });
   if (!ok) return;
-  const data = await adminApi("/api/admin/deliver", { orderNos });
-  const done = data.results.filter(r => r.ok).length;
-  const fail = data.results.filter(r => !r.ok).length;
-  showToast(`签收完成：成功 ${done} 单${fail ? "，失败 " + fail + " 单" : ""}`, fail ? "error" : "success");
+  let done = 0, fail = 0;
+  for (const key of keys) {
+    const [orderNo, ...rest] = key.split('|');
+    const customerName = rest.join('|');
+    const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName });
+    if (data.results?.[0]?.ok) done++; else fail++;
+  }
+  showToast(`签收完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
   loadOrders();
 }
 
 function getSelectedByStatus(status) {
-  return [...selectedOrders].filter(no => {
-    const o = allOrders.find(x => x.orderNo === no);
+  return [...selectedOrders].filter(key => {
+    const [orderNo, ...rest] = key.split('|');
+    const customerName = rest.join('|');
+    const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName);
     return o && o.status === status;
   });
 }
@@ -1785,10 +1805,10 @@ document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "a") {
     if (document.activeElement.tagName !== "INPUT") {
       e.preventDefault();
-      allOrders.forEach(o => selectedOrders.add(o.orderNo));
+      allOrders.forEach(o => selectedOrders.add(o.orderNo + '|' + o.customerName));
       document.getElementById("selectAll").checked = true;
       renderOrders();
-      showToast(`已全选 ${allOrders.length} 个订单`, "info");
+      showToast(`已全选 ${allOrders.length} 项`, "info");
     }
   }
 
@@ -1840,7 +1860,7 @@ function toggleKeyboardHints() {
 async function previewSelected() {
   if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
 
-  const orderNos = [...selectedOrders].join(",");
+  const orderNos = [...new Set([...selectedOrders].map(k => k.split('|')[0]))].join(",");
   const data = await api(`/api/admin/labels/batch?orderNos=${encodeURIComponent(orderNos)}`);
 
   const section = document.getElementById("previewSection");
@@ -1888,10 +1908,12 @@ function printLabels() {
   });
 }
 
-function downloadZip() {
+function downloadZip(customer) {
   if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
-  const orderNos = [...selectedOrders].join(",");
-  window.open(`/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNos)}`, "_blank");
+  const orderNos = [...new Set([...selectedOrders].map(k => k.split('|')[0]))].join(",");
+  let url = `/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNos)}`;
+  if (customer) url += `&customer=${encodeURIComponent(customer)}`;
+  window.open(url, "_blank");
 }
 
 // ─── AI 自然语言搜索 ─────────────────────────────────────────────────
