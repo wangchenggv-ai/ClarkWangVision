@@ -1803,10 +1803,14 @@ const server = createServer(async (req, res) => {
         const srcCustomer = lf["顾客姓名"] || "";
 
         // 直接用本镜片码记录的数据，不做姓名二次匹配（防同订单同名客户混入）
+        const skuCode = lf["产品型号"] || "";
+        const skus = await getSkusWithInventory();
+        const skuMatch = skus.find(s => s.sku === skuCode);
         orderInfo = {
           orderNo: srcOrderNo,
           customerName: srcCustomer,
-          sku: lf["产品型号"] || "",
+          sku: skuCode,
+          skuName: skuMatch?.name || skuCode,
           date: formatDate(lf["下单日期"] || lcData.items[0].fields["创建时间"]),
           eyeSide: lf["眼别"] || "",
           sph: lf["球镜SPH"] ?? "",
@@ -1822,6 +1826,7 @@ const server = createServer(async (req, res) => {
       html = html.replace("{{LENS_CODE}}", escapeHtml(lensCode));
       html = html.replace("{{ORDER_NO}}", escapeHtml(orderInfo.orderNo || ""));
       html = html.replace("{{CUSTOMER_NAME}}", escapeHtml(orderInfo.customerName || ""));
+      html = html.replace("{{SKU_NAME}}", escapeHtml(orderInfo.skuName || ""));
       html = html.replace("{{SKU}}", escapeHtml(orderInfo.sku || ""));
       html = html.replace("{{DATE}}", escapeHtml(orderInfo.date || ""));
       html = html.replace("{{EYE_SIDE}}", escapeHtml(orderInfo.eyeSide || "—"));
