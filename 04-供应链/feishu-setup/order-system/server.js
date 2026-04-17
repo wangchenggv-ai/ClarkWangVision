@@ -1796,27 +1796,32 @@ const server = createServer(async (req, res) => {
 
       let found = false;
       let orderInfo = {};
+      let eyes = [];
       if (lcData?.items?.length > 0) {
         found = true;
         const lf = lcData.items[0].fields;
         const srcOrderNo = lf["订单编号"] || "";
         const srcCustomer = lf["顾客姓名"] || "";
 
-        // 直接用本镜片码记录的数据，不做姓名二次匹配（防同订单同名客户混入）
         const skuCode = lf["产品型号"] || "";
         const skus = await getSkusWithInventory();
         const skuMatch = skus.find(s => s.sku === skuCode);
         orderInfo = {
           orderNo: srcOrderNo,
           customerName: srcCustomer,
-          sku: skuCode,
           skuName: skuMatch?.name || skuCode,
-          date: formatDate(lf["下单日期"] || lcData.items[0].fields["创建时间"]),
-          eyeSide: lf["眼别"] || "",
-          sph: lf["球镜SPH"] ?? "",
-          cyl: lf["柱镜CYL"] ?? "",
-          axis: lf["轴位AXIS"] ?? "",
         };
+
+        // 查同订单同客户的所有镜片记录（双眼）
+        const allLens = await getLensDetailsByOrder(srcOrderNo);
+        const sameCustomerLens = allLens.filter(r => (r.fields["顾客姓名"] || "") === srcCustomer);
+        eyes = sameCustomerLens.map(r => ({
+          side: r.fields["眼别"] || "",
+          sph: r.fields["球镜SPH"] ?? "",
+          cyl: r.fields["柱镜CYL"] ?? "",
+          axis: r.fields["轴位AXIS"] ?? "",
+          lensCode: r.fields["镜片码"] || "",
+        }));
       }
 
       // 读取 verify.html 模板并渲染（所有动态值均做 HTML 转义防注入）
@@ -1827,12 +1832,23 @@ const server = createServer(async (req, res) => {
       html = html.replace("{{ORDER_NO}}", escapeHtml(orderInfo.orderNo || ""));
       html = html.replace("{{CUSTOMER_NAME}}", escapeHtml(orderInfo.customerName || ""));
       html = html.replace("{{SKU_NAME}}", escapeHtml(orderInfo.skuName || ""));
-      html = html.replace("{{SKU}}", escapeHtml(orderInfo.sku || ""));
-      html = html.replace("{{DATE}}", escapeHtml(orderInfo.date || ""));
-      html = html.replace("{{EYE_SIDE}}", escapeHtml(orderInfo.eyeSide || "—"));
-      html = html.replace("{{SPH}}", escapeHtml(String(orderInfo.sph ?? "—")));
-      html = html.replace("{{CYL}}", escapeHtml(String(orderInfo.cyl ?? "—")));
-      html = html.replace("{{AXIS}}", escapeHtml(String(orderInfo.axis ?? "—")));
+
+      // 生成双眼处方行
+      const eyeRows = eyes.map(e => {
+        const cls = e.side.includes("左") ? "eye-L" : "eye-R";
+        return `<tr>
+        <td><span class="eye-tag ${cls}">${escapeHtml(e.side)}</span></td>
+        <td class="rx-num">${escapeHtml(String(e.sph ?? "—"))}</td>
+        <td class="rx-num">${escapeHtml(String(e.cyl ?? "—"))}</td>
+        <td class="rx-num">${escapeHtml(String(e.axis ?? "—"))}</td>
+      </tr>`;
+      }).join("\n");
+      html = html.replace("{{EYE_ROWS}}", eyeRows);
+
+      // 生成镜片码列表
+      const codeHtml = eyes.map(e => `<span class="lens-code-item"><span class="lens-code-side">${escapeHtml(e.side)}</span> <span class="mono">${escapeHtml(e.lensCode)}</span></span>`).join("\n");
+      html = html.replace("{{LENS_CODES}}", codeHtml);
+
       html = html.replace("{{NOW}}", escapeHtml(new Date().toLocaleString("zh-CN")));
 
       res.writeHead(found ? 200 : 404, { "Content-Type": "text/html; charset=utf-8" });

@@ -172,6 +172,21 @@ body {
   margin: 12px auto;
   border-radius: 1px;
 }
+.lens-codes {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.lens-code-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lens-code-side {
+  font-size: 12px;
+  color: var(--text-muted);
+}
 </style>
 </head>
 <body>
@@ -198,26 +213,20 @@ body {
   <div class="card">
     <div class="row"><span class="label">订单号</span><span class="value">{{ORDER_NO}}</span></div>
     <div class="row"><span class="label">产品名称</span><span class="value">{{SKU_NAME}}</span></div>
-    <div class="row"><span class="label">代理经销商</span><span class="value">{{CUSTOMER_NAME}}</span></div>
-    <div class="row"><span class="label">生产日期</span><span class="value">{{DATE}}</span></div>
+    <div class="row"><span class="label">顾客姓名</span><span class="value">{{CUSTOMER_NAME}}</span></div>
   </div>
 
   <div class="card">
     <div class="card-title">处方参数</div>
     <table class="rx-table">
       <tr><th></th><th>球镜 SPH</th><th>柱镜 CYL</th><th>轴位 AXIS</th></tr>
-      <tr>
-        <td><span class="eye-tag" id="eyeTag">{{EYE_SIDE}}</span></td>
-        <td class="rx-num">{{SPH}}</td>
-        <td class="rx-num">{{CYL}}</td>
-        <td class="rx-num">{{AXIS}}</td>
-      </tr>
+      {{EYE_ROWS}}
     </table>
   </div>
 </div>
 
 <div class="footer">
-  <p>镜片码 <span class="mono">{{LENS_CODE}}</span></p>
+  <div class="lens-codes">{{LENS_CODES}}</div>
   <p>验证时间 {{NOW}}</p>
   <div class="divider"></div>
   <p class="brand-name">GAUSH | CLEAR &middot; 高视高清</p>
