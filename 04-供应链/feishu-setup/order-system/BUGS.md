@@ -23,35 +23,35 @@
 |---|----------|--------|------|----------|----------|-------------|----------|
 | ①-1 | token 无效 | 1 | 已修复 | | | | 已验证 |
 | ①-2 | 每家代理商下拉终端客户都一样 | 3 | | | | | |
-| ①-3 | 导入 Excel 解析正确，实际导入到下单表里，顾客参数全部变成 0 | 2 | 已修复 | `public/order.html` `server.js` | 1) `importToForm` 两眼默认都勾选，Excel 只有单眼数据时另一眼空值提交为 0；2) 解析端对非数字文本缺 NaN 防护 | | 待验证 |
-| ①-4 | Excel 备注栏信息没有同步到下单备注内 | 4 | 已修复 | `server.js` | `handleExcelUpload` 未解析备注列；加 `get("备注")` 并追加到 patient.remark | | 待验证 |
-| ①-5 | Excel 订单表 PL（平光），无法识别 | 5 | 已修复 | `server.js` | `toRx` 对 PL/平光 文本返回 NaN→"0"；加 PL/PLANO/平光 特殊匹配返回 "0" | | 待验证 |
-| ①-6 | 手动填写订单，下方"订单摘要"无法识别全部顾客 | 5 | 已修复 | `public/order.html` | `updateSummary` 调 `collectPatients` 过滤了无眼别顾客；改为直接遍历卡片不过滤 eyes | | 待验证 |
+| ①-3 | 导入 Excel 解析正确，实际导入到下单表里，顾客参数全部变成 0 | 2 | 已修复 | `public/order.html` `server.js` | 1) `importToForm` 两眼默认都勾选，Excel 只有单眼数据时另一眼空值提交为 0；2) 解析端对非数字文本缺 NaN 防护 | | 已验证 |
+| ①-4 | Excel 备注栏信息没有同步到下单备注内 | 4 | 已修复 | `server.js` | `handleExcelUpload` 未解析备注列；加 `get("备注")` 并追加到 patient.remark | | 已验证 |
+| ①-5 | Excel 订单表 PL（平光），无法识别 | 5 | 已修复 | `server.js` | `toRx` 对 PL/平光 文本返回 NaN→"0"；加 PL/PLANO/平光 特殊匹配返回 "0" | | 已验证 |
+| ①-6 | 手动填写订单，下方"订单摘要"无法识别全部顾客 | 5 | 已修复 | `public/order.html` | `updateSummary` 调 `collectPatients` 过滤了无眼别顾客；改为直接遍历卡片不过滤 eyes | | 已验证 |
 | ①-7 | （原文仅截图，无描述） | | | | | | |
-| ①-8 | 数量单位为"副" | 5 | 已修复 | `server.js` `public/order.html` | 数量当"片"用了 `qty*lensCount`，实际每副=2片；改为 `qty*2`，Excel列名改为"数量（副）"，前端label同步 | | 待验证 |
+| ①-8 | 数量单位为"副" | 5 | 已修复 | `server.js` `public/order.html` | 数量当"片"用了 `qty*lensCount`，实际每副=2片；改为 `qty*2`，Excel列名改为"数量（副）"，前端label同步 | | 已验证 |
 
 ## 步骤② 助理确认订单
 
 | # | Bug 描述 | 严重度 | 状态 | 涉及文件 | 根因假设 | 修复 commit | 验证状态 |
 |---|----------|--------|------|----------|----------|-------------|----------|
-| ②-1 | 按照订单号确认，实际需要按照每个客户确认 | | 已修复 | `server.js` `public/labels.html` | confirm/ship/deliver 按 orderNo 批量操作同号所有客户；加 customerName 过滤参数，前端改为行级选择（orderNo|customerName复合键） | | 待验证 |
+| ②-1 | 按照订单号确认，实际需要按照每个客户确认 | | 已修复 | `server.js` `public/labels.html` | confirm/ship/deliver 按 orderNo 批量操作同号所有客户；加 customerName 过滤参数，前端改为行级选择（orderNo|customerName复合键） | | 已验证 |
 
 ## 步骤③ 助理发货
 
 | # | Bug 描述 | 严重度 | 状态 | 涉及文件 | 根因假设 | 修复 commit | 验证状态 |
 |---|----------|--------|------|----------|----------|-------------|----------|
-| ③-1 | 点击发货按钮，同一订单全部更改状态，实际应只更新 1 副的状态；发货和签收都是按订单处理，不是按一副处理 | 2 | 已修复 | `server.js` `public/labels.html` | 同 ②-1 根因；confirm/ship/deliver 全部加 customerName 过滤，前端行级选择 | | 待验证 |
+| ③-1 | 点击发货按钮，同一订单全部更改状态，实际应只更新 1 副的状态；发货和签收都是按订单处理，不是按一副处理 | 2 | 已修复 | `server.js` `public/labels.html` | 同 ②-1 根因；confirm/ship/deliver 全部加 customerName 过滤，前端行级选择；ship/deliver 同步镜片明细表状态 | | 已验证 |
 
 ## 步骤④ 助理批量导出 ZIP
 
 | # | Bug 描述 | 严重度 | 状态 | 涉及文件 | 根因假设 | 修复 commit | 验证状态 |
 |---|----------|--------|------|----------|----------|-------------|----------|
-| ④-1 | 同一名字间隔开，需要按名字排序 | 3 | 已修复 | `server.js` | records 未排序；`buildFactoryExcel` 加 `localeCompare("zh-CN")` 按顾客姓名排序 | | 待验证 |
-| ④-2 | 张四、张五为同一个订单，只有张四备注"需要随货同行单"，导出给工厂的文件中都带了备注，张五不应带 | | 已修复 | `server.js` | 备注用 `orderRemark`（订单级）覆盖了所有行；改为优先用镜片明细表自身的 `f["备注"]` | | 待验证 |
-| ④-3 | 导出订单内没有收货人、联系方式和收货地址 | 2 | 已修复 | `server.js` | `buildFactoryExcel` 从镜片明细表读字段，但联系人/电话/地址在订单主表；单订单路径更是传错了表（order records 当 lens records） | | 待验证 |
-| ④-4 | 导出 ZIP 文件，无备注、无收货地址 | | 已修复 | `server.js` | 同 ④-3，batch-zip 路径只拉了备注，未拉地址/联系信息 | | 待验证 |
-| ④-5 | 不同订单号不能导出同一个 Excel 表 | 4 | 已修复 | `server.js` | batch-zip 每订单单独 Excel；改为合并所有订单到一个 Excel sheet | | 待验证 |
-| ④-6 | 一个订单内多个人名，选中其中一人导出订单内所有人（应按人名导出） | | 已修复 | `server.js` `public/labels.html` | batch-zip 无 customer 过滤；加 `customer` query 参数，按顾客姓名过滤镜片记录 | | 待验证 |
+| ④-1 | 同一名字间隔开，需要按名字排序 | 3 | 已修复 | `server.js` | records 未排序；`buildFactoryExcel` 加 `localeCompare("zh-CN")` 按顾客姓名排序 | | 已验证 |
+| ④-2 | 张四、张五为同一个订单，只有张四备注"需要随货同行单"，导出给工厂的文件中都带了备注，张五不应带 | | 已修复 | `server.js` | 备注用 `orderRemark`（订单级）覆盖了所有行；改为优先用镜片明细表自身的 `f["备注"]` | | 已验证 |
+| ④-3 | 导出订单内没有收货人、联系方式和收货地址 | 2 | 已修复 | `server.js` | `buildFactoryExcel` 从镜片明细表读字段，但联系人/电话/地址在订单主表；单订单路径更是传错了表（order records 当 lens records） | | 已验证 |
+| ④-4 | 导出 ZIP 文件，无备注、无收货地址 | | 已修复 | `server.js` | 同 ④-3，batch-zip 路径只拉了备注，未拉地址/联系信息；page_size 改为 100 | | 已验证 |
+| ④-5 | 不同订单号不能导出同一个 Excel 表 | 4 | 已修复 | `server.js` | batch-zip 每订单单独 Excel；改为合并所有订单到一个 Excel sheet；sheet name 截断 31 字符 | | 已验证 |
+| ④-6 | 一个订单内多个人名，选中其中一人导出订单内所有人（应按人名导出） | | 已修复 | `server.js` `public/labels.html` | batch-zip 无 customer 过滤；加 `customer` query 参数，按顾客姓名过滤镜片记录 | | 已验证 |
 
 ## 步骤⑤ 工厂随货通行单
 
@@ -75,8 +75,8 @@
 
 | # | Bug 描述 | 严重度 | 状态 | 涉及文件 | 根因假设 | 修复 commit | 验证状态 |
 |---|----------|--------|------|----------|----------|-------------|----------|
-| ⑧-1 | 两只眼应该有两个镜片码，实际扫出来只显示一个，但显示的是两只眼的参数 | 3 | 已修复 | `server.js` `public/verify.html` | 模板用双眼展示但单镜片码只对应一眼；改为单眼展示+AXIS | | 待验证 |
-| ⑧-2 | 二维码验证，扫出来的参数不对，混入同订单其他人参数 | 3 | 已修复 | `server.js` | `samePerson` 按姓名过滤同名混入；去掉二次查找，直接用镜片码对应记录 | | 待验证 |
+| ⑧-1 | 两只眼应该有两个镜片码，实际扫出来只显示一个，但显示的是两只眼的参数 | 3 | 已修复 | `server.js` `public/verify.html` | 模板用双眼展示但单镜片码只对应一眼；改为单眼展示+AXIS | | 已验证 |
+| ⑧-2 | 二维码验证，扫出来的参数不对，混入同订单其他人参数 | 3 | 已修复 | `server.js` | `samePerson` 按姓名过滤同名混入；去掉二次查找，直接用镜片码对应记录 | | 已验证 |
 
 ---
 

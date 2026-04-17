@@ -797,7 +797,7 @@ function buildFactoryExcel(records, orderNo, orderInfo = {}) {
     { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
     { wch: 16 }, { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
   ];
-  XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`);
+  XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`.slice(0, 31));
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 }
 
@@ -1414,14 +1414,8 @@ const server = createServer(async (req, res) => {
             const codes = await assignLensCodes(orderNo);
             if (codes.length > 0) {
               console.log(`  镜片码已生成: ${orderNo} → ${codes.join(", ")}`);
-              // 回写镜片码到订单主表
-              const encoded = encodeURIComponent(`"${orderNo}"`);
-              const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
-              const recs = d?.items || [];
-              for (const rec of recs) {
-                await updateRecord(TABLES.order, rec.record_id, { "镜片码": codes.join(",") });
-              }
-              console.log(`  镜片码已回写主表: ${orderNo}`);
+              // 镜片码权威来源是镜片明细表，不在此处回写到订单主表
+              // 回写留到 confirm 时按 customerName 过滤后写入
             }
             break; // 成功则退出重试
           } catch (e) {
@@ -1975,7 +1969,7 @@ const server = createServer(async (req, res) => {
         if (!orderInfoMap[orderNo]) {
           const orderEnc = encodeURIComponent(`"${orderNo}"`);
           const orderData = await feishuApi("GET",
-            `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[订单编号]=${orderEnc}`
+            `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${orderEnc}`
           );
           const of = orderData?.items?.[0]?.fields || {};
           orderInfoMap[orderNo] = {
@@ -2058,11 +2052,13 @@ const server = createServer(async (req, res) => {
           // 生成镜片码（幂等，按客户过滤）
           const lensCodes = await assignLensCodes(orderNo, customerName);
 
-          // 更新状态为生产中 + 回写镜片码
+          // 更新状态为生产中 + 回写镜片码（合并已有码，不覆盖其他客户的码）
           for (const rec of records) {
+            const existingCodes = String(rec.fields["镜片码"] || "").split(",").filter(Boolean);
+            const mergedCodes = [...new Set([...existingCodes, ...lensCodes])];
             await updateRecord(TABLES.order, rec.record_id, {
               "订单状态": "生产中",
-              ...(lensCodes.length > 0 ? { "镜片码": lensCodes.join(",") } : {}),
+              ...(mergedCodes.length > 0 ? { "镜片码": mergedCodes.join(",") } : {}),
             });
           }
           results.push({ orderNo, ok: true, lensCodes });
@@ -2134,6 +2130,15 @@ const server = createServer(async (req, res) => {
             });
           }
 
+          // 同步镜片明细表状态
+          const shipLensDetails = await getLensDetailsByOrder(orderNo);
+          const shipFilteredLens = customerName
+            ? shipLensDetails.filter(r => (r.fields["顾客姓名"] || "") === customerName)
+            : shipLensDetails;
+          for (const rec of shipFilteredLens) {
+            await updateRecord(TABLES.lens_detail, rec.record_id, { "订单状态": "已发货" });
+          }
+
           // 飞书发货卡片
           const custName = rawVal(f0["顾客姓名"]) || "";
           const sku = rawVal(f0["产品型号"]) || "";
@@ -2183,6 +2188,15 @@ const server = createServer(async (req, res) => {
               "物流状态": "已签收",
               "签收时间": now,
             });
+          }
+
+          // 同步镜片明细表状态
+          const deliverLensDetails = await getLensDetailsByOrder(orderNo);
+          const deliverFilteredLens = customerName
+            ? deliverLensDetails.filter(r => (r.fields["顾客姓名"] || "") === customerName)
+            : deliverLensDetails;
+          for (const rec of deliverFilteredLens) {
+            await updateRecord(TABLES.lens_detail, rec.record_id, { "订单状态": "已签收" });
           }
 
           // 飞书签收卡片
