@@ -321,8 +321,11 @@ async function main() {
   console.log("\n─── 验证 ②-1 按客户确认 ───");
   const order3 = submitted.find(s => s.label.includes("②-1"));
   if (order3) {
-    const keys = Object.keys(confirmResults[order3.orderNo]);
-    assert("②-1 同订单号两客户分别确认", keys.length === 2, `客户数=${keys.length}`);
+    // 王芳×2 同名，confirmResults 按姓名 key 会合并为 1 个
+    // 验证：两次 confirm 都成功了（上面 assert 已覆盖），且拿到镜片码
+    const codes = Object.values(confirmResults[order3.orderNo]);
+    const totalCodes = codes.reduce((s, a) => s + a.length, 0);
+    assert("②-1 同订单号按客户确认", totalCodes >= 4, `总镜片码数=${totalCodes}`);
   }
 
   // ═══ Step 3: 验真（验证 ⑧-1/⑧-2）═════════════════════════════════════
@@ -335,8 +338,8 @@ async function main() {
         await new Promise(r => setTimeout(r, 300)); // 避免 429 限流
         const vRes = await apiGetRaw(`/verify/${code}`);
         const html = vRes.text;
-        // ⑧-1：验真页应该是单眼展示，不应同时出现 "L 左眼" 和 "R 右眼" 表格行
-        const hasBothEyes = html.includes("eye-L") && html.includes("eye-R");
+        // ⑧-1：验真页应该是单眼展示，不应同时出现 "左眼" 和 "右眼" 文本
+        const hasBothEyes = html.includes("左眼") && html.includes("右眼");
         assert(
           `验真 ${code} ⑧-1 单眼展示`,
           !hasBothEyes,
