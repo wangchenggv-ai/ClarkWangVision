@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视星 端到端价值链</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap');
+
+  :root {
+    --navy: #0B1D33;
+    --deep: #132F4C;
+    --brand: #1A5276;
+    --accent: #2E86C1;
+    --teal: #1B998B;
+    --gold: #D4A843;
+    --orange: #E67E22;
+    --light: #ECF0F1;
+    --white: #FFFFFF;
+    --gray: #8899AA;
+    --red-data: #E74C3C;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans SC', sans-serif;
+    background: var(--navy);
+    color: var(--white);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .header h1 {
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    background: linear-gradient(135deg, var(--gold), var(--orange));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+  .header .subtitle {
+    font-size: 14px;
+    color: var(--gray);
+    font-weight: 300;
+    letter-spacing: 4px;
+  }
+  .header .tagline {
+    margin-top: 16px;
+    font-size: 16px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  /* Two tracks */
+  .tracks {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+    margin-bottom: 40px;
+  }
+
+  .track {
+    background: var(--deep);
+    border-radius: 16px;
+    padding: 28px;
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .track::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+  }
+  .track-left::before {
+    background: linear-gradient(90deg, var(--brand), var(--accent));
+  }
+  .track-right::before {
+    background: linear-gradient(90deg, var(--teal), var(--gold));
+  }
+
+  .track-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .track-left .track-label { color: var(--accent); }
+  .track-right .track-label { color: var(--gold); }
+
+  .track-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .track-desc {
+    font-size: 13px;
+    color: var(--gray);
+    margin-bottom: 24px;
+  }
+
+  /* Nodes */
+  .node {
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+    border-left: 3px solid transparent;
+  }
+  .node:hover {
+    transform: translateX(4px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .track-left .node:nth-child(1) { border-left-color: var(--accent); }
+  .track-left .node:nth-child(2) { border-left-color: var(--brand); }
+  .track-left .node:nth-child(3) { border-left-color: #3498DB; }
+  .track-right .node:nth-child(1) { border-left-color: var(--teal); }
+  .track-right .node:nth-child(2) { border-left-color: var(--gold); }
+  .track-right .node:nth-child(3) { border-left-color: var(--orange); }
+
+  .node-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  .node-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .track-left .node:nth-child(1) .node-icon { background: rgba(46,134,193,0.2); }
+  .track-left .node:nth-child(2) .node-icon { background: rgba(26,82,118,0.3); }
+  .track-left .node:nth-child(3) .node-icon { background: rgba(52,152,219,0.2); }
+  .track-right .node:nth-child(1) .node-icon { background: rgba(27,153,139,0.2); }
+  .track-right .node:nth-child(2) .node-icon { background: rgba(212,168,67,0.2); }
+  .track-right .node:nth-child(3) .node-icon { background: rgba(230,126,34,0.2); }
+
+  .node-name {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .node-cn {
+    font-size: 12px;
+    color: var(--gray);
+    font-weight: 400;
+  }
+  .node-body {
+    font-size: 13px;
+    color: #BDC3C7;
+    line-height: 1.6;
+    margin-left: 48px;
+  }
+
+  /* Arrow between nodes */
+  .arrow-down {
+    text-align: center;
+    font-size: 20px;
+    color: rgba(255,255,255,0.15);
+    margin: -4px 0;
+    line-height: 1;
+  }
+
+  /* Center bridge */
+  .bridge {
+    background: linear-gradient(135deg, rgba(26,82,118,0.3), rgba(27,153,139,0.3));
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 28px 32px;
+    text-align: center;
+    margin-bottom: 40px;
+    position: relative;
+  }
+  .bridge-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--gold);
+  }
+  .bridge-text {
+    font-size: 14px;
+    color: #BDC3C7;
+    line-height: 1.7;
+    max-width: 800px;
+    margin: 0 auto;
+  }
+  .bridge-highlight {
+    color: var(--white);
+    font-weight: 700;
+  }
+
+  /* Flywheel */
+  .flywheel {
+    text-align: center;
+    margin-bottom: 32px;
+  }
+  .flywheel-title {
+    font-size: 12px;
+    letter-spacing: 4px;
+    color: var(--gray);
+    font-weight: 700;
+    margin-bottom: 20px;
+  }
+  .flywheel-ring {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .fw-step {
+    background: var(--deep);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .fw-arrow {
+    font-size: 18px;
+    color: var(--gold);
+    margin: 0 6px;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 24px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .footer-text {
+    font-size: 12px;
+    color: var(--gray);
+    font-weight: 300;
+    letter-spacing: 1px;
+  }
+  .footer-brand {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .tracks { grid-template-columns: 1fr; }
+    .header h1 { font-size: 24px; }
+    .flywheel-ring { flex-direction: column; gap: 8px; }
+    .fw-arrow { transform: rotate(90deg); }
+  }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .track { animation: fadeUp 0.6s ease both; }
+  .track-right { animation-delay: 0.15s; }
+  .bridge { animation: fadeUp 0.6s ease 0.3s both; }
+  .flywheel { animation: fadeUp 0.6s ease 0.45s both; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>高视星 · 端到端价值链</h1>
+    <div class="subtitle">GAOSHIXING END-TO-END VALUE CHAIN</div>
+    <div class="tagline">6 个系统 · 2 条轨道 · 1 个数据闭环</div>
+  </div>
+
+  <!-- Two Tracks -->
+  <div class="tracks">
+
+    <!-- Left Track: Company Operations -->
+    <div class="track track-left">
+      <div class="track-label">Track A · 公司运营</div>
+      <div class="track-title">CEO 视角：管生意</div>
+      <div class="track-desc">服务 20 人团队，驱动销售与交付</div>
+
+      <div class="node">
+        <div class="node-header">
+          <div class="node-icon">👥</div>
+          <div><div class="node-name">CRM 系统</div><div class="node-cn">管客户</div></div>
+        </div>
+        <div class="node-body">39 家经销商管理、客户分层（A/B/C）、销售漏斗追踪、拜访记录、月度预测</div>
+      </div>
+      <div class="arrow-down">↓</div>
+      <div class="node">
+        <div class="node-header">
+          <div class="node-icon">📦</div>
+          <div><div class="node-name">订单系统</div><div class="node-cn">管交付</div></div>
+        </div>
+        <div class="node-body">订单录入与审批、QR 码追溯、发货管理、回款跟踪、经销商对账</div>
+      </div>
+      <div class="arrow-down">↓</div>
+      <div class="node">
+        <div class="node-header">
+          <div class="node-icon">⚙️</div>
+          <div><div class="node-name">供应链系统</div><div class="node-cn">管生产</div></div>
+        </div>
+        <div class="node-body">产品概念 → 模具 → 毛坯 → 成品片 → 库存。ABC-XYZ 分类、安全库存、OEM 协同</div>
+      </div>
+    </div>
+
+    <!-- Right Track: CDSA -->
+    <div class="track track-right">
+      <div class="track-label">Track B · CDSA 临床数据联盟</div>
+      <div class="track-title">终端视角：管临床</div>
+      <div class="track-desc">服务合作门诊，驱动数据飞轮</div>
+
+      <div class="node">
+        <div class="node-header">
+          <div class="node-icon">🧠</div>
+          <div><div class="node-name">CDSS Agent</div><div class="node-cn">管得对 — 临床决策</div></div>
+        </div>
+        <div class="node-body">患者进来 → AI 辅助方案推荐、风险分级、参数建议。初级视光师也能做出靠谱决策</div>
+      </div>
+      <div class="arrow-down">↓</div>
+      <div class="node">
+        <div class="node-header">
+          <div class="node-icon">📋</div>
+          <div><div class="node-name">专病管理系统</div><div class="node-cn">管得住 — 患者随访</div></div>
+        </div>
+        <div class="node-body">自动排复查节点、家长提醒、数据采集、异常预警、流失追回。咏柳团队已交付</div>
+      </div>
+      <div class="arrow-down">↓</div>
+      <div class="node">
+        <div class="node-header">
+          <div class="node-icon">📊</div>
+          <div><div class="node-name">运营仪表盘</div><div class="node-cn">管得值 — 门诊运营</div></div>
+        </div>
+        <div class="node-body">患者 LTV 分析、方案升级推荐、转介绍识别、复购率趋势。让门诊老板看到管的回报</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bridge: Data Convergence -->
+  <div class="bridge">
+    <div class="bridge-title">⟷ 数据交汇点</div>
+    <div class="bridge-text">
+      左边告诉你<span class="bridge-highlight">卖了多少</span>，右边告诉你<span class="bridge-highlight">效果如何</span>。<br>
+      打通之后回答一个行业没人能答的问题：<br>
+      <span class="bridge-highlight">哪个产品 × 哪类患者 × 什么临床结果 × 多少商业价值</span>
+    </div>
+  </div>
+
+  <!-- Flywheel -->
+  <div class="flywheel">
+    <div class="flywheel-title">数 据 飞 轮</div>
+    <div class="flywheel-ring">
+      <div class="fw-step">签约门诊</div>
+      <span class="fw-arrow">→</span>
+      <div class="fw-step">部署系统</div>
+      <span class="fw-arrow">→</span>
+      <div class="fw-step">采集数据</div>
+      <span class="fw-arrow">→</span>
+      <div class="fw-step">AI 训练</div>
+      <span class="fw-arrow">→</span>
+      <div class="fw-step">决策更准</div>
+      <span class="fw-arrow">→</span>
+      <div class="fw-step">效果更好</div>
+      <span class="fw-arrow">→</span>
+      <div class="fw-step">更多门诊加入</div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-brand">AI + 垂直供应链 → 结果保障模式</div>
+    <div class="footer-text">近视先验证 · 老花第二曲线 · 终端联盟 · IPO 2030</div>
+  </div>
+
+</div>
+</body>
+</html>
