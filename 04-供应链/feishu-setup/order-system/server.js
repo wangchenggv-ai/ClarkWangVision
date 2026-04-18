@@ -1389,7 +1389,7 @@ const server = createServer(async (req, res) => {
           sku,
           skuName: skuInfo?.name || sku,
           quantity,
-          lensCount: quantity * 2,
+          lensCount: quantity * lensCount,
           customerName: customerName.trim(),
           deliveryType: est.deliveryType,
           promiseDate: est.promiseDate,

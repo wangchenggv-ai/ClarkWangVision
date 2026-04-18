@@ -11,3 +11,11 @@ Day2 bug 修复完成：
 - ④-2: 同 ④-1 根因
 - ④-6: downloadZip 自动传 customer 过滤
 - ④-3: 待验证（前端选择状态问题）
+
+测试：26/26 断言全部通过 → `docs/day2_test_report.md`
+已推送到 main（`12f8d9c`）
+
+## 2026-04-18
+代码审核后补修两处 must-fix：
+- labels.html 新增 `jsAttr()`，修复 `onclick` 中含 `'` 的客户名导致 JS 字符串截断的崩溃风险
+- server.js:1392 `lensCount: quantity * 2` → `quantity * lensCount`，与 1345 行单眼订单逻辑对齐

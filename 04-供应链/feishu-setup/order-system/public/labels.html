@@ -1294,6 +1294,12 @@ function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// 用于 onclick="...('${x}')" 中 JS 单引号字符串里的值：先 JS 转义反斜杠和单引号，再 HTML 转义
+function jsAttr(s) {
+  s = String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function statusBadge(s) {
   const dotMap = { "待处理":"pending","生产中":"producing","已发货":"shipped","已签收":"received","完成":"done" };
   const clsMap = { "待处理":"badge-pending","生产中":"badge-producing","已发货":"badge-shipped","已签收":"badge-received","完成":"badge-done" };
@@ -1493,8 +1499,8 @@ function renderOrders() {
     const overdue = isOverdue(o.status, getOrderDays(o.date));
     return `
     <tr class="data-row ${overdue ? 'overdue' : ''}" data-status="${o.status}" id="${rowId}">
-      <td><input type="checkbox" data-order="${o.orderNo}" data-customer="${escapeHtml(o.customerName)}" ${selectedOrders.has(o.orderNo+'|'+o.customerName)?'checked':''} onchange="toggleOrder('${o.orderNo}','${escapeHtml(o.customerName)}')"></td>
-      <td><button class="expand-btn" onclick="toggleRowExpand('${i}', '${o.orderNo}', '${escapeHtml(o.customerName)}')" title="展开详情">&#9654;</button></td>
+      <td><input type="checkbox" data-order="${o.orderNo}" data-customer="${escapeHtml(o.customerName)}" ${selectedOrders.has(o.orderNo+'|'+o.customerName)?'checked':''} onchange="toggleOrder('${o.orderNo}','${jsAttr(o.customerName)}')"></td>
+      <td><button class="expand-btn" onclick="toggleRowExpand('${i}', '${o.orderNo}', '${jsAttr(o.customerName)}')" title="展开详情">&#9654;</button></td>
       <td style="font-family:monospace;font-size:12px">${o.orderNo}</td>
       <td>${o.customerName}</td>
       <td>${o.agentName}</td>
