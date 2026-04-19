@@ -1,0 +1,21 @@
+services:
+  mock-shuang:
+    image: swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/mock-shuang:v1
+    container_name: mock-shuang
+    ports:
+      - "127.0.0.1:3220:3220"
+    restart: unless-stopped
+
+  order-app:
+    image: swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/order-app:v1
+    container_name: order-app
+    ports:
+      - "127.0.0.1:3210:3210"
+    env_file:
+      - .env.production
+    volumes:
+      - ./public/qrcodes:/app/public/qrcodes
+      - ./.env.production:/app/.env:ro
+    depends_on:
+      - mock-shuang
+    restart: unless-stopped
