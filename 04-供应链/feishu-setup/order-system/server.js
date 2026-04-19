@@ -1823,10 +1823,14 @@ const server = createServer(async (req, res) => {
           skuName: skuMatch?.name || skuCode,
         };
 
-        // 查同订单同客户的所有镜片记录（双眼）
+        // 同订单同客户同产品的眼别匹配（避免同名不同处方混入）
+        const srcSku = lf["产品型号"] || "";
         const allLens = await getLensDetailsByOrder(srcOrderNo);
-        const sameCustomerLens = allLens.filter(r => (r.fields["顾客姓名"] || "") === srcCustomer);
-        eyes = sameCustomerLens.map(r => ({
+        const samePair = allLens.filter(r =>
+          (r.fields["顾客姓名"] || "") === srcCustomer &&
+          (r.fields["产品型号"] || "") === srcSku
+        );
+        eyes = samePair.map(r => ({
           side: r.fields["眼别"] || "",
           sph: r.fields["球镜SPH"] ?? "",
           cyl: r.fields["柱镜CYL"] ?? "",

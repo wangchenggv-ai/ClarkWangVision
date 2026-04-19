@@ -90,3 +90,11 @@ docker compose pull && docker compose up -d
 - QR 码图片已下载本地扫码验证通过
 
 A 系统迁云完成，停止优化，回到 B 脚本主线。
+
+## 2026-04-19 华为云全量 Bug 回归
+- 关闭 READ_ONLY_MODE，在 ECS 上跑 E2E 全流程（8 订单，79 断言）
+- 74/79 通过，发现 ⑧-2 同名不混回归：验真页按客户名过滤，同名不同处方混入
+- 修复 `server.js:1828`：过滤条件增加产品型号匹配（`sameCustomerLens` → `samePair`，加 `srcSku` 条件）
+- 修复后验证通过：同名"张伟"的 Ultra双效组（2 码）和 D8 组（2 码）互不干扰
+- 已恢复 READ_ONLY_MODE=true
+- 报告：`docs/cloud_regression_report.md`

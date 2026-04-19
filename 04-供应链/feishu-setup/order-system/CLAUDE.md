@@ -88,7 +88,7 @@
 待处理 → 生产中 → 已发货 → 已签收
 ```
 - **禁止回退状态** — 任何"从已发货回到生产中"的需求，用单独的订正流程处理，不能直接改字段
-- 订单主表状态和镜片明细表状态必须同步（见 [server.js](server.js) 的 admin/* 端点）
+- 订单主表状态和镜片明细表状态必须同步（见 [server.js](04-供应链/feishu-setup/order-system/server.js) 的 admin/* 端点）
 
 ### 4.4 Bitable 写入
 - 批量操作用 `batch_create` / `batch_update`（上限 500 条/次），分页处理
@@ -140,7 +140,7 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 ## 六、目录导航
 
 ### 常改的
-- [server.js](server.js) — 主后端（112KB，所有 API 端点）
+- [server.js](04-供应链/feishu-setup/order-system/server.js) — 主后端（112KB，所有 API 端点）
 - [public/order.html](public/order.html) — 代理商下单页
 - [public/labels.html](public/labels.html) — 助理管理页（确认/发货/签收/标签）
 - [public/track.html](public/track.html) — 代理商追踪页（只读）
@@ -148,7 +148,7 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 - [logistics.js](logistics.js) — 物流 CLI + 通行单生成
 
 ### 偶尔碰的
-- [automations.js](automations.js) — 业务规则引擎
+- [automations.js](04-供应链/feishu-setup/order-system/automations.js) — 业务规则引擎
 - [ai_analysis.js](ai_analysis.js) — AI 周分析（MiMo）
 - [dashboard.js](dashboard.js) / [dashboard.html](dashboard.html) — KPI 看板
 - [delivery_analysis.js](delivery_analysis.js) — 交期分析
@@ -160,7 +160,7 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 
 ### 文档
 - [ARCHITECTURE.md](ARCHITECTURE.md) — 完整架构（本文件的详细版）
-- [CHANGELOG.md](CHANGELOG.md) — 迭代记录
+- [CHANGELOG.md](04-供应链/feishu-setup/order-system/CHANGELOG.md) — 迭代记录
 - [docs/](docs/) — E2E 报告 / 设计稿 / 历史方案
 
 ---
@@ -169,12 +169,12 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 
 | 任务 | 从哪开始 |
 |------|----------|
-| 加一个管理端操作 | [server.js](server.js) 找 `/api/admin/*` 端点，照抄现有模式；前端 [public/labels.html](public/labels.html) 加按钮 |
-| 改订单字段 | 同时改 [server.js](server.js) 的写入 + [ARCHITECTURE.md](ARCHITECTURE.md) 的字段表 |
+| 加一个管理端操作 | [server.js](04-供应链/feishu-setup/order-system/server.js) 找 `/api/admin/*` 端点，照抄现有模式；前端 [public/labels.html](public/labels.html) 加按钮 |
+| 改订单字段 | 同时改 [server.js](04-供应链/feishu-setup/order-system/server.js) 的写入 + [ARCHITECTURE.md](ARCHITECTURE.md) 的字段表 |
 | 改状态流转 | **先停下来问用户** — 状态机变动影响所有端，不能独断 |
 | 改 Bitable 结构 | 写一个新的 `migrate_*.js` 脚本，不要手动改 Bitable UI |
 | 前端样式调整 | `public/css/` 和对应 HTML 内联 style |
-| 排查消费者扫码报错 | 看 [server.js](server.js) 的 `/verify/:lensCode` 端点 + 浏览器 Network |
+| 排查消费者扫码报错 | 看 [server.js](04-供应链/feishu-setup/order-system/server.js) 的 `/verify/:lensCode` 端点 + 浏览器 Network |
 
 ---
 
@@ -182,6 +182,7 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 
 - **order.html 重复 const 声明** → JS 崩溃，白屏。改前 `grep` 确认变量名唯一
 - **/api/terminal-customers 同步加载** → 阻塞首屏渲染。必须异步加载且不堵死下单流程
+- **⑧-2 验真页同名混入** → 同名客户不同处方，按客户名过滤无法区分。修复：过滤条件加产品型号（`customerName + sku`），不能只按姓名
 - 详见 `~/.claude/projects/...memory/project_order_system_bugs.md`
 
 ---
