@@ -165,6 +165,56 @@ ECP（验配师）开发管理，**暂不启用**。
 
 **表单管理**：`+form-create` / `+form-questions-update` / `+form-get`
 
+### 08_会议酒店房量表 (`tbl18k4MMLYMcgKB`)
+
+酒店房间池，每场会每个酒店一条记录，实时显示各房型余量。
+
+| 字段名 | 字段ID | 类型 | 说明 |
+|--------|--------|------|------|
+| 酒店名称 | fldYJvt0xL | text | |
+| 酒店联系人 | fldH8weAXI | text | 对接的助理姓名 |
+| 酒店联系电话 | fldvfbuaP3 | text | |
+| 大床房总量 | fldKF78odr | number | |
+| 大床房已订 | fldnyTt1ho | number | 助理确认订房时+1 |
+| 大床房剩余 | fldH0ZH84X | formula | 总量-已订 |
+| 双床房总量 | fldVjae7FE | number | |
+| 双床房已订 | fldI757SiU | number | |
+| 双床房剩余 | fldZVezF47 | formula | 总量-已订 |
+| 入住日期 | fldZPsmjn2 | datetime | |
+| 退房日期 | fldjmZSLoy | datetime | |
+| 备注 | flddCt6OEX | text | |
+| 所属会议 | fld3jZb2Y8 | link → 06表 | 双向关联，06表自动生成"关联酒店房量" |
+
+### 09_住宿订房记录 (`tbl9otGltI0zFZCn`)
+
+每条记录 = 一间房的预订请求，销售提交 → 助理审核。
+
+| 字段名 | 字段ID | 类型 | 说明 |
+|--------|--------|------|------|
+| 会议名称 | fld8uhAfT5 | text | 表单填写（助理确认时关联link） |
+| 酒店名称 | fldrPHgBuH | text | 表单填写（助理确认时关联link） |
+| 入住客户 | fldMEEz89m | text | 表单填写（助理确认时关联link） |
+| 客户联系人 | fldaPdoIuF | text | 入住人姓名 |
+| 手机号 | fld7w2Jzd2 | text | |
+| 房型 | fldflP63HY | select | 大床房/双床房 |
+| 入住日期 | fldCVTQcnW | datetime | |
+| 退房日期 | fldVsQzRFl | datetime | |
+| 订房销售 | fldan3Da3Q | user | 提交人 |
+| 状态 | fldYuUt3NZ | select | 待确认/已确认/已取消 |
+| 确认人 | fldbPzaYcj | user | 助理确认时填入 |
+| 确认时间 | fldxEXetgd | datetime | |
+| 备注 | fld5zhDld5 | text | 特殊需求 |
+| 所属会议 | fldZGjm1DL | link → 06表 | 双向关联 |
+| 关联酒店 | fldcEqhSzY | link → 08表 | 双向关联 |
+| 客户名称 | fldFsICS4f | link → 02表 | 单向关联 |
+
+**订房表单**：form-id `vew8Hz37Vu`，表单链接需在飞书UI中获取
+**表单字段**：会议名称/酒店名称/入住客户/客户联系人/手机号/房型/入住日期/退房日期（8个必填）+ 备注（选填）
+**业务流程**：
+1. 销售扫码填表 → 写入09表（状态=待确认）
+2. 助理看"待确认"视图 → 确认时手动关联所属会议/关联酒店/客户名称link字段 → 状态改为"已确认"
+3. 助理手动更新08表该酒店对应房型"已订"+1
+
 ## API 限制
 
 - **省份/城市字段**: `not_support` 类型（动态选项），无法通过 lark-cli API 写入，需手动在飞书中维护
