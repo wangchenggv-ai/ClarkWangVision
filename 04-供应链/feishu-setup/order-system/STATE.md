@@ -98,3 +98,31 @@ A 系统迁云完成，停止优化，回到 B 脚本主线。
 - 修复后验证通过：同名"张伟"的 Ultra双效组（2 码）和 D8 组（2 码）互不干扰
 - 已恢复 READ_ONLY_MODE=true
 - 报告：`docs/cloud_regression_report.md`
+
+## 2026-04-20 内部同事测试启动
+
+系统全部就绪，开放同事测试：
+- 代理商登录：`https://lab.gaushclear.com/login?t={代理商Token}`（41 个代理商已启用）
+- 管理后台：`https://lab.gaushclear.com/admin-login?admin=GaushOrderMock`
+- 验真示例：`https://lab.gaushclear.com/verify/9A01D300D79856A0`
+- 注：READ_ONLY_MODE=true 实际未在 server.js 中实现，写入操作不受限制
+
+## 2026-04-21 同事测试反馈修复（第一批）
+
+修复 2 个 bug（详见 BUGS.md）：
+- ①-9：Excel 空行（仅眼别无度数）被误识别为零值 → `server.js` 跳过无度数行
+- ①-10：追加导入 Excel 时第一个顾客被跳过 → `order.html` 追加模式移除空占位卡
+
+## 2026-04-21 同事测试反馈修复（第二批）
+
+修复 9 个 bug（详见 BUGS.md 4/21 第二批表格）：
+- ①-1：Excel 20 行上限→去掉限制，支持任意人数
+- ①-3：备注行被误创建为新客户→无产品/眼别的行备注附加到上一个 patient
+- ②-1/④-2/⑧-2：眼别排序不一致（同根）→`getLensDetailsByOrder` 内部加排序 + `buildFactoryExcel` 二级排序
+- ④-1：导出备注读错表→回退到 `orderRemark`
+- ④-3：同订单选多人导出全订单→前端收集全部客户名，后端支持逗号分隔过滤
+- ④-4：度数浮点精度→`.toFixed()` 格式化
+- ④-5：`quickZip` key 格式错误→直接构建 URL 绕过自动检测
+- ⑧-1：验证时间显示扫码时间→改为订单创建时间
+
+涉及文件：`server.js`（6 处）、`labels.html`（2 处）、`BUGS.md`

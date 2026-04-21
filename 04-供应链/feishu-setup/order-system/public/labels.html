@@ -1713,9 +1713,8 @@ function fmtDateISO(d) {
 // ─── 单行快捷操作 ───────────────────────────────────────────────────
 
 function quickZip(orderNo) {
-  selectedOrders.clear();
-  selectedOrders.add(orderNo);
-  downloadZip();
+  const url = `/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNo)}`;
+  window.open(url, "_blank");
 }
 
 async function quickConfirm(orderNo, customerName) {
@@ -1923,12 +1922,10 @@ function downloadZip(customer) {
   if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
   const keys = [...selectedOrders];
   const orderNos = [...new Set(keys.map(k => k.split('|')[0]))].join(",");
-  // 如果每个订单号只选了一个客户，自动传 customer 过滤（④-6）
+  // 收集所有选中的客户名，传给后端过滤
   if (!customer) {
-    const byOrder = {};
-    keys.forEach(k => { const [no, cn] = k.split('|'); (byOrder[no] = byOrder[no] || new Set()).add(cn); });
-    const singleCustomers = [...new Set(Object.values(byOrder).filter(s => s.size === 1).map(s => [...s][0]))];
-    if (singleCustomers.length === 1) customer = singleCustomers[0];
+    const allCustomers = [...new Set(keys.map(k => k.split('|')[1]).filter(Boolean))];
+    if (allCustomers.length > 0) customer = allCustomers.join(",");
   }
   let url = `/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNos)}`;
   if (customer) url += `&customer=${encodeURIComponent(customer)}`;

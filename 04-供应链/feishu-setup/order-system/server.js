@@ -133,7 +133,7 @@ async function handleExcelUpload(file) {
   };
 
   // 3. 解析数据行
-  const dataRows = allRows.slice(headerIdx + 1, headerIdx + 21); // 最多20行
+  const dataRows = allRows.slice(headerIdx + 1);
   const warnings = [];
   const patients = [];
   let lastCustomerName = "";
@@ -150,6 +150,12 @@ async function handleExcelUpload(file) {
 
     const customerName = String(get("顾客姓名") || "").trim();
     const eye = String(get("眼别") || "").trim();
+
+    // 跳过有眼别但无任何度数的行（Excel 空行模板）
+    const _sph = get("球镜") ?? get("SPH") ?? get("球镜SPH");
+    const _cyl = get("柱镜") ?? get("CYL") ?? get("柱镜CYL");
+    const _axis = get("轴位") ?? get("AXIS") ?? get("轴位AXIS");
+    if (eye && (_sph == null || String(_sph).trim() === "") && (_cyl == null || String(_cyl).trim() === "") && (_axis == null || String(_axis).trim() === "")) continue;
     const productModel = String(get("产品型号") || "").trim();
     const sph = get("球镜") ?? get("SPH") ?? get("球镜SPH");
     const cyl = get("柱镜") ?? get("CYL") ?? get("柱镜CYL");
@@ -165,6 +171,15 @@ async function handleExcelUpload(file) {
     if (customerName) lastCustomerName = customerName;
 
     if (!name) continue;
+
+    // 如果该行无产品型号、无眼别、无数数，只有备注 → 附加到上一个 patient
+    if (!productModel && !eye && remark && lastCustomerName) {
+      const prev = patients.find(p => p.customerName === lastCustomerName);
+      if (prev && !prev.remark.includes(remark)) {
+        prev.remark = prev.remark ? prev.remark + "；" + remark : remark;
+      }
+      continue;
+    }
 
     // 收集订单级联系信息（取第一个非空值）
     if (!orderContact && contact) orderContact = contact;
@@ -749,7 +764,14 @@ async function getLensDetailsByOrder(orderNo) {
   const data = await feishuApi("GET",
     `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.lens_detail}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`
   );
-  return data?.items || [];
+  const items = data?.items || [];
+  items.sort((a, b) => {
+    const ea = a.fields["眼别"] || "", eb = b.fields["眼别"] || "";
+    if (ea === eb) return 0;
+    if (ea.includes("右")) return -1;
+    return 1;
+  });
+  return items;
 }
 
 // ─── QR 溯源码 ──────────────────────────────────────────────────────────────
@@ -778,7 +800,14 @@ async function generateQRPng(lensCode) {
 // orderInfo: { remark, address, contact, phone } 来自订单主表，lens records 没有这些字段
 function buildFactoryExcel(records, orderNo, orderInfo = {}) {
   const { remark: orderRemark = "", address = "", contact = "", phone = "" } = orderInfo;
-  const sorted = [...records].sort((a, b) => String(a.fields["顾客姓名"] || "").localeCompare(String(b.fields["顾客姓名"] || ""), "zh-CN"));
+  const sorted = [...records].sort((a, b) => {
+    const nameCmp = String(a.fields["顾客姓名"] || "").localeCompare(String(b.fields["顾客姓名"] || ""), "zh-CN");
+    if (nameCmp !== 0) return nameCmp;
+    const ea = a.fields["眼别"] || "", eb = b.fields["眼别"] || "";
+    if (ea.includes("右") && !eb.includes("右")) return -1;
+    if (!ea.includes("右") && eb.includes("右")) return 1;
+    return 0;
+  });
   const rows = sorted.map(rec => {
     const f = rec.fields;
     return {
@@ -787,15 +816,15 @@ function buildFactoryExcel(records, orderNo, orderInfo = {}) {
       "产品型号": f["产品型号"] || "",
       "数量": Number(f["数量"]) || 1,
       "眼别": f["眼别"] || "",
-      "球镜SPH": f["球镜SPH"] ?? "",
-      "柱镜CYL": f["柱镜CYL"] ?? "",
-      "轴位AXIS": f["轴位AXIS"] ?? "",
+      "球镜SPH": f["球镜SPH"] != null ? Number(f["球镜SPH"]).toFixed(2) : "",
+      "柱镜CYL": f["柱镜CYL"] != null ? Number(f["柱镜CYL"]).toFixed(2) : "",
+      "轴位AXIS": f["轴位AXIS"] != null ? Number(f["轴位AXIS"]).toFixed(0) : "",
       "镜片码": f["镜片码"] || "",
       "是否装配": f["是否装配"] || "",
       "联系人": contact,
       "联系电话": phone,
       "收货地址": address,
-      "备注": f["备注"] || "",
+      "备注": f["备注"] || orderRemark || "",
     };
   });
 
@@ -1837,6 +1866,16 @@ const server = createServer(async (req, res) => {
           axis: r.fields["轴位AXIS"] ?? "",
           lensCode: r.fields["镜片码"] || "",
         }));
+
+        // 获取订单创建时间
+        const orderEnc = encodeURIComponent(`"${srcOrderNo}"`);
+        const orderData = await feishuApi("GET",
+          `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[订单编号]=${orderEnc}`
+        );
+        const orderRecord = orderData?.items?.[0];
+        if (orderRecord?.created_time) {
+          orderInfo.createTime = new Date(orderRecord.created_time * 1000).toLocaleString("zh-CN");
+        }
       }
 
       // 读取 verify.html 模板并渲染（所有动态值均做 HTML 转义防注入）
@@ -1864,7 +1903,7 @@ const server = createServer(async (req, res) => {
       const codeHtml = eyes.map(e => `<span class="lens-code-item"><span class="lens-code-side">${escapeHtml(e.side)}</span> <span class="mono">${escapeHtml(e.lensCode)}</span></span>`).join("\n");
       html = html.replace("{{LENS_CODES}}", codeHtml);
 
-      html = html.replace("{{NOW}}", escapeHtml(new Date().toLocaleString("zh-CN")));
+      html = html.replace("{{NOW}}", escapeHtml(orderInfo.createTime || new Date().toLocaleString("zh-CN")));
 
       res.writeHead(found ? 200 : 404, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
@@ -1995,9 +2034,10 @@ const server = createServer(async (req, res) => {
         let details = await getLensDetailsByOrder(orderNo);
         if (!details.length) continue;
 
-        // 按顾客姓名过滤（④-6）
+        // 按顾客姓名过滤（④-6），支持逗号分隔多客户名
         if (customerFilter) {
-          details = details.filter(r => (r.fields["顾客姓名"] || "") === customerFilter);
+          const names = customerFilter.split(",").map(s => s.trim()).filter(Boolean);
+          details = details.filter(r => names.includes(r.fields["顾客姓名"] || ""));
         }
         if (!details.length) continue;
 
