@@ -58,24 +58,12 @@ A 系统迁云完成（学习+冷备演练，不接真流量）：
 
 ### SWR 镜像仓库
 - 区域: 华北-北京四
+- 组织: gaushclear-clark
 - 地址: swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/
-- 登录: docker login -u cn-north-4@HST3WE7E22JS62Z857O4 -p 1ccc8f79040c8491b4301272da55df1abe0f3a9278b1ad48a6190d4def6dcdcf swr.cn-north-4.myhuaweicloud.com
+- 登录凭据: 见 `DEPLOY.md`
 
 ### 更新部署流程
-本地（Windows）：
-```
-cd C:\Users\wangc\Downloads\ClarkWangVision\04-供应链\feishu-setup\order-system
-docker login swr.cn-north-4.myhuaweicloud.com  # 用上面的凭据
-docker build --platform linux/amd64 --provenance=false -t swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/order-app:v1 .
-docker push swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/order-app:v1
-```
-
-ECS（SSH）：
-```
-ssh -i "密钥/key-gaush-lab.pem" root@113.44.175.221
-cd /opt/gaush-lab
-docker compose pull && docker compose up -d
-```
+详细步骤见 `DEPLOY.md`（包含 SWR 登录、构建、推送、ECS 更新全流程）。
 
 ### 本地开发
 本地直接 `node server.js`，读 `../shared/.env` 或 `../.env` 里的飞书凭证。
@@ -126,3 +114,10 @@ A 系统迁云完成，停止优化，回到 B 脚本主线。
 - ⑧-1：验证时间显示扫码时间→改为订单创建时间
 
 涉及文件：`server.js`（6 处）、`labels.html`（2 处）、`BUGS.md`
+
+## 2026-04-21 部署
+
+第二批 bug 修复已部署到华为云 ECS：
+- SWR 镜像: `swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/order-app:v1`
+- ECS 容器: order-app 已重启，HTTP 200 正常
+- 新 SWR 凭据已更新（旧 AK `HST3WE7E22JS62Z857O4` 已失效）
