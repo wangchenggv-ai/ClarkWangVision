@@ -35,11 +35,18 @@ const QR_DIR = resolve(__dirname, "public", "qrcodes");
 const TABLES = {
   sku: "tblwQsvGAahoeoJV",
   finished_inventory: "tblUF49B6i53MV2O",
+  stock_detail: "tbl7U79QGG4JtQev",
   order: "tblk9Ch4gk2uQ1zG",
   customer: "tbltXNNhF65EBl17",
   lens_detail: "tblC7pve7ObFgIOl",
   agent: "tblHsgGbJWkB31qu",
 };
+
+// 按度数精细管理库存的 SKU — 其他 SKU 走粗粒度判定
+const SKUS_WITH_DETAIL_STOCK = new Set(["Ultra双效", "D8"]);
+// 常规备货度数范围（闭区间）
+const STD_SPH_RANGE = [-6, 0];
+const STD_CYL_RANGE = [-2, 0];
 
 // ─── 配置 ──────────────────────────────────────────────────────────────────
 
@@ -403,6 +410,52 @@ function estimateDelivery(skuInfo, qty) {
     promiseDate: now + 5 * 86400000,
     available: false,
   };
+}
+
+// ─── 度数级库存缓存 ────────────────────────────────────────────────────────
+// key = "SKU|SPH|CYL"（SPH/CYL 保留两位小数），value = 当前库存数
+const STOCK_TTL = 2 * 60 * 1000; // 2 分钟
+let _stockCache = { map: null, time: 0 };
+
+async function getStockMap() {
+  if (_stockCache.map && Date.now() - _stockCache.time < STOCK_TTL) return _stockCache.map;
+  const rows = await listRecords(TABLES.stock_detail);
+  const map = new Map();
+  for (const r of rows) {
+    const f = r.fields || {};
+    const sku = typeof f["SKU编号"] === "string" ? f["SKU编号"] : (Array.isArray(f["SKU编号"]) ? f["SKU编号"][0]?.text : "");
+    const sph = Number(f["SPH"]);
+    const cyl = Number(f["CYL"]);
+    const stock = Number(f["当前库存"]) || 0;
+    if (!sku || !Number.isFinite(sph) || !Number.isFinite(cyl)) continue;
+    map.set(`${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`, stock);
+  }
+  _stockCache = { map, time: Date.now() };
+  return map;
+}
+
+function inRange(x, [lo, hi]) { return x >= lo && x <= hi; }
+
+// 度数级交期判定 — 返回 { deliveryType, days, promiseDate, available, stock }
+async function estimateDeliveryByRx(sku, sph, cyl, qty) {
+  const now = Date.now();
+  const sphN = Number(sph);
+  const cylN = Number(cyl);
+
+  // 超出常规备货度数范围 → 定制
+  if (!Number.isFinite(sphN) || !Number.isFinite(cylN) ||
+      !inRange(sphN, STD_SPH_RANGE) || !inRange(cylN, STD_CYL_RANGE)) {
+    return { deliveryType: "定制7-10天", days: 10, promiseDate: now + 10 * 86400000, available: false, stock: 0 };
+  }
+
+  const map = await getStockMap();
+  const key = `${sku}|${sphN.toFixed(2)}|${cylN.toFixed(2)}`;
+  const stock = map.get(key) ?? 0;
+
+  if (stock >= qty) {
+    return { deliveryType: "有货1-2天", days: 2, promiseDate: now + 2 * 86400000, available: true, stock };
+  }
+  return { deliveryType: "排产5-7天", days: 7, promiseDate: now + 7 * 86400000, available: false, stock };
 }
 
 // ─── 生成编号 ──────────────────────────────────────────────────────────────
@@ -1262,6 +1315,8 @@ const server = createServer(async (req, res) => {
 
       const skuId = url.searchParams.get("sku") || "";
       const qty = Number(url.searchParams.get("qty")) || 0;
+      const sphRaw = url.searchParams.get("sph");
+      const cylRaw = url.searchParams.get("cyl");
 
       if (!skuId || qty <= 0) {
         jsonRes(res, 400, { error: "请提供有效的 SKU 和数量" });
@@ -1272,6 +1327,14 @@ const server = createServer(async (req, res) => {
         return logReq(req, 400, start);
       }
 
+      // 精细库存 SKU 且传了度数 → 走度数级判定
+      if (SKUS_WITH_DETAIL_STOCK.has(skuId) && sphRaw !== null && cylRaw !== null) {
+        const est = await estimateDeliveryByRx(skuId, sphRaw, cylRaw, qty);
+        jsonRes(res, 200, { ...est, promiseDateFormatted: formatDate(est.promiseDate) });
+        return logReq(req, 200, start);
+      }
+
+      // 其他 SKU / 未传度数 → 沿用粗粒度 fallback
       const skus = await getSkusWithInventory();
       const skuInfo = skus.find(s => s.sku === skuId);
       if (!skuInfo) {
