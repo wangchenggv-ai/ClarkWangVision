@@ -173,5 +173,8 @@ ECP（验配师）开发管理，**暂不启用**。
 
 ## 与其他系统的关系
 
-- **供应链系统** (`B3xQbbqicaome1sKdZbcwdk8nWg`): 订单/库存/生产，通过 `supply-chain/sync_*.js` 同步01/02表数据
-- **销售飞轮项目** (`MSqkbR21kaTO9Ys39qkcv7qzn9b`): 独立CRM，含培训/会议/商机管理
+| 系统 | Bitable | 关系 |
+|------|---------|------|
+| **订单系统** (`B3xQbbqicaome1sKdZbcwdk8nWg`) | 订单/镜片/代理商/客户 | 通过 `sync_agents.js` + `sync_customers.js` 同步01/02表数据 |
+| **库存系统** (`B3xQbbqicaome1sKdZbcwdk8nWg`) | 度数级库存/生产/采购 | 同一 Bitable，共享表 ID（`../shared/tables.js`） |
+| **销售飞轮** (`MSqkbR21kaTO9Ys39qkcv7qzn9b`) | 独立CRM，含培训/会议/商机管理 | 不直接交互 |

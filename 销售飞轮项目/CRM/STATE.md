@@ -6,6 +6,18 @@
 - **飞书链接**: https://gausheyetech.feishu.cn/base/RlfTb6gykaEb3gsR1lwcGnShnAA
 - **启动日期**: 2026-04-21
 
+## 三系统架构
+
+| 系统 | Bitable | 职责 |
+|------|---------|------|
+| **CRM**（本系统） | `RlfTb6gykaEb3gsR1lwcGnShnAA` | 客户主数据、代理商管理、销售目标、会议 |
+| **订单系统** | `B3xQbbqicaome1sKdZbcwdk8nWg` | 代理商门户、下单、验真、物流 |
+| **库存系统** | `B3xQbbqicaome1sKdZbcwdk8nWg`（同上） | 度数级库存、交期预估、9条业务规则 |
+
+- 01代理商表 → `sync_agents.js` → 订单系统代理商表
+- 02终端客户表 → `sync_customers.js` → 订单系统终端客户表
+- CRM 是客户主数据的唯一源头，同步脚本在订单系统目录下
+
 ## 表结构（7张核心表）
 
 | # | 表名 | Table ID | 状态 |

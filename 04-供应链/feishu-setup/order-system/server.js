@@ -25,25 +25,13 @@ import { fileURLToPath } from "url";
 import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import QRCode from "qrcode";
 import XLSX from "xlsx";
+import { TABLES } from "../shared/tables.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
 const BASE = "https://open.feishu.cn/open-apis";
 const QR_DIR = resolve(__dirname, "public", "qrcodes");
 
-// 表 ID（与 automations.js 一致）
-const TABLES = {
-  sku: "tblwQsvGAahoeoJV",
-  finished_inventory: "tblUF49B6i53MV2O",
-  stock_detail: "tbl7U79QGG4JtQev",
-  order: "tblk9Ch4gk2uQ1zG",
-  customer: "tbltXNNhF65EBl17",
-  lens_detail: "tblC7pve7ObFgIOl",
-  agent: "tblHsgGbJWkB31qu",
-};
-
-// 按度数精细管理库存的 SKU — 其他 SKU 走粗粒度判定
-const SKUS_WITH_DETAIL_STOCK = new Set(["Ultra双效", "D8"]);
 // 常规备货度数范围（闭区间）
 const STD_SPH_RANGE = [-6, 0];
 const STD_CYL_RANGE = [-2, 0];
@@ -356,60 +344,29 @@ async function updateRecord(tableId, recordId, fields) {
 const CACHE_TTL = 5 * 60 * 1000; // 5分钟
 let _skuCache = { data: null, time: 0 };
 
-// 硬编码产品列表（Bitable SKU表已删除）
-const HARDCODED_SKUS = [
-  { sku: "Ultra双效", name: "Ultra双效", type: "备货品", currentStock: 100, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
-  { sku: "D8", name: "D8", type: "备货品", currentStock: 100, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
-  { sku: "时空之眼A", name: "时空之眼A", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
-  { sku: "时空之眼B", name: "时空之眼B", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
-  { sku: "时空之眼PRO", name: "时空之眼PRO", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
-  { sku: "时空之眼MAX", name: "时空之眼MAX", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
-  { sku: "小旋风", name: "小旋风", type: "备货品", currentStock: 50, safetyStock: 10, status: "instock", statusLabel: "有货", deliveryDays: 3 },
+// 产品目录（静态，不含库存数字 — 库存判定走 stock_detail 表）
+const SKU_CATALOG = [
+  { sku: "Ultra双效", name: "Ultra双效", type: "备货品" },
+  { sku: "D8", name: "D8", type: "备货品" },
+  { sku: "时空之眼A", name: "时空之眼A", type: "备货品" },
+  { sku: "时空之眼B", name: "时空之眼B", type: "备货品" },
+  { sku: "时空之眼PRO", name: "时空之眼PRO", type: "备货品" },
+  { sku: "时空之眼MAX", name: "时空之眼MAX", type: "备货品" },
+  { sku: "小旋风", name: "小旋风", type: "备货品" },
 ];
 
 async function getSkusWithInventory() {
   if (_skuCache.data && Date.now() - _skuCache.time < CACHE_TTL) {
     return _skuCache.data;
   }
-  _skuCache = { data: HARDCODED_SKUS, time: Date.now() };
-  return HARDCODED_SKUS;
+  _skuCache = { data: SKU_CATALOG, time: Date.now() };
+  return SKU_CATALOG;
 }
 
 // ─── 产品级 SKU 过滤（无空格 = 产品级，有空格 = 处方级） ──────────────────────
 
 function getModelSkus(allSkus) {
   return allSkus.filter(s => !s.sku.includes(" "));
-}
-
-// ─── Rule 1 交期逻辑（从 automations.js 移植） ─────────────────────────────
-
-function estimateDelivery(skuInfo, qty) {
-  const now = Date.now();
-
-  if (skuInfo.type === "定制品") {
-    return {
-      deliveryType: "定制5天",
-      days: 5,
-      promiseDate: now + 5 * 86400000,
-      available: false,
-    };
-  }
-
-  if (skuInfo.currentStock >= qty) {
-    return {
-      deliveryType: "有货3天",
-      days: 3,
-      promiseDate: now + 3 * 86400000,
-      available: true,
-    };
-  }
-
-  return {
-    deliveryType: "定制5天",
-    days: 5,
-    promiseDate: now + 5 * 86400000,
-    available: false,
-  };
 }
 
 // ─── 度数级库存缓存 ────────────────────────────────────────────────────────
@@ -1327,22 +1284,13 @@ const server = createServer(async (req, res) => {
         return logReq(req, 400, start);
       }
 
-      // 精细库存 SKU 且传了度数 → 走度数级判定
-      if (SKUS_WITH_DETAIL_STOCK.has(skuId) && sphRaw !== null && cylRaw !== null) {
-        const est = await estimateDeliveryByRx(skuId, sphRaw, cylRaw, qty);
-        jsonRes(res, 200, { ...est, promiseDateFormatted: formatDate(est.promiseDate) });
-        return logReq(req, 200, start);
+      if (sphRaw === null || cylRaw === null) {
+        jsonRes(res, 400, { error: "请提供度数（sph 和 cyl）" });
+        return logReq(req, 400, start);
       }
 
-      // 其他 SKU / 未传度数 → 沿用粗粒度 fallback
-      const skus = await getSkusWithInventory();
-      const skuInfo = skus.find(s => s.sku === skuId);
-      if (!skuInfo) {
-        jsonRes(res, 404, { error: "未找到该 SKU" });
-        return logReq(req, 404, start);
-      }
-
-      const est = estimateDelivery(skuInfo, qty);
+      // 所有 SKU 统一度数级判定
+      const est = await estimateDeliveryByRx(skuId, sphRaw, cylRaw, qty);
       jsonRes(res, 200, { ...est, promiseDateFormatted: formatDate(est.promiseDate) });
       return logReq(req, 200, start);
     }
@@ -1424,9 +1372,15 @@ const server = createServer(async (req, res) => {
 
       for (const p of patients) {
         const { customerName, sku, quantity, eyes, assembly, remark } = p;
-        const skuInfo = skus.find(s => s.sku === sku);
 
-        const est = skuInfo ? estimateDelivery(skuInfo, quantity) : { deliveryType: "标准", promiseDate: now + 5 * 86400000 };
+        // 交期取双眼中最慢的（stock_detail 表判定）
+        let est = { deliveryType: "定制7-10天", days: 10, promiseDate: now + 10 * 86400000 };
+        for (const eye of eyes) {
+          if (eye.sph != null && eye.cyl != null) {
+            const eyeEst = await estimateDeliveryByRx(sku, eye.sph, eye.cyl, quantity);
+            if (eyeEst.days > est.days) est = eyeEst;
+          }
+        }
         const lensCount = eyes.length;
 
         // 写入订单主表（每笔患者 = 1 行）

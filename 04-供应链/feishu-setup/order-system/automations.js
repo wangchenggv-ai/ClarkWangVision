@@ -26,6 +26,7 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { notifyBatch } from "./notify.js";
 import { cachedFetch, cacheStatus } from "./cache.js";
+import { TABLES, APP_TOKEN } from "../shared/tables.js";
 
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -46,22 +47,6 @@ function loadEnv() {
 
 const env = loadEnv();
 const BASE = "https://open.feishu.cn/open-apis";
-const APP_TOKEN = "B3xQbbqicaome1sKdZbcwdk8nWg";
-
-// 表 ID
-const TABLES = {
-  sku: "tblwQsvGAahoeoJV",
-  finished_inventory: "tblUF49B6i53MV2O",
-  blank_inventory: "tbladv6bQTXlNOlM",
-  mold: "tblkZ4ODg3v63prW",
-  production: "tbltSntfaR9KCI7B",
-  forecast: "tblFLAHOXLSgWS6Q",
-  ai_analysis: "tbl8W9F9K2RbaL0k",
-  order: "tblk9Ch4gk2uQ1zG",
-  procurement: "tblZX1qW7RvcJieg",
-  factory: "tblJ6RXFENJFQe9A",
-  rule_config: "tbl78V8wgziRs0pt",
-};
 
 let TOKEN = "";
 
