@@ -1352,6 +1352,7 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
       <button class="btn btn-outline" style="color:#722ed1;border-color:#d3adf7" onclick="printLabels()">打印标签</button>
       <button class="btn btn-outline" style="color:#eb2f96;border-color:#ffadd2" onclick="printZplLabels()">&#128424; 斑马打印</button>
       <button class="btn btn-outline ctx-btn act-ship-btn" style="color:#52c41a;border-color:#52c41a" onclick="shipOrders()">确认发货</button>
+      <button class="btn btn-outline ctx-btn act-slip-btn" style="color:#c0392b;border-color:#f0d0d0" onclick="batchSlip()">通行单</button>
       <button class="btn btn-outline ctx-btn act-deliver-btn" style="color:#237804;border-color:#b7eb8f" onclick="deliverOrders()">标记签收</button>
     </div>
     <span class="count" id="selectedCount">已选 0 个订单</span>
@@ -1706,8 +1707,8 @@ function getQuickAction(o) {
   const cn = escapeHtml(o.customerName);
   if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}')">确认</button>`;
   if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}')" title="导出ZIP给工厂">导出</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="斑马打印机直出" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}')">发货</button>`;
-  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">签收</button>`;
-  if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#ccc;font-size:11px">&#128424;</button>`;
+  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}')" title="随货通行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">签收</button>`;
+  if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#ccc;font-size:11px">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}')" title="随货通行单" style="color:#c0392b">&#128196;</button>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
 }
 
@@ -1806,6 +1807,7 @@ function updateContextualActions() {
 
   document.querySelector(".act-confirm-btn").classList.toggle("visible", showConfirm);
   document.querySelector(".act-ship-btn").classList.toggle("visible", showShip);
+  document.querySelector(".act-slip-btn").classList.toggle("visible", showDeliver);
   document.querySelector(".act-deliver-btn").classList.toggle("visible", showDeliver);
 }
 
@@ -1901,6 +1903,10 @@ function quickZip(orderNo) {
   window.open(url, "_blank");
 }
 
+function quickSlip(orderNo) {
+  window.open(`/api/admin/slip/${orderNo}?admin=${adminToken}`, "_blank");
+}
+
 async function quickZplPrint(orderNo, customerName) {
   try {
     const data = await adminApi("/api/admin/print-label", { orderNo, customerName });
@@ -1961,19 +1967,58 @@ async function confirmOrders() {
 async function shipOrders() {
   const keys = getSelectedByStatus("生产中");
   if (keys.length === 0) { showToast("没有生产中的订单可发货", "info"); return; }
-  const ok = await showConfirmModal({ title: "批量发货", body: `发货 <b>${keys.length}</b> 项？<br>将自动生成快递单号。` });
+
+  // 1. 发货前预览
+  const orderNosSet = new Set(), customersSet = new Set();
+  for (const key of keys) {
+    const [orderNo, ...rest] = key.split('|');
+    orderNosSet.add(orderNo);
+    const cn = rest.join('|');
+    if (cn) customersSet.add(cn);
+  }
+  const preview = await adminApi(`/api/admin/ship-preview?orderNos=${[...orderNosSet].join(",")}&customer=${[...customersSet].join(",")}`);
+  let previewHtml = "";
+  if (preview.orders?.length) {
+    previewHtml = preview.orders.map(o => {
+      const rowsHtml = o.rows.map(r =>
+        `<tr><td class="eye-${r.eye.includes('右') ? 'r' : 'l'}">${r.eye.includes('右') ? 'R' : 'L'}</td><td>${r.sku}</td><td>${r.sph}</td><td>${r.cyl}</td><td>${r.axis}</td><td style="font-family:monospace;font-size:8pt">${r.lensCode}</td></tr>`
+      ).join("");
+      return `<div style="margin-bottom:12px;padding:10px;background:#fafafa;border-radius:6px;border:1px solid #eee">
+        <div style="font-weight:700;margin-bottom:4px">${o.customerName} <span style="color:#888;font-size:9pt">${o.orderNo}</span></div>
+        <div style="font-size:9pt;color:#555;margin-bottom:6px">${o.agentName} · ${o.contact || ""} ${o.phone || ""} · ${o.address || ""}</div>
+        <table style="width:100%;border-collapse:collapse;font-size:9pt"><thead><tr style="background:#1a1a2e;color:#fff;font-size:8pt">
+          <th style="padding:3px 6px">眼</th><th style="padding:3px 6px">SKU</th><th style="padding:3px 6px">SPH</th><th style="padding:3px 6px">CYL</th><th style="padding:3px 6px">AXIS</th><th style="padding:3px 6px">镜片码</th></tr></thead>
+          <tbody>${rowsHtml}</tbody></table></div>`;
+    }).join("");
+  }
+  const ok = await showConfirmModal({ title: `发货预览 (${keys.length} 项)`, body: previewHtml || `发货 <b>${keys.length}</b> 项？<br>将自动生成快递单号。` });
   if (!ok) return;
+
+  // 2. 执行发货
   let done = 0, fail = 0;
   const details = [];
+  const agentIds = new Set();
   for (const key of keys) {
     const [orderNo, ...rest] = key.split('|');
     const customerName = rest.join('|');
     const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName });
-    if (data.results?.[0]?.ok) { done++; details.push(`${orderNo} ${customerName}: ${data.results[0].courier} ${data.results[0].trackingNo}`); }
-    else fail++;
+    if (data.results?.[0]?.ok) {
+      done++;
+      details.push(`${orderNo} ${customerName}: ${data.results[0].courier} ${data.results[0].trackingNo}`);
+      // 收集代理商ID用于生成通行单
+      const ord = preview.orders?.find(o => o.orderNo === orderNo);
+      if (ord?.agentId) agentIds.add(ord.agentId);
+    } else fail++;
   }
-  let html = details.join("<br>");
-  await showConfirmModal({ title: "发货完成", body: `成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, confirmText: "关闭", cancelText: "", resultHtml: html });
+
+  // 3. 发货完成，显示结果 + 通行单按钮
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const slipUrl = agentIds.size === 1
+    ? `/api/admin/slip-batch?date=${today}&agent=${[...agentIds][0]}`
+    : `/api/admin/slip-batch?date=${today}`;
+  let resultHtml = details.join("<br>");
+  resultHtml += `<div style="margin-top:12px"><a href="${slipUrl}" target="_blank" class="btn btn-primary" style="display:inline-block;padding:6px 16px;text-decoration:none">生成随货通行单</a></div>`;
+  await showConfirmModal({ title: "发货完成", body: `成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, confirmText: "关闭", cancelText: "", resultHtml });
   loadOrders();
 }
 
