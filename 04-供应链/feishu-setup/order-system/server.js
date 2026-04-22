@@ -1493,6 +1493,15 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
       allRows.push({ ...r, orderNo: o.orderNo, customerName: o.customerName });
     }
   }
+  // 按顾客姓名分组排序，同一人的右眼在上、左眼在下
+  allRows.sort((a, b) => {
+    const nameCmp = (a.customerName || "").localeCompare(b.customerName || "", "zh-CN");
+    if (nameCmp !== 0) return nameCmp;
+    // 同一人：右眼在前
+    const aR = a.eye?.includes("右") ? 0 : 1;
+    const bR = b.eye?.includes("右") ? 0 : 1;
+    return aR - bR;
+  });
 
   const eyeRow = (r) => {
     const lc = r.lensCode || "—";
@@ -1607,9 +1616,9 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
   <div class="logistics-box" style="flex:3">
     <h3>订单汇总 Order Summary</h3>
     <table style="margin:0;font-size:7.5pt">
-      <thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:1.5mm;color:#555;font-weight:600">订单号</th><th style="padding:1.5mm;color:#555;font-weight:600">顾客</th><th style="padding:1.5mm;color:#555;font-weight:600">SKU</th><th style="padding:1.5mm;color:#555;font-weight:600">片数</th></tr></thead>
+      <thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:1.5mm;color:#555;font-weight:600">SKU</th><th style="padding:1.5mm;color:#555;font-weight:600">片数</th></tr></thead>
       <tbody>
-        ${orders.map(o => `<tr><td style="padding:1.5mm;font-family:monospace;font-size:6.5pt">${o.orderNo}</td><td style="padding:1.5mm;font-weight:600">${o.customerName}</td><td style="padding:1.5mm">${o.rows.map(r=>r.sku).filter((v,i,a)=>a.indexOf(v)===i).join(", ")}</td><td style="padding:1.5mm;text-align:center;font-weight:700;color:#c0392b">${o.rows.length}</td></tr>`).join("")}
+        ${(() => { const skuQty = {}; for (const r of allRows) { skuQty[r.sku || "—"] = (skuQty[r.sku || "—"] || 0) + 1; } return Object.entries(skuQty).map(([sku, qty]) => `<tr><td style="padding:1.5mm;font-weight:600">${sku}</td><td style="padding:1.5mm;text-align:center;font-weight:700;color:#c0392b">${qty}</td></tr>`).join(""); })()}
       </tbody>
     </table>
   </div>
