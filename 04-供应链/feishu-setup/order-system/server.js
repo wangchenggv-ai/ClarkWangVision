@@ -516,7 +516,7 @@ async function deductStockDetail(sku, sph, cyl, qty, orderNo) {
     }
 
     const newStock = currentStock - qty;
-    const now = new Date().toISOString();
+    const now = Date.now();
 
     const patchRes = await feishuApi("PUT",
       `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`,
@@ -2247,7 +2247,6 @@ const server = createServer(async (req, res) => {
             "订单来源": "代理商门户",
             "客户ID": customerId,
             "是否装配": assembly !== false ? "是" : "否",
-            "流程步骤": JSON.stringify({ current: 0, steps: { submitted: { ts: now } } }),
             ...(terminalCustomer?.name ? { "终端客户": terminalCustomer.name } : {}),
             ...(terminalCustomer?.contact ? { "联系人": terminalCustomer.contact } : {}),
             ...(terminalCustomer?.phone ? { "联系电话": terminalCustomer.phone } : {}),

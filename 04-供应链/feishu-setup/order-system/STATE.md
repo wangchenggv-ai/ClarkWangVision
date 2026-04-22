@@ -319,3 +319,65 @@ Token 缓存 bug 暴露两个问题：系统缺自愈能力，缺低门槛运维
 | 斑马打印机 IP 配置 | 需提供实际 IP |
 | ZPL 标签物理定位调优 | 需实际打印测试 |
 | E2E 回归测试 | 待跑 |
+
+## 2026-04-22 随货通行单 Web 化完成
+
+将 logistics.js 的通行单模板接入 web 端，实现发货前后全流程联动。
+
+### 改动
+
+**server.js（+250 行）：**
+- `slipHTML()` — 单订单 A4 通行单 HTML 模板（从 logistics.js 复制，SERVER_BASE 改为 `getServerBaseUrl()`）
+- `batchSlipHTML()` — 合单通行单模板
+- `GET /api/admin/ship-preview` — 发货前预览清单（处方明细+收货信息 JSON）
+- `GET /api/admin/slip/:orderNo` — 单订单通行单 HTML（浏览器直接打印）
+- `GET /api/admin/slip-batch` — 按日期+代理商批量生成通行单（单分组返回 HTML，多分组返回汇总卡片页）
+
+**labels.html（4 处 UI）：**
+- `shipOrders()` 重构：点击"确认发货"先弹预览弹窗 → 确认后发货 → 完成后显示"生成随货通行单"按钮
+- 已发货/已签收行增加 📄 按钮（`quickSlip()`），点击新窗口打开单张通行单
+- 底部操作栏增加"通行单"按钮（`batchSlip()`），已发货选中时可见
+- `updateActionVisibility()` 增加 act-slip-btn 可见性控制
+
+### 数据流
+
+```
+选中"生产中"订单 → 点"确认发货"
+  → GET /api/admin/ship-preview（预览处方+地址）
+  → 弹窗确认 → POST /api/admin/ship
+  → 结果弹窗出现"生成随货通行单"按钮
+  → GET /api/admin/slip-batch?date=today → 浏览器打印
+
+已发货订单随时：点 📄 → GET /api/admin/slip/:orderNo → 预览/打印
+底部批量：选中已发货订单 → 点"通行单" → 批量通行单
+```
+
+### 待验证
+
+- [ ] 发货前预览弹窗显示完整处方数据
+- [ ] 单订单通行单 HTML 可打印
+- [ ] 合单通行单按代理商分组
+- [ ] 已发货行 📄 按钮打开正确
+- [ ] E2E 全流程回归
+
+## 2026-04-22 库存实时扣减测试通过（17/17）
+
+跑通 `test_stock_concurrency.mjs`，修复 2 个阻断 bug：
+
+**Bug 1：`流程步骤` 字段不存在于测试 Bitable**
+- `batch_create` 写订单主表时包含 `流程步骤` 字段，测试 Bitable 无此字段 → FieldNameNotFound
+- 修复：从 `/api/submit` 的 orderRecords 中移除 `流程步骤`（工作流读取端已有 null-safe 处理）
+
+**Bug 2：`最近出库` 日期格式错误**
+- `deductStockDetail` 用 `new Date().toISOString()` 写 `最近出库` DATE 字段，Feishu 要求毫秒时间戳
+- 修复：`new Date().toISOString()` → `Date.now()`
+
+### 测试结果
+
+| # | 场景 | 结果 |
+|---|------|------|
+| 1 | 正常下单→库存扣减 | ✅ 77→76 |
+| 2 | 幂等保护 | ✅ 同 requestId 返回同一订单号，库存只扣一次 |
+| 3 | 库存不足→409 | ✅ STOCK_INSUFFICIENT，不写订单不扣库存 |
+| 4 | 并发下单 | ✅ 两单各扣3片，10→4（无 lost update） |
+| 5 | 双眼同度数 | ✅ 两眼各扣1片，5→3 |
