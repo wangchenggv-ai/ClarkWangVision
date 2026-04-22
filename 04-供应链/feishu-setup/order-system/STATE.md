@@ -410,3 +410,12 @@ Token 缓存 bug 暴露两个问题：系统缺自愈能力，缺低门槛运维
 | 3 | 库存不足→照常下单 | ✅ 库存1片下单2片→200成功，库存扣至0，交期"定制7-10天" |
 | 4 | 并发下单 | ✅ 两单各扣3片，10→4（无 lost update） |
 | 5 | 双眼同度数 | ✅ 两眼各扣1片，5→3 |
+
+## 2026-04-22 代码清理（simplify）
+
+- `fmt`/`fmtAxis` 从 3 处内联提取为模块级函数（`buildZpl` / `buildLabelHtml` / `buildLabelHtmlFromFields`）
+- `deductStockDetail` 移除未使用的 `orderNo` 参数
+- 移除 `result.available` 死属性引用
+- deductErrors 消息增加 `reason` 说明（not_found / write_failed）
+- `buildZpl` 删除 4 行 WHAT 注释
+- 测试移除 `oneOkOne409` 死分支 + 更新报告关键改动段落
