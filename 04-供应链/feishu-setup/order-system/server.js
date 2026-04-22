@@ -357,6 +357,11 @@ async function feishuApi(method, path, body) {
   const json = await res.json();
   if (json.code !== 0) {
     console.error(`  飞书 API 错误 [${method} ${path}]:`, json.msg);
+    // token 失效 → 清空缓存，下次请求自动刷新
+    if (json.code === 99991663 || /invalid access token/i.test(json.msg || "")) {
+      _feishuToken = "";
+      _feishuTokenTime = 0;
+    }
     return null;
   }
   return json.data;
@@ -1462,6 +1467,23 @@ const server = createServer(async (req, res) => {
     if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/qrcodes/")) {
       serveStatic(res, resolve(__dirname, "public", pathname.slice(1)));
       return logReq(req, 200, start);
+    }
+
+    // ── 健康检查 ──
+    if (pathname === "/health") {
+      const checks = { feishu_token: false, bitable_read: false, agent_count: 0, uptime_seconds: Math.floor(process.uptime()) };
+      try {
+        const t = await getFeishuToken();
+        checks.feishu_token = !!t;
+        if (t) {
+          const agents = await loadAgents();
+          checks.agent_count = agents.length;
+          checks.bitable_read = agents.length > 0;
+        }
+      } catch {}
+      const ok = checks.feishu_token && checks.bitable_read && checks.agent_count > 0;
+      jsonRes(res, ok ? 200 : 503, { ok, checks });
+      return logReq(req, ok ? 200 : 503, start);
     }
 
     // ── API: 代理商信息 ──
