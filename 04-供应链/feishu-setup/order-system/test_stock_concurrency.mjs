@@ -262,25 +262,14 @@ console.log("--- Test 4: 并发下单（两单同度数）---");
 
   const [res1, res2] = await Promise.all([submitOrder(body1), submitOrder(body2)]);
 
-  const bothOk = res1.status === 200 && res2.status === 200;
-  const oneOkOne409 = (res1.status === 200 && res2.status === 409) ||
-                       (res1.status === 409 && res2.status === 200);
-
-  assert("两单状态合理", bothOk || oneOkOne409,
+  assert("两单都返回 200", res1.status === 200 && res2.status === 200,
     `res1=${res1.status} res2=${res2.status}`);
 
   await new Promise(r => setTimeout(r, 1000));
   const afterStock = await getStock(TEST_SKU, TEST_SPH, TEST_CYL);
 
-  if (bothOk) {
-    // 两单都成功：库存应为 10 - 3 - 3 = 4
-    assert("并发扣减正确", afterStock.stock === 4,
-      `扣减前=10 扣减后=${afterStock.stock} 期望=4`);
-  } else {
-    // 一成一败：库存应为 10 - 3 = 7
-    assert("单次扣减正确", afterStock.stock === 7,
-      `扣减前=10 扣减后=${afterStock.stock} 期望=7`);
-  }
+  assert("并发扣减正确", afterStock.stock === 4,
+    `扣减前=10 扣减后=${afterStock.stock} 期望=4`);
 
   // 清理
   await setStock(stockInfo.recordId, beforeStock);
@@ -360,10 +349,9 @@ ${results.map(r => `| ${r.status === "PASS" ? "✅" : r.status === "FAIL" ? "❌
 ## 关键改动
 
 - \`withLock()\` per-key 异步锁 — 序列化同一 SKU/SPH/CYL 的并发扣减
-- \`deductStockDetail\` 锁内 fresh read 单条记录（~200ms）
-- \`/api/submit\` 四阶段：预检(409) → 写订单 → 扣库存(失败标记人工)
+- \`deductStockDetail\` 锁内 fresh read 单条记录（~200ms），库存不足时扣至 0
+- \`/api/submit\` 无预检拦截：库存不足照常下单，交期自动变长
 - \`clientRequestId\` 幂等保护（10min TTL）
-- 前端 409 库存冲突弹窗
 `;
 
 import { writeFileSync } from "fs";
