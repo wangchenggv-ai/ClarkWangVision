@@ -23,6 +23,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve, dirname, extname } from "path";
 import { fileURLToPath } from "url";
 import { randomBytes, createHash, timingSafeEqual } from "crypto";
+import { spawn } from "child_process";
 import QRCode from "qrcode";
 import XLSX from "xlsx";
 import { TABLES } from "../shared/tables.js";
@@ -35,6 +36,57 @@ const QR_DIR = resolve(__dirname, "public", "qrcodes");
 // 常规备货度数范围（闭区间）
 const STD_SPH_RANGE = [-6, 0];
 const STD_CYL_RANGE = [-2, 0];
+
+// 14 条业务规则元数据（控制中心 UI 用）
+const RULE_MANIFEST = {
+  rule1: { name: "订单自动分配", desc: "新订单自动分配SKU", params: {
+    instock_delivery_days: { label: "现货交期(天)", type: "number" },
+    custom_delivery_days: { label: "定制交期(天)", type: "number" },
+    max_order_qty: { label: "最大下单量", type: "number" },
+  }},
+  rule2: { name: "库存预警", desc: "低于阈值自动告警", params: {
+    high_alert_threshold: { label: "紧急阈值(倍)", type: "number" },
+  }},
+  rule3: { name: "模芯寿命预警", desc: "模芯剩余次数告警", params: {
+    critical_remaining: { label: "紧急剩余(次)", type: "number" },
+    default_warning_threshold: { label: "预警阈值(次)", type: "number" },
+  }},
+  rule4: { name: "销售预测→排产", desc: "根据周预测+季节系数排产", params: {
+    seasonal_summer: { label: "夏季系数", type: "number" },
+    seasonal_school: { label: "开学系数", type: "number" },
+    seasonal_cny: { label: "春节系数", type: "number" },
+  }},
+  rule5: { name: "毛坯库存预警", desc: "毛坯低于安全线告警", params: {
+    blank_safety_multiplier: { label: "安全倍数", type: "number" },
+    blank_floor: { label: "最低库存", type: "number" },
+  }},
+  rule6: { name: "订单超期预警", desc: "超时未处理/生产告警", params: {
+    warning_hours: { label: "告警小时数", type: "number" },
+  }},
+  rule7: { name: "采购自动触发", desc: "毛坯/模芯低于安全线自动下单", params: {
+    mold_lead_days: { label: "模具交期(天)", type: "number" },
+    blank_lead_days: { label: "毛坯交期(天)", type: "number" },
+    blank_reorder_point: { label: "毛坯再订点", type: "number" },
+    blank_replenish_target: { label: "毛坯补货目标", type: "number" },
+    blank_min_order_qty: { label: "毛坯最小批量", type: "number" },
+  }},
+  rule8: { name: "排产分配车房", desc: "按产能+专长自动分配", params: {
+    specialty_bonus: { label: "专长加成", type: "number" },
+  }},
+  rule9: { name: "模芯使用累加", desc: "完工后累加模芯使用量", params: {}},
+  rule10: { name: "寄售到期预警", desc: "60天黄/90天红预警", params: {}},
+  rule11: { name: "月度对账单", desc: "每月1-3日自动生成", params: {}},
+  rule12: { name: "度数级库存预警", desc: "当前库存<安全库存时告警", params: {}},
+  rule13: { name: "度数级自动排产", desc: "缺口→工单→分配车房→生产中", params: {
+    production_lead_days: { label: "生产周期(天)", type: "number" },
+    replenish_multiplier: { label: "补货倍数", type: "number" },
+    min_batch_size: { label: "最小批量", type: "number" },
+    auto_confirm: { label: "自动确认生产", type: "checkbox" },
+  }},
+  rule14: { name: "度数级库存回补", desc: "到期/完成→库存+=产量→累加模芯", params: {
+    auto_complete: { label: "自动完成回补", type: "checkbox" },
+  }},
+};
 
 // ─── 配置 ──────────────────────────────────────────────────────────────────
 
@@ -392,6 +444,7 @@ async function getStockMap() {
 }
 
 function clearStockCache() { _stockCache = { map: null, time: 0 }; }
+let _dashCache = null;
 
 // ─── 度数级库存扣减 ────────────────────────────────────────────────────────
 // 幂等：同一订单号重复调用不会重复扣减
@@ -1394,6 +1447,10 @@ const server = createServer(async (req, res) => {
     }
     if (pathname === "/labels" || pathname === "/labels.html") {
       serveStatic(res, resolve(__dirname, "public/labels.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/control" || pathname === "/control.html") {
+      serveStatic(res, resolve(__dirname, "public/control.html"));
       return logReq(req, 200, start);
     }
 
@@ -2988,6 +3045,158 @@ const server = createServer(async (req, res) => {
 
       const result = await handleExcelUpload(payload.file);
       jsonRes(res, 200, result);
+      return logReq(req, 200, start);
+    }
+
+    // ── Admin 控制中心 API ─────────────────────────────────────────────────
+
+    // GET /api/admin/rules — 读取当前规则配置 + 元数据
+    if (pathname === "/api/admin/rules" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      let config = {};
+      try { config = JSON.parse(readFileSync(resolve(__dirname, "rules_config.json"), "utf-8")); } catch {}
+      jsonRes(res, 200, { config, manifest: RULE_MANIFEST });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/rules — 更新单条规则参数
+    if (pathname === "/api/admin/rules" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      if (!body.rule || !body.param) { jsonRes(res, 400, { error: "需要 rule 和 param 字段" }); return logReq(req, 400, start); }
+      const configPath = resolve(__dirname, "rules_config.json");
+      let config = {};
+      try { config = JSON.parse(readFileSync(configPath, "utf-8")); } catch {}
+      if (!config[body.rule]) config[body.rule] = {};
+      config[body.rule][body.param] = body.value;
+      writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+      jsonRes(res, 200, { ok: true, rule: body.rule, param: body.param, value: body.value });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/execute-rule — 执行业务规则（child_process）
+    if (pathname === "/api/admin/execute-rule" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      const rule = body.rule || "";
+      if (!rule || !/^rule\d+$/.test(rule)) { jsonRes(res, 400, { error: "需要有效的 rule 编号，如 rule13" }); return logReq(req, 400, start); }
+      const args = ["automations.js", rule];
+      if (body.dryRun) args.push("--dry-run");
+      if (body.fresh) args.push("--fresh");
+      const t0 = Date.now();
+      const child = spawn("node", args, { cwd: __dirname, timeout: 60000 });
+      let stdout = "", stderr = "";
+      child.stdout.on("data", d => stdout += d);
+      child.stderr.on("data", d => stderr += d);
+      child.on("close", code => {
+        jsonRes(res, 200, { rule, stdout: stdout.trim(), stderr: stderr.trim(), exitCode: code, ms: Date.now() - t0 });
+        logReq(req, 200, start);
+      });
+      child.on("error", err => {
+        jsonRes(res, 500, { error: err.message, stdout: stdout.trim(), stderr: stderr.trim() });
+        logReq(req, 500, start);
+      });
+      return;
+    }
+
+    // GET /api/admin/dashboard — 系统概览指标（2分钟缓存）
+    if (pathname === "/api/admin/dashboard" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const now = Date.now();
+      if (!_dashCache || (now - _dashCache.ts > 2 * 60 * 1000)) {
+        const [stockRows, prodRows, agentRows] = await Promise.all([
+          listRecords(TABLES.stock_detail),
+          listRecords(TABLES.production).catch(() => []),
+          listRecords(TABLES.agent).catch(() => []),
+        ]);
+        let totalStock = 0, belowSafety = 0;
+        const skuStats = {};
+        const topDeficits = [];
+        for (const r of stockRows) {
+          const stock = Number(r.fields["当前库存"] || 0);
+          const safety = Number(r.fields["安全库存"] || 0);
+          const sku = r.fields["SKU编号"] || "未知";
+          totalStock += stock;
+          if (!skuStats[sku]) skuStats[sku] = { stock: 0, safety: 0, below: 0, total: 0 };
+          skuStats[sku].stock += stock;
+          skuStats[sku].safety += safety;
+          skuStats[sku].total++;
+          if (stock < safety) {
+            belowSafety++;
+            skuStats[sku].below++;
+            topDeficits.push({ sku, sph: r.fields["SPH"], cyl: r.fields["CYL"], stock, safety, gap: safety - stock });
+          }
+        }
+        topDeficits.sort((a, b) => b.gap - a.gap);
+        const prodStatus = {};
+        for (const r of prodRows) {
+          const s = r.fields["状态"] || "未知";
+          prodStatus[s] = (prodStatus[s] || 0) + 1;
+        }
+        const pendingReplenish = prodRows.filter(r => r.fields["回补状态"] === "待回补").length;
+        const recentOrders = prodRows
+          .sort((a, b) => (b.fields["预计完成日"] || 0) - (a.fields["预计完成日"] || 0))
+          .slice(0, 10)
+          .map(r => ({
+            工单号: r.fields["工单号"] || "",
+            产品型号: r.fields["产品型号"] || "",
+            SPH: r.fields["SPH"],
+            CYL: r.fields["CYL"],
+            建议产量: r.fields["建议产量"],
+            状态: r.fields["状态"],
+            预计完成日: r.fields["预计完成日"],
+          }));
+        _dashCache = { ts: now, data: {
+          totalStock, belowSafety, totalStockRows: stockRows.length,
+          prodStatus, pendingReplenish, agentCount: agentRows.length,
+          recentOrders, skuStats, topDeficits: topDeficits.slice(0, 15),
+        }};
+      }
+      jsonRes(res, 200, { ..._dashCache.data, cached: now - _dashCache.ts < 1000 ? false : true, cacheAge: Math.round((now - _dashCache.ts) / 1000) });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/ai-chat — AI Agent 对话
+    if (pathname === "/api/admin/ai-chat" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      if (!body.message) { jsonRes(res, 400, { error: "需要 message 字段" }); return logReq(req, 400, start); }
+      let config = {};
+      try { config = JSON.parse(readFileSync(resolve(__dirname, "rules_config.json"), "utf-8")); } catch {}
+      const systemPrompt = `你是眼镜库存管理系统的 AI 助手，深度理解以下业务规则和数据模型。
+
+## 系统架构
+三系统：CRM（客户管理）→ 订单系统（下单/物流/验真）→ 库存系统（度数级库存/排产/寄售）
+存储：飞书多维表格 Bitable，无自建 DB
+技术栈：Node.js + 原生 HTML，端口 3210
+
+## 14 条业务规则
+${Object.entries(RULE_MANIFEST).map(([k, v]) => {
+  const cfg = config[k] || {};
+  const paramStr = Object.entries(v.params).map(([pk, pv]) => `  - ${pv.label}(${pk}): ${cfg[pk] ?? "未设置"}`).join("\n");
+  return `### ${k}: ${v.name}\n${v.desc}${paramStr ? "\n当前配置:\n" + paramStr : "\n无可配参数"}`;
+}).join("\n\n")}
+
+## 数据模型
+- stock_detail (度数级库存): SKU × SPH × CYL 唯一组合，字段：当前库存、安全库存、最近出库
+- production (排产表): 工单号=SKU|SPH|CYL|日期，状态=待确认/生产中/完成
+- stock_plan (备库参数): SPH × CYL 占比，公式：理论备库 = max(ceil(月预测 × 季节系数 × 2 × 占比), 1)
+- blank_inventory (毛坯库存): 批次级，SKU × CYL
+- mold (模具台账): 单模，总寿命/已使用/剩余寿命
+- agent_stock (代理商库存): 自有/寄售分拆
+- consignment_ledger (寄售流水): 入库/消耗/到期转收入
+7 SKU: Ultra双效, D8, 时空之眼A/B/PRO/MAX, 小旋风
+度数范围: SPH 0~-6.00, CYL 0~-2.00, 步长 0.25
+交期三档: 有货1-2天 / 排产5-7天 / 定制7-10天
+
+## 你的能力
+- 解释规则含义和影响
+- 建议参数调整方案
+- 分析库存和排产数据
+- 帮助诊断问题
+回答简明扼要，中文。`;
+      const reply = await callMiMo(systemPrompt, body.message);
+      jsonRes(res, 200, { reply });
       return logReq(req, 200, start);
     }
 

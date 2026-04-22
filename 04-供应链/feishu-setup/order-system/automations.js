@@ -1,5 +1,5 @@
 /**
- * automations.js — 9 business rules engine for eyeglass supply chain
+ * automations.js — 14 business rules engine for eyeglass supply chain
  *
  * Rule parameters are loaded from two sources (Feishu table overrides local defaults):
  *   1. rules_config.json  — local defaults (developer edits)
@@ -18,6 +18,8 @@
  *   node automations.js rule10  # Consignment expiry alerts
  *   node automations.js rule11  # Monthly statement auto-generation
  *   node automations.js rule12  # Degree-level stock alerts (theoretical vs actual)
+ *   node automations.js rule13  # Degree-level auto production
+ *   node automations.js rule14  # Degree-level stock auto-replenishment
  *   node automations.js all     # Run all rules sequentially
  *   node automations.js all -q  # Quiet mode (summary only, saves tokens)
  *   node automations.js all --fresh  # Bypass cache, fetch fresh from API
@@ -37,13 +39,21 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // ─── 配置 ───────────────────────────────────────────────
 
 function loadEnv() {
-  const content = readFileSync(resolve(__dirname, ".env"), "utf-8");
+  const candidates = [
+    resolve(__dirname, "../shared/.env"),
+    resolve(__dirname, ".env"),
+  ];
   const env = {};
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const [key, ...rest] = trimmed.split("=");
-    env[key.trim()] = rest.join("=").trim();
+  for (const p of candidates) {
+    try {
+      const content = readFileSync(p, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const [key, ...rest] = trimmed.split("=");
+        if (!(key.trim() in env)) env[key.trim()] = rest.join("=").trim();
+      }
+    } catch { /* skip missing */ }
   }
   return env;
 }
@@ -1035,6 +1045,245 @@ async function rule12() {
   console.log(`\n  检查完成：${Object.keys(skuStats).length} 个 SKU，${alertItems.length} 个有预警`);
 }
 
+// ─── 规则13：度数级自动排产 ──────────────────────────────────────────
+//
+// 核心公式：
+//   缺口 = max(安全库存 - 当前库存, 0)
+//   排产量 = max(缺口 × 补货倍数, 最小批量)
+//   预计完成日 = 排产日 + 生产周期天数
+//   工单号 = SKU|SPH|CYL|YYYYMMDD
+
+async function rule13() {
+  console.log("\n🏭 规则13：度数级自动排产");
+  log("─".repeat(50));
+
+  const stockDetail = getData("stock_detail");
+  const existingPlans = getData("production");
+
+  if (stockDetail.length === 0) {
+    console.log("  ⏭️  stock_detail 为空，跳过");
+    return;
+  }
+
+  // 配置
+  const leadDays = cfg("rule13", "production_lead_days", 5);
+  const multiplier = cfg("rule13", "replenish_multiplier", 1.0);
+  const minBatch = cfg("rule13", "min_batch_size", 2);
+  const autoConfirm = cfg("rule13", "auto_confirm", true);
+
+  // 已有排产索引：SKU|SPH|CYL → record（仅"待确认"和"生产中"）
+  const activePlans = new Map();
+  for (const r of existingPlans) {
+    const f = r.fields;
+    if (f["状态"] !== "待确认" && f["状态"] !== "生产中") continue;
+    const sph = f["SPH"];
+    const cyl = f["CYL"];
+    if (sph === undefined || cyl === undefined) continue; // 非度数级排产（rule4 的旧记录）
+    const sku = f["产品型号"];
+    const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
+    activePlans.set(key, r);
+  }
+
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+  const todayTs = Date.now();
+  const promiseDate = todayTs + leadDays * 86400000;
+
+  // 需要新建的排产单
+  const newRecords = [];
+  const alertItems = [];
+  let skipped = 0;
+
+  for (const r of stockDetail) {
+    const f = r.fields;
+    const sku = typeof f["SKU编号"] === "string" ? f["SKU编号"] : (Array.isArray(f["SKU编号"]) ? f["SKU编号"][0]?.text : "");
+    if (!sku) continue;
+
+    const sph = Number(f["SPH"]);
+    const cyl = Number(f["CYL"]);
+    const current = Number(f["当前库存"]) || 0;
+    const safety = Number(f["安全库存"]) || 0;
+    if (safety <= 0) continue;
+
+    const gap = Math.max(safety - current, 0);
+    if (gap < minBatch) { skipped++; continue; }
+
+    // 去重：已有活跃排产单则跳过
+    const key = `${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`;
+    if (activePlans.has(key)) { skipped++; continue; }
+
+    const qty = Math.max(Math.ceil(gap * multiplier), minBatch);
+    const workOrder = `${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}|${dateStr}`;
+
+    const record = {
+      fields: {
+        "工单号": workOrder,
+        "产品型号": sku,
+        "SPH": sph,
+        "CYL": cyl,
+        "建议产量": qty,
+        "生产类型": "备货生产",
+        "触发原因": `库存${current} < 安全线${safety}，缺口${gap}`,
+        "状态": autoConfirm ? "生产中" : "待确认",
+        "预计完成日": promiseDate,
+      },
+    };
+
+    newRecords.push(record);
+    // 加入索引防同批次内重复
+    activePlans.set(key, { fields: record.fields });
+    alertItems.push({ emoji: "📌", text: `${sku} SPH=${sph.toFixed(2)} CYL=${cyl.toFixed(2)}：缺口${gap}片 → 排产${qty}片` });
+  }
+
+  // 批量创建（上限 500/次）
+  let created = 0;
+  for (let i = 0; i < newRecords.length; i += 500) {
+    const batch = newRecords.slice(i, i + 500);
+    const data = await api("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.production}/records/batch_create`, { records: batch });
+    if (data) created += batch.length;
+  }
+
+  if (alertItems.length > 0) {
+    await notifyBatch(`🏭 度数级自动排产：${created} 张工单`, alertItems.slice(0, 20), "orange");
+  }
+
+  console.log(`\n  排产完成：${created} 张工单，${skipped} 个跳过（缺口不足/已有排产）`);
+}
+
+// ─── 规则14：度数级库存自动回补 ──────────────────────────────────────────
+//
+// 触发条件：
+//   1. 排产单"预计完成日 ≤ 今天"且状态="生产中" → 自动回补
+//   2. 排产单状态被人工改为"完成" → 回补（人工提前完成）
+//
+// 回补动作：
+//   - stock_detail.当前库存 += 建议产量
+//   - production.状态 = "完成"
+//   - production.实际完成日 = 今天
+//   - 复用 rule9 累加模芯
+
+async function rule14() {
+  console.log("\n🔄 规则14：度数级库存自动回补");
+  log("─".repeat(50));
+
+  const stockDetail = getData("stock_detail");
+  const production = getData("production");
+  const molds = getData("mold");
+
+  // stock_detail 索引：SKU|SPH|CYL → record
+  const stockMap = new Map();
+  for (const r of stockDetail) {
+    const f = r.fields;
+    const sku = typeof f["SKU编号"] === "string" ? f["SKU编号"] : (Array.isArray(f["SKU编号"]) ? f["SKU编号"][0]?.text : "");
+    if (!sku) continue;
+    const sph = Number(f["SPH"]);
+    const cyl = Number(f["CYL"]);
+    const key = `${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`;
+    stockMap.set(key, r);
+  }
+
+  // 模芯索引：SKU → [mold records]
+  const moldMap = {};
+  for (const r of molds) {
+    const sku = r.fields["产品型号"];
+    if (!moldMap[sku]) moldMap[sku] = [];
+    moldMap[sku].push(r);
+  }
+
+  const now = Date.now();
+  const autoComplete = cfg("rule14", "auto_complete", true);
+  const today = new Date().toISOString().slice(0, 10);
+
+  let replenished = 0;
+  const alertItems = [];
+
+  for (const plan of production) {
+    const f = plan.fields;
+    const sku = f["产品型号"];
+    const sph = f["SPH"];
+    const cyl = f["CYL"];
+
+    // 只处理度数级排产单（有 SPH/CYL 字段）
+    if (sph === undefined || cyl === undefined) continue;
+
+    const qty = Number(f["建议产量"]) || 0;
+    if (qty <= 0) continue;
+
+    // 判断是否应该回补
+    let shouldReplenish = false;
+    let reason = "";
+
+    if (f["回补状态"] === "已回补") continue; // 已回补，跳过
+
+    if (f["状态"] === "完成") {
+      // 人工标记完成 → 回补
+      shouldReplenish = true;
+      reason = "人工完成";
+    } else if (autoComplete && f["状态"] === "生产中") {
+      const promiseDate = f["预计完成日"];
+      if (promiseDate) {
+        const promiseTs = typeof promiseDate === "number" ? promiseDate : new Date(promiseDate).getTime();
+        if (promiseTs <= now) {
+          shouldReplenish = true;
+          reason = "自动回补（到期）";
+        }
+      }
+    }
+
+    if (!shouldReplenish) continue;
+
+    // 找到对应库存行
+    const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
+    const stockRecord = stockMap.get(key);
+    if (!stockRecord) {
+      log(`  ⚠️  ${key} 无对应库存行，跳过回补`);
+      continue;
+    }
+
+    const oldStock = Number(stockRecord.fields["当前库存"]) || 0;
+    const newStock = oldStock + qty;
+
+    // 更新库存
+    await updateRecord(TABLES.stock_detail, stockRecord.record_id, {
+      "当前库存": newStock,
+      "最近出库": now, // 复用字段标记最近变动
+    });
+
+    // 更新排产单状态
+    const planUpdate = {
+      "状态": "完成",
+      "实际完成日": now,
+      "回补状态": "已回补",
+      "触发原因": (f["触发原因"] || "") + ` → ${reason}`,
+    };
+    await updateRecord(TABLES.production, plan.record_id, planUpdate);
+
+    // 累加模芯（复用 rule9 逻辑）
+    const skuMolds = moldMap[sku];
+    if (skuMolds && skuMolds.length > 0) {
+      const mold = skuMolds[0];
+      const mf = mold.fields;
+      const newUsed = (mf["已使用次数"] || 0) + qty;
+      const remaining = (mf["总寿命（次）"] || 0) - newUsed;
+      await updateRecord(TABLES.mold, mold.record_id, {
+        "已使用次数": newUsed,
+        "剩余次数": remaining,
+      });
+      log(`  🔧 模芯${mf["模芯编号"]} 使用+${qty}, 剩余${remaining}次`);
+    }
+
+    log(`  ✅ ${sku} SPH=${Number(sph).toFixed(2)} CYL=${Number(cyl).toFixed(2)}：${oldStock} → ${newStock}（+${qty}，${reason}）`);
+    alertItems.push({ emoji: "✅", text: `${sku} SPH=${Number(sph).toFixed(2)} CYL=${Number(cyl).toFixed(2)}：${oldStock}+${qty}=${newStock}（${reason}）` });
+    replenished++;
+  }
+
+  if (alertItems.length > 0) {
+    await notifyBatch(`🔄 库存自动回补：${replenished} 个度数`, alertItems.slice(0, 20), "green");
+  }
+
+  console.log(`\n  回补完成：${replenished} 个度数组合`);
+}
+
 // ─── 主入口 ─────────────────────────────────────────────
 
 async function main() {
@@ -1063,6 +1312,8 @@ async function main() {
     rule10,
     rule11,
     rule12,
+    rule13,
+    rule14,
   };
 
   if (cmd === "all") {
@@ -1072,7 +1323,7 @@ async function main() {
   } else if (rules[cmd]) {
     await rules[cmd]();
   } else {
-    console.error(`未知命令: ${cmd}\n用法: node automations.js [rule1-rule12|all]`);
+    console.error(`未知命令: ${cmd}\n用法: node automations.js [rule1-rule14|all]`);
     process.exit(1);
   }
 

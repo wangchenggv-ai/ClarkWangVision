@@ -1,6 +1,5 @@
 {
   "_description": "Supply chain rule parameters. Business users can override any value via the Feishu '规则配置' table.",
-
   "rule1": {
     "_name": "订单处理",
     "instock_delivery_days": 3,
@@ -8,42 +7,49 @@
     "max_order_qty": 100,
     "custom_product_type": "定制品"
   },
-
   "rule2": {
     "_name": "库存预警",
     "high_alert_threshold": 3
   },
-
   "rule3": {
     "_name": "模芯寿命预警",
     "critical_remaining": 50,
     "default_warning_threshold": 500
   },
-
   "rule4": {
     "_name": "销售预测→排产",
     "seasonal_summer": 1.3,
-    "seasonal_summer_months": [6, 7, 8],
+    "seasonal_summer_months": [
+      6,
+      7,
+      8
+    ],
     "seasonal_school": 1.2,
-    "seasonal_school_months": [9],
+    "seasonal_school_months": [
+      9
+    ],
     "seasonal_cny": 0.8,
-    "seasonal_cny_months": [1, 2],
-    "seasonal_default": 1.0
+    "seasonal_cny_months": [
+      1,
+      2
+    ],
+    "seasonal_default": 1
   },
-
   "rule5": {
     "_name": "毛坯库存预警",
     "blank_safety_multiplier": 1.5,
     "blank_floor": 2000,
     "high_alert_threshold": 2
   },
-
   "rule6": {
     "_name": "订单超期预警",
     "warning_hours": 24,
-    "skip_statuses": ["已发货", "完成", "已签收"]
+    "skip_statuses": [
+      "已发货",
+      "完成",
+      "已签收"
+    ]
   },
-
   "rule7": {
     "_name": "采购自动触发",
     "mold_lead_days": 28,
@@ -52,13 +58,22 @@
     "blank_replenish_target": 5000,
     "blank_min_order_qty": 3000
   },
-
   "rule8": {
     "_name": "排产分配车房",
     "specialty_bonus": 10
   },
-
   "rule9": {
     "_name": "模芯使用累加"
+  },
+  "rule13": {
+    "_name": "度数级自动排产",
+    "production_lead_days": 5,
+    "replenish_multiplier": 1,
+    "min_batch_size": 2,
+    "auto_confirm": true
+  },
+  "rule14": {
+    "_name": "度数级库存自动回补",
+    "auto_complete": true
   }
 }

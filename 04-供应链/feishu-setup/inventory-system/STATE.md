@@ -1,7 +1,7 @@
 # STATE.md — 库存系统进度快照
 
 > 本文件是**当前状态快照**（易变），记录"现在走到哪了"。长期规则请看 [CLAUDE.md](CLAUDE.md)。
-> 最后更新：**2026-04-22（v5 — 理论备库系统全量上线 + 度数级扣减）**
+> 最后更新：**2026-04-22（v7 — Admin 控制中心上线）**
 
 ---
 
@@ -82,6 +82,21 @@
 - [x] `automations.js` — rule10 寄售到期预警（60天黄/90天红）
 - [x] `automations.js` — rule11 月度对账单自动生成
 
+### 动态排产飞轮（2026-04-22）
+
+- [x] `migrate_production.js` — 建排产表（含度数级字段），表 ID `tblWu5QwGPK1zYMl`
+- [x] `shared/tables.js` — 更新 production 表 ID
+- [x] `automations.js` — rule13 度数级自动排产（缺口→工单→自动分配车房→自动标记生产中）
+- [x] `automations.js` — rule14 度数级库存自动回补（到期/人工完成→回补库存→累加模芯）
+- [x] `rules_config.json` — rule13/rule14 配置已写入
+- [x] `automations.js` — env 加载改为支持 `../shared/.env` 回退
+- [x] 规则数从 12 → 14，CLAUDE.md 已更新
+- [x] 飞书 production 表建 3 个视图（按SKU分组/按状态筛选/按预计完成日）
+- [x] 端到端飞轮测试通过：rule13→1491张工单→改一条过期→rule14→库存+238→工单变完成
+- [x] 寄售三张表建表：agent_stock(`tblIEYUemBGIquVs`) / consignment_ledger(`tblP9VObYpOMh1gD`) / monthly_statement(`tblvEIQ7IBCJw2iY`)
+- [x] agent 表加字段：寄售账期天数 / 结算方式 / 备库比例
+- [x] `shared/tables.js` — 寄售三张表 ID 已填入
+
 ### 架构重组（2026-04-22）
 
 - [x] `TABLES` 常量合并到 `../shared/tables.js`，消除 server.js + automations.js 重复定义
@@ -89,6 +104,17 @@
 - [x] 删除 `SKUS_WITH_DETAIL_STOCK`，不再区分精细/粗粒度 SKU
 - [x] 删除 `estimateDelivery()`（粗粒度交期），统一走 `estimateDeliveryByRx()`
 - [x] 删除 `supply-chain/` 目录，sync 脚本搬到 `../order-system/`
+
+### Admin 控制中心（2026-04-22）
+
+- [x] `public/control.html` — 3 Tab 单页应用（仪表盘/规则+执行+AI/数据流）
+- [x] `server.js` — 5 条 admin API 路由（rules 读写、execute-rule、dashboard、ai-chat）
+- [x] `server.js` — RULE_MANIFEST 常量（14 条规则元数据）
+- [x] 仪表盘：总库存/安全库存/排产状态/SKU达标率/TOP10缺口可视化
+- [x] 规则 Tab：按业务分组（订单/库存/生产/预警），参数可 UI 编辑+全部保存
+- [x] 执行 Tab：快捷按钮 + 下拉选择 + 预览模式 + 终端风格输出
+- [x] AI 助手：MiMo Agent，内置完整规则知识 + 快捷问题芯片
+- [x] 仪表盘 2 分钟缓存（首次 ~10s，后续 <100ms）
 
 ### 测试
 
@@ -112,13 +138,8 @@
 
 ### 下阶段（短期，下次会话优先做）
 
-- [ ] **理论备库植入**：`node migrate_stock_plan.js create` → `import` → `apply_stock_plan.js --dry-run` → 实际写入
-- [ ] **创建飞书 Bitable 表**：运行 `node migrate_consignment.js create-tables` 创建三张表
-- [ ] **agent 表加字段**：运行 `node migrate_consignment.js add-agent-fields`
-- [ ] **更新 tables.js**：把 create-tables 打印的 ID 填入
-- [ ] **选 1 家试点代理商**：录入初始库存数据
+- [ ] **选 1 家试点代理商**：录入初始库存数据（`node migrate_consignment.js import <agentId> <excel> ...`）
 - [ ] **跑通端到端流程**：入库 → 下单 → 消耗 → 月度结算 → 到期转收入
-- [ ] **新增5个 SKU 的度数库存**：时空之眼A/B/PRO/MAX + 小旋风
 - [ ] **上游物料表录入数据**：同事通过表单视图开始填毛坯批次和模具台账
 - [ ] **上游物料表确认字段**：业务同事用表单试填，反馈是否需要加减字段
 
@@ -137,8 +158,12 @@
 |----|----|
 | 飞书 App Token | `B3xQbbqicaome1sKdZbcwdk8nWg` |
 | 度数级库存表 ID | `tbl7U79QGG4JtQev` |
+| 排产表 ID | `tblWu5QwGPK1zYMl` |
 | 毛坯库存表 ID | `tblrFIGHFVhTB16p` |
 | 模具台账表 ID | `tblfnVzOA2yFzbjs` |
+| 代理商库存表 ID | `tblIEYUemBGIquVs` |
+| 寄售流水表 ID | `tblP9VObYpOMh1gD` |
+| 月度对账单表 ID | `tblvEIQ7IBCJw2iY` |
 | 已录 SKU | 全部 7 个（各 225 行） |
 | 待录 SKU | 无 |
 | 当前库存总量 | 2340 片 × 2 SKU = 4680 片（新 SKU 库存=0 待补货） |

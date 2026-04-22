@@ -20,16 +20,16 @@ export const TABLES = {
   stock_plan: "tbluUfuETzwGdW1E",
   blank_inventory: "tblrFIGHFVhTB16p",
   mold: "tblfnVzOA2yFzbjs",
-  production: "tbltSntfaR9KCI7B",
+  production: "tblWu5QwGPK1zYMl",
   forecast: "tblK2YNUZ3RM3Zta",
   procurement: "tblZX1qW7RvcJieg",
   factory: "tblJ6RXFENJFQe9A",
   rule_config: "tbl78V8wgziRs0pt",
 
   // ── 寄售库存 ──
-  agent_stock: "",          // TODO: migrate_consignment.js create-tables 后填入
-  consignment_ledger: "",   // TODO: 同上
-  monthly_statement: "",    // TODO: 同上
+  agent_stock: "tblIEYUemBGIquVs",
+  consignment_ledger: "tblP9VObYpOMh1gD",
+  monthly_statement: "tblvEIQ7IBCJw2iY",
 
   // ── 分析 ──
   ai_analysis: "tbl8W9F9K2RbaL0k",

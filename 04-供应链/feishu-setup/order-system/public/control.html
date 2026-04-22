@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>控制中心 — 库存管理系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7fa;color:#1a202c;min-height:100vh}
+.header{background:#fff;border-bottom:1px solid #e2e8f0;padding:10px 24px;display:flex;align-items:center;justify-content:space-between}
+.header h1{font-size:18px;font-weight:600}
+.header .tag{font-size:11px;color:#4f46e5;background:rgba(79,70,229,.08);padding:3px 8px;border-radius:4px}
+.tabs{display:flex;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 24px}
+.tab{padding:10px 18px;cursor:pointer;font-size:13px;color:#718096;border-bottom:2px solid transparent;transition:.15s}
+.tab:hover{color:#1a202c}.tab.active{color:#4f46e5;border-bottom-color:#4f46e5;font-weight:500}
+.content{max-width:1100px;margin:0 auto;padding:16px 20px}
+.panel{display:none}.panel.active{display:block}
+/* Dashboard */
+.metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.mc{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px;text-align:center}
+.mc .v{font-size:26px;font-weight:700}.mc .l{font-size:11px;color:#718096;margin-top:2px}
+.mc.warn .v{color:#ca8a04}.mc.danger .v{color:#dc2626}.mc.ok .v{color:#16a34a}
+.risk-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;margin:8px 0;background:#e2e8f0}
+table.skus{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0}
+table.skus th{padding:5px 8px;text-align:left;border-bottom:2px solid #e2e8f0;font-weight:500;color:#718096;font-size:11px}
+table.skus td{padding:5px 8px;border-bottom:1px solid #edf2f7}
+table.skus tr:hover{background:#f7fafc}
+.deficit-bar{display:inline-block;height:6px;border-radius:3px;background:#dc2626;vertical-align:middle}
+table.ft{width:100%;border-collapse:collapse;font-size:12px}
+table.ft th{padding:5px 8px;text-align:left;border-bottom:2px solid #e2e8f0;font-weight:500;color:#718096;font-size:11px}
+table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
+/* ── Tab 2: Rules/Execute/AI ── */
+.t2-layout{display:grid;grid-template-columns:1fr 340px;gap:16px}
+@media(max-width:800px){.t2-layout{grid-template-columns:1fr}}
+/* Left: rules */
+.t2-rules{}
+/* Right sidebar: tools */
+.t2-tools{position:sticky;top:0;align-self:start}
+.tool-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:12px;overflow:hidden}
+.tool-card-head{padding:10px 14px;font-size:12px;font-weight:600;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.tool-card-head .icon{font-size:14px}
+.tool-card-body{padding:12px 14px}
+/* Execute */
+.exec-quick{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.exec-quick .qb{padding:3px 8px;border:1px solid #e2e8f0;border-radius:12px;font-size:11px;cursor:pointer;background:#fff;transition:.15s}
+.exec-quick .qb:hover{border-color:#4f46e5;color:#4f46e5;background:rgba(79,70,229,.04)}
+.exec-quick .qb.active{border-color:#4f46e5;background:#4f46e5;color:#fff}
+.exec-bar{display:flex;gap:6px;align-items:center;margin-bottom:8px}
+.exec-bar select{flex:1;padding:4px 6px;border:1px solid #e2e8f0;border-radius:4px;font-size:11px}
+.exec-bar label{font-size:11px;color:#718096;display:flex;align-items:center;gap:3px;white-space:nowrap}
+.terminal{background:#1e293b;color:#e2e8f0;border-radius:6px;padding:8px 10px;font-family:'Fira Code','Consolas',monospace;font-size:11px;max-height:180px;overflow-y:auto;white-space:pre-wrap;line-height:1.4}
+.terminal .s{color:#4ade80}.terminal .e{color:#f87171}.terminal .m{color:#94a3b8}
+/* AI */
+.ai-chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.ai-chips .chip{padding:3px 8px;border:1px solid #e2e8f0;border-radius:12px;font-size:10px;cursor:pointer;background:#fff;color:#718096;transition:.15s}
+.ai-chips .chip:hover{border-color:#4f46e5;color:#4f46e5}
+.chat-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;max-height:220px;overflow-y:auto;padding:8px;margin-bottom:8px}
+.chat-msg{margin-bottom:6px;max-width:90%}.chat-msg.user{margin-left:auto;text-align:right}
+.chat-msg .b{display:inline-block;padding:5px 9px;border-radius:6px;font-size:11px;line-height:1.4}
+.chat-msg.user .b{background:#4f46e5;color:#fff;border-bottom-right-radius:2px}
+.chat-msg.ai .b{background:#fff;border:1px solid #e2e8f0;border-bottom-left-radius:2px}
+.chat-msg .r{font-size:9px;color:#718096;margin-bottom:1px}
+.chat-row{display:flex;gap:6px}
+.chat-row input{flex:1;padding:5px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px}
+/* Rules — grouped */
+.rule-group{margin-bottom:12px}
+.rule-group-head{padding:8px 12px;font-size:12px;font-weight:600;background:#fff;border:1px solid #e2e8f0;border-radius:6px 6px 0 0;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none}
+.rule-group-head:hover{background:#f8fafc}
+.rule-group-head .badge{font-size:10px;color:#718096;font-weight:400}
+.rule-group-head .arrow{font-size:10px;color:#a0aec0;transition:.2s}
+.rule-group-head .arrow.open{transform:rotate(90deg)}
+.rule-group-body{border:1px solid #e2e8f0;border-top:none;border-radius:0 0 6px 6px;background:#fff}
+.rule-row{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #edf2f7;font-size:12px}
+.rule-row:last-child{border-bottom:none}
+.rule-row:hover{background:#f8fafc}
+.rule-id{font-weight:600;min-width:48px;color:#4f46e5}
+.rule-info{flex:1;min-width:0}
+.rule-name{font-weight:500}
+.rule-desc{color:#718096;font-size:11px}
+.rule-params{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pf{display:flex;align-items:center;gap:3px;font-size:11px}
+.pf label{color:#718096;white-space:nowrap}
+.pf input[type="number"]{width:56px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;font-size:11px}
+.pf input[type="checkbox"]{margin:0}
+.rule-acts{display:flex;gap:4px;min-width:80px;justify-content:flex-end}
+.btn{padding:3px 10px;border-radius:3px;border:1px solid #e2e8f0;background:#fff;color:#1a202c;cursor:pointer;font-size:11px;transition:.15s;white-space:nowrap}
+.btn:hover{border-color:#4f46e5;color:#4f46e5}
+.btn.p{background:#4f46e5;border-color:#4f46e5;color:#fff}.btn.p:hover{background:#6366f1}
+.btn.sm{padding:2px 8px;font-size:10px}
+/* Flow */
+.flow{display:flex;flex-direction:column;gap:4px;align-items:center;padding:8px 0}
+.flow-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center}
+.fn{background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;font-size:12px;text-align:center;min-width:110px}
+.fn.hl{border-color:#4f46e5;background:rgba(79,70,229,.06)}
+.fn.gr{border-color:#16a34a;background:rgba(22,163,74,.06)}
+.fn.yl{border-color:#ca8a04;background:rgba(202,138,4,.06)}
+.fa{color:#718096;font-size:14px}.fs{font-size:10px;color:#718096}
+.fl{border:1px dashed #e2e8f0;border-radius:6px;padding:8px;margin:4px 0}
+.sec{font-size:13px;font-weight:600;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+/* Toast */
+.toast{position:fixed;bottom:16px;right:16px;padding:8px 14px;border-radius:6px;font-size:12px;z-index:999;opacity:0;transition:.2s;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.toast.show{opacity:1}.toast.success{background:#16a34a;color:#fff}.toast.error{background:#dc2626;color:#fff}.toast.info{background:#2563eb;color:#fff}
+.sp{display:inline-block;width:14px;height:14px;border:2px solid #e2e8f0;border-top-color:#4f46e5;border-radius:50%;animation:sp .5s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>控制中心</h1>
+  <span class="tag">Admin</span>
+</div>
+<div class="tabs">
+  <div class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">仪表盘</div>
+  <div class="tab" data-tab="rules" onclick="switchTab('rules')">规则 / 执行 / AI</div>
+  <div class="tab" data-tab="flow" onclick="switchTab('flow')">数据流</div>
+</div>
+<div class="content">
+  <!-- 仪表盘 -->
+  <div class="panel active" id="panel-dashboard">
+    <div class="metrics" id="metrics-grid"></div>
+    <div id="risk-section"></div>
+    <div id="sku-section"></div>
+    <div class="sec">最近排产单</div>
+    <div id="recent-orders"></div>
+  </div>
+
+  <!-- 规则+执行+AI -->
+  <div class="panel" id="panel-rules">
+    <div class="t2-layout">
+      <!-- Left: grouped rules -->
+      <div class="t2-rules">
+        <div style="margin-bottom:10px;display:flex;gap:6px;align-items:center">
+          <input type="text" id="rule-search" placeholder="搜索规则..." oninput="renderRules()" style="padding:5px 8px;border:1px solid #e2e8f0;border-radius:4px;font-size:12px;width:200px">
+          <button class="btn" onclick="loadRules()">刷新</button>
+          <button class="btn" onclick="saveAll()" title="保存所有修改">全部保存</button>
+        </div>
+        <div id="rules-container"></div>
+      </div>
+      <!-- Right: sticky tools sidebar -->
+      <div class="t2-tools">
+        <!-- Execute -->
+        <div class="tool-card">
+          <div class="tool-card-head" onclick="toggleTool('exec')">
+            <span class="icon">&#9654;</span> 执行规则
+          </div>
+          <div class="tool-card-body" id="tool-exec">
+            <div class="exec-quick" id="exec-quick"></div>
+            <div class="exec-bar">
+              <select id="exec-rule"></select>
+              <label><input type="checkbox" id="exec-dry" checked> 预览</label>
+              <button class="btn p" onclick="executeRule()">执行</button>
+            </div>
+            <div class="terminal" id="exec-output"><span class="m">点击规则执行...</span></div>
+          </div>
+        </div>
+        <!-- AI -->
+        <div class="tool-card">
+          <div class="tool-card-head" onclick="toggleTool('ai')">
+            <span class="icon">&#10024;</span> AI 助手
+          </div>
+          <div class="tool-card-body" id="tool-ai">
+            <div class="ai-chips" id="ai-chips">
+              <span class="chip" onclick="askAI('当前系统哪些度数缺货最严重？')">缺货分析</span>
+              <span class="chip" onclick="askAI('rule13 的补货倍数改成 1.2 会怎样？')">调参建议</span>
+              <span class="chip" onclick="askAI('帮我分析当前库存健康度')">健康诊断</span>
+              <span class="chip" onclick="askAI('排产周期从5天改到3天的影响？')">交期优化</span>
+              <span class="chip" onclick="askAI('哪些SKU需要优先补货？')">补货优先级</span>
+            </div>
+            <div class="chat-box" id="chat-messages">
+              <div class="chat-msg ai"><div class="r">AI</div><div class="b">你好！可以问我规则、库存、排产相关问题，或点击上方快捷问题。</div></div>
+            </div>
+            <div class="chat-row">
+              <input type="text" id="chat-input" placeholder="输入问题..." onkeydown="if(event.key==='Enter')sendChat()">
+              <button class="btn p" onclick="sendChat()">发送</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 数据流 -->
+  <div class="panel" id="panel-flow">
+    <div class="flow">
+      <div class="flow-row">
+        <div class="fn hl">代理商下单<div class="fs">选SKU + 填度数</div></div>
+        <div class="fa">&rarr;</div>
+        <div class="fn">交期预估<div class="fs">estimateDeliveryByRx()</div></div>
+        <div class="fa">&rarr;</div>
+        <div class="fn gr">库存查询<div class="fs">stock_detail (度数级)</div></div>
+      </div>
+      <div class="fa" style="transform:rotate(90deg)">&rarr;</div>
+      <div class="flow-row">
+        <div class="fn hl">提交订单<div class="fs">POST /api/submit</div></div>
+        <div class="fa">&rarr;</div>
+        <div class="fn yl">扣减库存<div class="fs">deductStockDetail()</div></div>
+        <div class="fa">&rarr;</div>
+        <div class="fl"><div style="font-size:10px;color:#718096;margin-bottom:6px;text-align:center">寄售扣减（先自有后寄售）</div>
+          <div class="flow-row"><div class="fn" style="font-size:11px;padding:6px 10px">自有库存</div><div class="fa">&rarr;</div><div class="fn" style="font-size:11px;padding:6px 10px">寄售库存</div><div class="fa">&rarr;</div><div class="fn" style="font-size:11px;padding:6px 10px">写流水</div></div>
+        </div>
+      </div>
+      <div class="fa" style="transform:rotate(90deg)">&rarr;</div>
+      <div class="flow-row">
+        <div class="fn yl">库存 &lt; 安全线?<div class="fs">当前库存 vs 安全库存</div></div>
+        <div class="fa">&rarr;</div>
+        <div class="fn hl">rule13 自动排产<div class="fs">缺口→工单→分配车房</div></div>
+        <div class="fa">&rarr;</div>
+        <div class="fn">生产中<div class="fs">5天生产周期</div></div>
+      </div>
+      <div class="fa" style="transform:rotate(90deg)">&rarr;</div>
+      <div class="flow-row">
+        <div class="fn gr">rule14 自动回补<div class="fs">到期→库存+=产量</div></div>
+        <div class="fa">&rarr;</div>
+        <div class="fn">模芯累加<div class="fs">rule9</div></div>
+        <div class="fa">&rarr;</div>
+        <div class="fn hl">循环↑<div class="fs">飞轮闭环</div></div>
+      </div>
+    </div>
+    <div class="sec">辅助规则</div>
+    <div class="flow-row" style="flex-wrap:wrap;gap:6px">
+      <div class="fn" style="min-width:90px;padding:6px 10px;font-size:11px">rule2 库存预警</div>
+      <div class="fn" style="min-width:90px;padding:6px 10px;font-size:11px">rule3 模芯预警</div>
+      <div class="fn" style="min-width:90px;padding:6px 10px;font-size:11px">rule5 毛坯预警</div>
+      <div class="fn" style="min-width:90px;padding:6px 10px;font-size:11px">rule6 超期预警</div>
+      <div class="fn" style="min-width:90px;padding:6px 10px;font-size:11px">rule7 采购触发</div>
+      <div class="fn" style="min-width:90px;padding:6px 10px;font-size:11px">rule10 寄售预警</div>
+      <div class="fn" style="min-width:90px;padding:6px 10px;font-size:11px">rule11 月度对账</div>
+      <div class="fn" style="min-width:90px;padding:6px 10px;font-size:11px">rule12 度数预警</div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+var ADMIN = new URLSearchParams(location.search).get("admin") || "";
+var API = "/api/admin";
+
+function api(p, o) {
+  var s = p.indexOf("?") >= 0 ? "&" : "?";
+  return fetch(API+p+s+"admin="+ADMIN, Object.assign({headers:{"Content-Type":"application/json"}},o))
+    .then(function(r){if(!r.ok) return r.json().then(function(d){throw Error(d.error||"HTTP "+r.status)});return r.json()})
+    .catch(function(e){toast(e.message,"error");throw e});
+}
+
+function switchTab(n) {
+  document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("active",t.dataset.tab===n)});
+  document.querySelectorAll(".panel").forEach(function(p){p.classList.toggle("active",p.id==="panel-"+n)});
+  if (n==="dashboard") loadDashboard();
+  if (n==="rules") { loadRules(); loadExecOptions(); }
+}
+
+function toast(m, t) {
+  var el = document.getElementById("toast");
+  el.textContent = m; el.className = "toast "+(t||"info")+" show";
+  setTimeout(function(){el.classList.remove("show")}, 3000);
+}
+
+function h(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function toggleTool(id) { var b = document.getElementById("tool-"+id); b.style.display = b.style.display==="none" ? "block" : "none"; }
+
+// ── Dashboard ──
+async function loadDashboard() {
+  var g = document.getElementById("metrics-grid");
+  g.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:24px"><div class="sp" style="width:20px;height:20px"></div><span style="margin-left:8px;font-size:12px;color:#718096">加载中...</span></div>';
+  var d;
+  try { d = await api("/dashboard"); } catch(e) { g.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#dc2626;font-size:13px">加载失败</div>'; return; }
+  var pct = d.totalStockRows > 0 ? Math.round((d.totalStockRows - d.belowSafety) / d.totalStockRows * 100) : 0;
+  g.innerHTML = [
+    {v:d.totalStock,l:"总库存片数",c:"ok"},
+    {v:d.belowSafety,l:"低于安全库存",c:d.belowSafety>0?"danger":"ok"},
+    {v:d.totalStockRows,l:"库存行数",c:""},
+    {v:(d.prodStatus["生产中"]||0),l:"排产中",c:""},
+    {v:d.pendingReplenish,l:"待回补",c:d.pendingReplenish>0?"warn":"ok"},
+    {v:d.agentCount,l:"代理商",c:""},
+  ].map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join("");
+  var rs = document.getElementById("risk-section");
+  var riskColor = pct < 40 ? "#dc2626" : pct < 70 ? "#ca8a04" : "#16a34a";
+  var rsHtml = '<div class="sec">库存健康度 <span style="font-weight:400;color:'+riskColor+'">'+pct+'% 达标</span></div>';
+  rsHtml += '<div class="risk-bar"><div style="width:'+pct+'%;background:#16a34a;border-radius:4px"></div><div style="width:'+(100-pct)+'%;background:#dc2626;border-radius:4px"></div></div>';
+  if (d.skuStats) {
+    rsHtml += '<table class="skus"><thead><tr><th>SKU</th><th style="text-align:right">库存</th><th style="text-align:right">达标率</th><th>健康度</th></tr></thead><tbody>';
+    for (var k in d.skuStats) {
+      var st = d.skuStats[k], ok = st.total - st.below;
+      var sp = st.total > 0 ? Math.round(ok / st.total * 100) : 0;
+      var sc = sp > 70 ? "#16a34a" : sp > 40 ? "#ca8a04" : "#dc2626";
+      rsHtml += '<tr><td style="font-weight:500">'+k+'</td><td style="text-align:right">'+st.stock+'</td><td style="text-align:right;color:'+sc+'">'+sp+'%</td><td><div class="risk-bar" style="width:120px;display:inline-block;vertical-align:middle;margin:0"><div style="width:'+sp+'%;background:'+sc+';border-radius:4px"></div></div></td></tr>';
+    }
+    rsHtml += '</tbody></table>';
+  }
+  rs.innerHTML = rsHtml;
+  var ss = document.getElementById("sku-section");
+  if (d.topDeficits && d.topDeficits.length) {
+    var ds = '<div class="sec" style="color:#dc2626">最大缺口 TOP 10</div>';
+    ds += '<table class="skus"><thead><tr><th>SKU</th><th style="text-align:right">SPH</th><th style="text-align:right">CYL</th><th style="text-align:right">库存</th><th style="text-align:right">安全线</th><th style="text-align:right">缺口</th><th></th></tr></thead><tbody>';
+    var mx = d.topDeficits[0].gap;
+    d.topDeficits.slice(0,10).forEach(function(df) {
+      var w = mx > 0 ? Math.round(df.gap / mx * 100) : 0;
+      ds += '<tr><td>'+df.sku+'</td><td style="text-align:right">'+df.sph+'</td><td style="text-align:right">'+df.cyl+'</td><td style="text-align:right">'+df.stock+'</td><td style="text-align:right">'+df.safety+'</td><td style="text-align:right;color:#dc2626;font-weight:500">-'+df.gap+'</td><td><div class="deficit-bar" style="width:'+Math.max(w,4)+'px"></div></td></tr>';
+    });
+    ds += '</tbody></table>';
+    ss.innerHTML = ds;
+  } else { ss.innerHTML = ""; }
+  var tbl = document.getElementById("recent-orders");
+  if (d.recentOrders && d.recentOrders.length) {
+    tbl.innerHTML = '<table class="ft"><thead><tr><th>工单号</th><th>SKU</th><th style="text-align:right">SPH</th><th style="text-align:right">CYL</th><th style="text-align:right">产量</th><th>状态</th></tr></thead><tbody>'+d.recentOrders.map(function(o){return '<tr><td>'+o.工单号+'</td><td>'+o.产品型号+'</td><td style="text-align:right">'+o.SPH+'</td><td style="text-align:right">'+o.CYL+'</td><td style="text-align:right">'+o.建议产量+'</td><td>'+o.状态+'</td></tr>'}).join("")+'</tbody></table>';
+  } else { tbl.innerHTML = '<p style="color:#718096;font-size:12px">暂无排产单</p>'; }
+}
+
+// ── Rules ──
+var _cfg={}, _man={};
+var RULE_GROUPS = [
+  { name: "订单处理", rules: ["rule1","rule2","rule3"], desc: "下单、验真、签收" },
+  { name: "库存管理", rules: ["rule4","rule5","rule12","rule13","rule14"], desc: "预测、预警、排产、回补" },
+  { name: "生产运营", rules: ["rule7","rule8","rule9"], desc: "采购、车房、模芯" },
+  { name: "风险预警", rules: ["rule6","rule10","rule11"], desc: "超期、寄售、对账" },
+];
+var _collapsed = {};
+
+async function loadRules() {
+  var c = document.getElementById("rules-container");
+  c.innerHTML = '<div style="text-align:center;padding:16px"><div class="sp"></div></div>';
+  var d;
+  try { d = await api("/rules"); } catch(e) { c.innerHTML = '<p style="color:#dc2626;text-align:center;padding:16px;font-size:12px">加载失败</p>'; return; }
+  _cfg = d.config || {}; _man = d.manifest || {};
+  renderRules(); loadExecOptions();
+}
+
+function renderRules() {
+  var c = document.getElementById("rules-container");
+  var q = (document.getElementById("rule-search").value||"").toLowerCase();
+  var html = "";
+  RULE_GROUPS.forEach(function(grp) {
+    var visible = grp.rules.filter(function(rid) {
+      var m = _man[rid]; if (!m) return false;
+      return !q || rid.indexOf(q)>=0 || m.name.indexOf(q)>=0 || m.desc.indexOf(q)>=0;
+    });
+    if (q && !visible.length) return;
+    var paramCount = 0;
+    visible.forEach(function(rid) { paramCount += Object.keys(_man[rid].params).length; });
+    var collapsed = _collapsed[grp.name] && !q;
+    html += '<div class="rule-group">';
+    html += '<div class="rule-group-head" onclick="toggleGroup(\''+grp.name+'\')"><div><span style="font-weight:600">'+grp.name+'</span> <span class="badge">'+grp.desc+' · '+visible.length+'条规则'+(paramCount?' · '+paramCount+'参数':'')+'</span></div><span class="arrow'+(collapsed?'':' open')+'">&#9654;</span></div>';
+    if (!collapsed) {
+      html += '<div class="rule-group-body">';
+      visible.forEach(function(rid) {
+        var m = _man[rid], cfg = _cfg[rid]||{};
+        var params = Object.entries(m.params).map(function(pe) {
+          var pk=pe[0], pm=pe[1], val=cfg[pk];
+          if (pm.type==="checkbox") return '<div class="pf"><label><input type="checkbox" data-rule="'+rid+'" data-param="'+pk+'" '+(val?"checked":"")+' onchange="upd(this)"> '+pm.label+'</label></div>';
+          return '<div class="pf"><label>'+pm.label+'</label><input type="number" value="'+(val!=null?val:"")+'" data-rule="'+rid+'" data-param="'+pk+'" onchange="upd(this)" step="any"></div>';
+        }).join("");
+        var hasP = Object.keys(m.params).length > 0;
+        html += '<div class="rule-row">';
+        html += '<div class="rule-id">'+rid+'</div>';
+        html += '<div class="rule-info"><div class="rule-name">'+m.name+'</div><div class="rule-desc">'+m.desc+'</div></div>';
+        html += '<div class="rule-params">'+(hasP?params:'<span style="color:#a0aec0;font-size:10px">无参数</span>')+'</div>';
+        html += '<div class="rule-acts">'+(hasP?'<button class="btn sm p" onclick="saveRule(\''+rid+'\')">保存</button>':'')+'<button class="btn sm" onclick="quickExec(\''+rid+'\')">执行</button></div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  });
+  // Catch-all for rules not in any group
+  var grouped = new Set();
+  RULE_GROUPS.forEach(function(g) { g.rules.forEach(function(r) { grouped.add(r); }); });
+  var ungrouped = Object.keys(_man).filter(function(r) { return !grouped.has(r); });
+  if (ungrouped.length && !q) {
+    html += '<div class="rule-group"><div class="rule-group-head"><div><span style="font-weight:600">其他</span> <span class="badge">'+ungrouped.length+'条</span></div></div><div class="rule-group-body">';
+    ungrouped.forEach(function(rid) {
+      var m = _man[rid], cfg = _cfg[rid]||{};
+      html += '<div class="rule-row"><div class="rule-id">'+rid+'</div><div class="rule-info"><div class="rule-name">'+m.name+'</div><div class="rule-desc">'+m.desc+'</div></div><div class="rule-acts"><button class="btn sm" onclick="quickExec(\''+rid+'\')">执行</button></div></div>';
+    });
+    html += '</div></div>';
+  }
+  c.innerHTML = html;
+}
+
+function toggleGroup(name) { _collapsed[name] = !_collapsed[name]; renderRules(); }
+
+function upd(el) {
+  var r=el.dataset.rule, p=el.dataset.param;
+  var v = el.type==="checkbox" ? el.checked : parseFloat(el.value);
+  if (!_cfg[r]) _cfg[r] = {};
+  _cfg[r][p] = v;
+}
+
+async function saveRule(rid) {
+  var cfg=_cfg[rid]||{}, meta=_man[rid]||{params:{}};
+  for (var pk of Object.keys(meta.params)) {
+    await api("/rules",{method:"POST",body:JSON.stringify({rule:rid,param:pk,value:cfg[pk]})});
+  }
+  toast(rid+" 已保存","success");
+}
+
+async function saveAll() {
+  var count = 0;
+  for (var rid in _man) {
+    var meta = _man[rid], cfg = _cfg[rid]||{};
+    for (var pk of Object.keys(meta.params)) {
+      await api("/rules",{method:"POST",body:JSON.stringify({rule:rid,param:pk,value:cfg[pk]})});
+      count++;
+    }
+  }
+  toast("已保存 "+count+" 个参数","success");
+}
+
+function quickExec(rid) {
+  document.getElementById("exec-rule").value = rid;
+  document.getElementById("exec-dry").checked = true;
+  executeRule();
+}
+
+// ── Execute ──
+function loadExecOptions() {
+  var sel = document.getElementById("exec-rule");
+  if (sel.options.length) return;
+  // Quick buttons
+  var qb = document.getElementById("exec-quick");
+  var quickRules = ["rule12","rule13","rule14","rule4"];
+  qb.innerHTML = quickRules.filter(function(r){return _man[r]}).map(function(r) {
+    return '<span class="qb" onclick="quickExec(\''+r+'\')">'+r+' '+_man[r].name+'</span>';
+  }).join("");
+  // Dropdown
+  for (var e of Object.entries(_man)) {
+    var opt = document.createElement("option");
+    opt.value = e[0]; opt.textContent = e[0]+" "+e[1].name;
+    sel.appendChild(opt);
+  }
+}
+
+async function executeRule() {
+  var rule = document.getElementById("exec-rule").value;
+  var dry = document.getElementById("exec-dry").checked;
+  var out = document.getElementById("exec-output");
+  out.innerHTML = '<span class="m">执行中...</span>';
+  // Highlight active quick button
+  document.querySelectorAll(".exec-quick .qb").forEach(function(b) { b.classList.toggle("active", b.textContent.indexOf(rule)>=0); });
+  var t0 = Date.now(), data;
+  try { data = await api("/execute-rule",{method:"POST",body:JSON.stringify({rule:rule,dryRun:dry})}); } catch(e) { out.innerHTML = '<span class="e">'+h(e.message)+'</span>'; return; }
+  var s = ((Date.now()-t0)/1000).toFixed(1);
+  var o = '<span class="m"># '+rule+(dry?" --dry-run":"")+' | '+s+'s | exit '+(data.exitCode!=null?data.exitCode:"?")+'</span>\n';
+  if (data.stdout) o += '<span class="s">'+h(data.stdout)+'</span>\n';
+  if (data.stderr) o += '<span class="e">'+h(data.stderr)+'</span>\n';
+  if (!data.stdout && !data.stderr) o += '<span class="m">(无输出)</span>';
+  out.innerHTML = o;
+  toast(data.exitCode===0?rule+" 成功":rule+" 失败",data.exitCode===0?"success":"error");
+}
+
+// ── AI ──
+function askAI(q) {
+  document.getElementById("chat-input").value = q;
+  sendChat();
+}
+
+async function sendChat() {
+  var input = document.getElementById("chat-input");
+  var msg = input.value.trim();
+  if (!msg) return;
+  input.value = "";
+  var box = document.getElementById("chat-messages");
+  box.innerHTML += '<div class="chat-msg user"><div class="r">你</div><div class="b">'+h(msg)+'</div></div>';
+  box.innerHTML += '<div class="chat-msg ai" id="ai-w"><div class="r">AI</div><div class="b"><div class="sp"></div></div></div>';
+  box.scrollTop = box.scrollHeight;
+  var data;
+  try { data = await api("/ai-chat",{method:"POST",body:JSON.stringify({message:msg})}); } catch(e) { document.getElementById("ai-w")?.remove(); return; }
+  document.getElementById("ai-w")?.remove();
+  box.innerHTML += '<div class="chat-msg ai"><div class="r">AI</div><div class="b">'+h(data.reply||"无回复")+'</div></div>';
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Init ──
+if (!ADMIN) {
+  document.querySelector(".content").innerHTML = '<p style="color:#dc2626;padding:20px;font-size:14px">请通过 ?admin=TOKEN 访问</p>';
+} else {
+  loadDashboard(); loadRules();
+}
+</script>
+</body>
+</html>

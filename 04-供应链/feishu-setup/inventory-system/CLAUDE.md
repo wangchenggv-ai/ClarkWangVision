@@ -14,7 +14,7 @@
 |------|------|------|
 | **CRM** | `销售飞轮项目/`（独立飞书 Bitable） | 客户主数据、代理商、销售目标、会议 |
 | **订单** | `order-system/` | 代理商门户、下单、验真、物流、CRM同步 |
-| **库存** | `inventory-system/`（本目录） | 度数级库存、交期预估、9条业务规则 |
+| **库存** | `inventory-system/`（本目录） | 度数级库存、交期预估、14条业务规则 |
 
 - **业务目标：** 让代理商和终端客户对交期有明确预期
 - **心智模型：** 现货 = 放心 = 愿意推荐 = 正向循环
@@ -29,7 +29,7 @@
 
 运行时代码在 `../order-system/`：
 - `server.js` — `getStockMap()` + `estimateDeliveryByRx()` + `/api/delivery-estimate`
-- `automations.js` — 12条业务规则（库存告警、采购触发、排产等，含 rule12 度数级预警）
+- `automations.js` — 14条业务规则（库存告警、采购触发、排产等，含 rule12 度数级预警、rule13 自动排产、rule14 自动回补）
 
 表 ID 从 `../shared/tables.js` 引用（单一真相源），APP_TOKEN 从 `../shared/.env` 读取。
 
@@ -85,6 +85,30 @@
 - 季节系数 = summer 1.3 / school 1.2 / CNY 0.8 / default 1.0（复用 rule4 配置）
 - 2 = 2 个月库存周转目标
 - 占比 = 备库参数表中该 SPH/CYL 组合的归一化比例
+
+### 排产计划表（度数级排产）
+
+- **Table ID：** `TABLES.production`（`tblWu5QwGPK1zYMl`）
+- **表名：** 排产计划
+- **粒度：** 一行 = 一张工单（可为 SKU 级 rule4 产出，或 SKU×SPH×CYL 级 rule13 产出）
+- **去重键：** `工单号` = `SKU|SPH|CYL|YYYYMMDD`（度数级排产）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `工单号` | TEXT | 业务去重键（度数级排产） |
+| `产品型号` | TEXT | SKU |
+| `SPH` | NUMBER | 球镜值（度数级排产时填） |
+| `CYL` | NUMBER | 柱镜值（度数级排产时填） |
+| `周次` | TEXT | 预测周期（rule4 兼容） |
+| `建议产量` | NUMBER | 排产数量 |
+| `生产类型` | SINGLE_SELECT | 备货生产 / 订单生产 |
+| `触发原因` | TEXT | 触发说明，如"库存2 < 安全线50，缺口48" |
+| `状态` | SINGLE_SELECT | 待确认 / 生产中 / 完成 |
+| `分配车房` | TEXT | rule8/rule13 自动分配 |
+| `已计模芯` | SINGLE_SELECT | 否 / 是 |
+| `预计完成日` | DATE | 排产日 + 生产周期天数 |
+| `实际完成日` | DATE | 人工确认或自动回补时填入 |
+| `回补状态` | SINGLE_SELECT | 待回补 / 已回补 |
 
 ---
 
@@ -167,6 +191,14 @@ node calc_stock_plan.js --months 3 --auto-apply   # 近3月订单 → 更新参�
 node calc_stock_plan.js --months 6 --dry-run      # 预览近6月分布
 ```
 
+### [migrate_production.js](migrate_production.js) — 排产表
+
+```bash
+node migrate_production.js preview       # 查看当前字段
+node migrate_production.js create        # 新建排产表（含全部 14 个字段）
+node migrate_production.js add-fields    # 已有表新增 6 个度数级字段
+```
+
 ### 当前默认值
 
 - **Excel 路径：** `C:/Users/wangc/Desktop/备库参数比例.xlsx`（sheet：`库存表`）
@@ -201,6 +233,10 @@ node calc_stock_plan.js --months 6 --dry-run      # 预览近6月分布
 | 更新理论备库参数 | 更新 CSV → `node migrate_stock_plan.js import <tid>` → `node apply_stock_plan.js` |
 | 从订单自动测算备库分布 | `node calc_stock_plan.js --months 3 --auto-apply` |
 | 手动指定 SKU 备库目标 | `node apply_stock_plan.js --targets "SKU=数量"` （forecast 表不可用时） |
+| 手动触发排产 | `node automations.js rule13` |
+| 手动触发库存回补 | `node automations.js rule14` |
+| 调整排产参数 | `rules_config.json` 的 `rule13` 段（生产周期/补货倍数/最小批量） |
+| 调整回补参数 | `rules_config.json` 的 `rule14` 段（自动完成开关） |
 
 ---
 
@@ -241,12 +277,24 @@ node calc_stock_plan.js --months 6 --dry-run      # 预览近6月分布
 |------|------|
 | rule10 | 寄售到期预警（60天黄 / 90天红 + 写流水） |
 | rule11 | 月度对账单自动生成（每月 1-3 日） |
+| rule12 | 度数级库存预警（当前库存 vs 安全库存） |
+| rule13 | 度数级自动排产（缺口→工单→分配车房→生产中） |
+| rule14 | 度数级库存自动回补（到期/人工完成→库存+=产量→累加模芯） |
 
-### 下一阶段（暂未动手）
+### 寄售表（已建表）
 
-- **寄售建表** — `migrate_consignment.js` 建三张表 + agent 表新增字段
+| 表 | Table ID | 说明 |
+|----|----------|------|
+| `agent_stock` | `tblIEYUemBGIquVs` | 代理商库存（agent_id × SKU × SPH × CYL） |
+| `consignment_ledger` | `tblP9VObYpOMh1gD` | 寄售流水（入库/消耗/到期转收入/退货） |
+| `monthly_statement` | `tblvEIQ7IBCJw2iY` | 月度对账单（代理商 × 月份 × SKU） |
+
+Agent 表已加字段：`寄售账期天数`、`结算方式`、`备库比例`。
+
+### 下一阶段（待业务侧）
+
+- **选 1 家试点代理商** — `node migrate_consignment.js import <agentId> <excel> ...`
 - **寄售 API** — `/api/agent-stock`、`/api/admin/consignment-report`、月度对账单
-- **寄售规则** — rule10（到期预警）、rule11（月度对账单生成）
 
 ---
 
@@ -301,10 +349,14 @@ node calc_stock_plan.js --months 6 --dry-run      # 预览近6月分布
 SKU_CATALOG (server.js 静态常量)
   ├── stock_detail     (SKU × SPH × CYL → 成品片数 / 安全库存)
   ├── stock_plan       (SPH × CYL × 月份 → 占比，理论备库计算源)
+  ├── production       (SKU × SPH × CYL → 排产工单 / 状态)
   ├── blank_inventory  (SKU × CYL × 批次 → 毛坯片数)
   └── mold             (SKU × 模具编号 → 剩余寿命)
 
-数据飞轮：lens_detail(订单) → calc_stock_plan → stock_plan → apply → stock_detail.安全库存 → rule12 度数级预警
+数据飞轮：
+  lens_detail(订单) → calc_stock_plan → stock_plan → apply → stock_detail.安全库存
+  stock_detail(库存<安全线) → rule13 自动排产 → production → 分配车房 → 生产中
+  production(到期/完成) → rule14 自动回补 → stock_detail.当前库存 += 产量 → 循环
 ```
 
 ---

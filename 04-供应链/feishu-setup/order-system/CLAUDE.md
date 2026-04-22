@@ -14,7 +14,7 @@
 |------|------|------|
 | **CRM** | `销售飞轮项目/`（独立飞书 Bitable） | 客户主数据、代理商、销售目标、会议 |
 | **订单** | `order-system/`（本目录） | 代理商门户、下单、验真、物流、CRM同步 |
-| **库存** | `inventory-system/` | 度数级库存、交期预估、12条业务规则 |
+| **库存** | `inventory-system/` | 度数级库存、交期预估、14条业务规则 |
 
 - **业务目标：** 6.30 前完成最小闭环
 - **用户三端：** 代理商（下单/追踪） / 助理（管理后台） / 消费者（扫码验真）
@@ -213,12 +213,13 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 - [server.js](server.js) — 主后端（所有 API 端点）
 - [public/order.html](public/order.html) — 代理商下单页
 - [public/labels.html](public/labels.html) — 助理管理页（确认/发货/签收/标签）
+- [public/control.html](public/control.html) — Admin 控制中心（仪表盘/规则/AI，3 Tab）
 - [public/track.html](public/track.html) — 代理商追踪页（只读）
 - [public/verify.html](public/verify.html) — 消费者验真页
 - [logistics.js](logistics.js) — 物流 CLI + 通行单生成
 
 ### 偶尔碰的
-- [automations.js](automations.js) — 12条业务规则引擎（含 rule12 度数级库存预警）
+- [automations.js](automations.js) — 14条业务规则引擎（含 rule12 度数级库存预警、rule13 自动排产、rule14 自动回补）
 - [sync_*.js](.) — CRM/旧订单同步脚本
 - [ai_analysis.js](ai_analysis.js) — AI 周分析（MiMo）
 - [dashboard.js](dashboard.js) / [dashboard.html](dashboard.html) — KPI 看板
@@ -248,6 +249,9 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 | 前端样式调整 | `public/css/` 和对应 HTML 内联 style |
 | 排查消费者扫码报错 | 看 server.js 的 `/verify/:lensCode` 端点 + 浏览器 Network |
 | 新增/修改库存 | 看 `../inventory-system/CLAUDE.md` 的迁移脚本 |
+| 调整业务规则参数 | 打开 `/control?admin=TOKEN`，在规则 Tab 直接改 |
+| 手动触发规则 | `/control` 的执行 Tab，选规则点执行（支持预览） |
+| 规则参数存储 | `rules_config.json`（本地文件，API 可读写） |
 
 ---
 
