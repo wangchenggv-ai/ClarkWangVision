@@ -4,7 +4,7 @@
  * 测试项：
  *   1. 正常下单 → 库存正确扣减
  *   2. 幂等保护 → 同 clientRequestId 不重复下单
- *   3. 库存不足 → 409 返回（预检拦截，不写订单）
+ *   3. 库存不足 → 照常下单（库存扣至0，走生产）
  *   4. 并发下单 → 两单同 SKU/SPH/CYL 库存扣减正确（无 lost update）
  *   5. 重复度数（双眼同参数）→ 只扣一次预检
  */
@@ -224,8 +224,8 @@ console.log("--- Test 2: 幂等保护（同 clientRequestId）---");
   console.log(`  (已恢复库存)\n`);
 }
 
-// ─── Test 3: 库存不足 → 409 ─────────────────────────────────────────────
-console.log("--- Test 3: 库存不足 → 409 拦截 ---");
+// ─── Test 3: 库存不足 → 照常下单 ──────────────────────────────────────────
+console.log("--- Test 3: 库存不足 → 照常下单（库存扣至0）---");
 {
   const beforeStock = (await getStock(TEST_SKU, TEST_SPH, TEST_CYL)).stock;
   // 把库存设为 1
@@ -235,15 +235,13 @@ console.log("--- Test 3: 库存不足 → 409 拦截 ---");
   const body = makeOrder(TEST_SKU, TEST_SPH, TEST_CYL, 2); // 要 2 片，库存只有 1
   const res = await submitOrder(body);
 
-  assert("返回 409", res.status === 409, `status=${res.status}`);
-  assert("错误码 STOCK_INSUFFICIENT", res.body.code === "STOCK_INSUFFICIENT", res.body.code);
-  assert("有 details 说明", Array.isArray(res.body.details) && res.body.details.length > 0,
-    res.body.details?.join("; "));
+  assert("下单返回 200（不拦截）", res.status === 200, `status=${res.status}`);
+  assert("下单成功", res.body.success === true, JSON.stringify(res.body));
+  assert("返回订单号", !!res.body.orderNo, res.body.orderNo);
 
-  // 确认没有创建订单（用一个新的 orderNo 检查）
   await new Promise(r => setTimeout(r, 500));
   const currentStock = await getStock(TEST_SKU, TEST_SPH, TEST_CYL);
-  assert("库存未扣减", currentStock.stock === 1, `库存=${currentStock.stock}`);
+  assert("库存扣至0（有1扣1）", currentStock.stock === 0, `库存=${currentStock.stock}`);
 
   // 清理
   await setStock(stockInfo.recordId, beforeStock);
@@ -355,7 +353,7 @@ ${results.map(r => `| ${r.status === "PASS" ? "✅" : r.status === "FAIL" ? "❌
 |---|------|--------|
 | 1 | 正常下单 | 库存扣减正确、返回订单号 |
 | 2 | 幂等保护 | 同 clientRequestId 不重复下单、库存只扣一次 |
-| 3 | 库存不足 | 返回 409 + STOCK_INSUFFICIENT、不写订单、不扣库存 |
+| 3 | 库存不足 | 照常下单、库存扣至0、走生产 |
 | 4 | 并发下单 | 两单同时扣同一库存，无 lost update |
 | 5 | 双眼同度数 | 去重预检、双眼各扣正确 |
 

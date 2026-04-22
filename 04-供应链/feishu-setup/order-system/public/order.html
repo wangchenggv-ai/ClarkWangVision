@@ -207,17 +207,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="stockConflictModal">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-header">
-      <h2 style="color:#cf1322">库存不足</h2>
-    </div>
-    <div id="stockConflictDetail" style="margin:12px 0"></div>
-    <p style="font-size:13px;color:#888;margin:0 0 16px">其他代理商可能刚刚下单占用了库存，请刷新后重新提交。</p>
-    <button class="btn btn-primary btn-lg btn-block" onclick="closeStockConflict()">刷新页面</button>
-  </div>
-</div>
-
 <script>
 const token = new URLSearchParams(location.search).get("t") || "";
 let agentInfo = null;
@@ -749,18 +738,6 @@ function showConfirm() {
 
 function closeConfirm() { document.getElementById("confirmModal").classList.remove("show"); }
 
-function showStockConflict(details) {
-  const el = document.getElementById("stockConflictDetail");
-  el.innerHTML = details.map(d =>
-    `<div style="padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px;color:#333">${d}</div>`
-  ).join("");
-  document.getElementById("stockConflictModal").classList.add("show");
-}
-function closeStockConflict() {
-  document.getElementById("stockConflictModal").classList.remove("show");
-  location.reload();
-}
-
 // ─── 提交 ──────────────────────────────────────────────────────────────────
 async function doSubmit() {
   closeConfirm();
@@ -815,8 +792,6 @@ async function doSubmit() {
 
       // 清除草稿
       try { localStorage.removeItem(DRAFT_KEY); } catch {}
-    } else if (res.status === 409) {
-      showStockConflict(json.details || [json.error || "库存不足"]);
     } else {
       showToast(json.error || "提交失败，请重试", "error");
     }
