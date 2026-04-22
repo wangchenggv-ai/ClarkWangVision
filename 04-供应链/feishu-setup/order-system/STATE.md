@@ -198,3 +198,20 @@ Token 缓存 bug 暴露两个问题：系统缺自愈能力，缺低门槛运维
 - ✅ 同订单选人导出（④-8）
 - ✅ 验真时间字段（⑧-1）
 - ✅ 健康检查 / 订单查询 / 镜片明细 / 验真页面
+
+## 2026-04-22 ①-12 下单接口 500 修复 + 部署
+
+**Bug ①-12：** `deductStockDetail` 调飞书 API 返回非 JSON 响应时 `res.json()` 直接崩溃，导致 `/api/submit` 返回 500。
+
+**修复：**
+- `feishuApi()` / `getFeishuToken()` / `getNotifyToken()` 三处 `res.json()` 加 try-catch
+- `deductStockDetail` PATCH 失败返回 false 而非 true
+
+**部署：**
+- GitHub commit `224894a`
+- SWR 镜像 `v1` 已推送
+- ECS 容器已重启（docker compose pull && up -d）
+
+**验证：**
+- 下单接口：无效 token 返回 401 "无效链接"（不再 500）
+- E2E 回归：11/11 通过（17:55）

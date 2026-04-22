@@ -151,10 +151,10 @@
 |---|---------|--------|------|----------|------|----------|
 | 安-1 | 访问 admin-login?admin=xxx 无需操作，几秒后自动进入管理后台 | 1 | 已修复 | `public/admin-login.html` | `verifyAndRedirect` 自动验证 URL 中的 token 并跳转，任何人拿到带 token 的 URL 即可直接进入 | 去掉自动验证跳转逻辑，URL 带 `?admin=xxx` 时仅预填到输入框，用户必须手动点击"进入后台" |
 | ①-11 | Excel 中备注栏被识别为新客户（如"哈哈"出现在客户名位置） | 2 | 已修复 | `server.js` | 备注附加逻辑（①-3 旧修）要求"无眼别"，有眼别的备注行走到 `if (!name) continue` 时备注丢失 | 将备注附加判断移到 `if (!name) continue` 之前，不限制无眼别条件；无顾客名的行有备注即附加到上一个 patient |
-| ④-7 | 勾选不同订单号导出 ZIP 无 Excel 文件 | 2 | 修复中 | `server.js` | `buildFactoryExcel` 异常被静默吞掉；`allDetails` 为空时无日志 | 增加 buffer 非空检查、详细错误日志、allDetails 为空时打日志 |
+| ④-7 | 勾选不同订单号导出 ZIP 无 Excel 文件 | 2 | 已修复 | `server.js` | `buildFactoryExcel` 异常被静默吞掉；`allDetails` 为空时无日志 | 增加 buffer 非空检查、详细错误日志、allDetails 为空时打日志 | | 已验证 |
 | ④-8 | 同订单选 2 人导出，备注显示未选中的第 3 人备注 | 3 | 已修复 | `server.js` | `orderInfoMap` 查询订单主表取 `items[0]` 无客户名过滤，同订单多患者时取到未选中患者的记录 | 订单主表查询加客户名过滤，只取被选中患者的备注；多患者备注合并 |
 | ④-9 | 多订单合并导出 Excel，联系人/地址/备注全用第一个订单的信息，数量全为 1 | 2 | 已修复 | `server.js` | `orderInfoMap` 按 `orderNo|customerFilter` 做 key，无 customerFilter 时多订单共用一个 key；数量从镜片明细表读（无此字段），默认 1 | key 改为纯 orderNo；`buildFactoryExcel` 改为按每条记录的订单号查找对应 info；数量从订单主表读取 |
-| ①-12 | 下单接口 500 — deductStockDetail 调飞书 API 返回非 JSON 响应 | 1 | 已修复 | `server.js` | `feishuApi()`/`getFeishuToken()`/`getNotifyToken()` 的 `res.json()` 无 try-catch，飞书返回 HTML 错误页（502/504）时直接 SyntaxError 崩溃 | 三处 `res.json()` 全部加 try-catch，非 JSON 响应回退为文本日志并返回 null；`deductStockDetail` PATCH 失败时返回 false 而非 true |
+| ①-12 | 下单接口 500 — deductStockDetail 调飞书 API 返回非 JSON 响应 | 1 | 已修复 | `server.js` | `feishuApi()`/`getFeishuToken()`/`getNotifyToken()` 的 `res.json()` 无 try-catch，飞书返回 HTML 错误页（502/504）时直接 SyntaxError 崩溃 | 三处 `res.json()` 全部加 try-catch，非 JSON 响应回退为文本日志并返回 null；`deductStockDetail` PATCH 失败时返回 false 而非 true | | 已验证 |
 
 ## 汇总
 
