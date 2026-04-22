@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>卡坦岛 · Catan</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #1a2332; color: #e8ecf1; overflow: hidden; }
+  #app { display: grid; grid-template-columns: 1fr 340px; height: 100vh; }
+  #board-area { position: relative; display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, #2b4869 0%, #0f1a2a 100%); }
+  #board { cursor: pointer; }
+  #overlay { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,0.55); padding: 10px 14px; border-radius: 8px; font-size: 13px; max-width: 420px; line-height: 1.5; }
+  #phase-banner { position: absolute; top: 12px; right: 12px; background: rgba(30, 60, 100, 0.85); padding: 10px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; }
+
+  #sidebar { background: #0f1a2a; border-left: 1px solid #2a3a50; display: flex; flex-direction: column; }
+  .panel { padding: 12px 14px; border-bottom: 1px solid #223148; }
+  .panel h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: #8fa4bf; margin-bottom: 8px; font-weight: 600; }
+
+  .player-list { display: flex; flex-direction: column; gap: 6px; }
+  .player-row { display: grid; grid-template-columns: 14px 1fr auto; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; background: #1a2740; font-size: 13px; }
+  .player-row.active { outline: 2px solid #ffd96a; }
+  .player-row .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .player-row .name { font-weight: 500; }
+  .player-row .vp { font-weight: 700; color: #ffd96a; }
+  .player-row .meta { font-size: 11px; color: #7b8ba3; grid-column: 2 / 4; }
+
+  .resources { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; }
+  .res-chip { display: flex; flex-direction: column; align-items: center; padding: 6px 2px; background: #223148; border-radius: 4px; font-size: 11px; }
+  .res-chip .icon { font-size: 16px; margin-bottom: 2px; }
+  .res-chip .count { font-weight: 700; }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  button.action { padding: 8px 6px; background: #2d4a7a; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.15s; }
+  button.action:hover:not(:disabled) { background: #3e63a0; }
+  button.action:disabled { background: #1f2a3d; color: #4a5a75; cursor: not-allowed; }
+  button.action.primary { background: #c87a3a; grid-column: 1 / 3; }
+  button.action.primary:hover:not(:disabled) { background: #e08e48; }
+  button.action.danger { background: #7a3a3a; }
+  button.action.danger:hover:not(:disabled) { background: #a04848; }
+
+  #log { flex: 1; overflow-y: auto; padding: 10px 14px; font-size: 12px; line-height: 1.6; }
+  #log .entry { padding: 3px 0; color: #b8c5d9; border-bottom: 1px solid #1a2740; }
+  #log .entry.highlight { color: #ffd96a; font-weight: 600; }
+  #log .entry.system { color: #7b8ba3; font-style: italic; }
+
+  .cost { font-size: 10px; color: #8fa4bf; display: block; margin-top: 2px; }
+
+  .dialog-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .dialog { background: #1a2740; border: 1px solid #3e5a85; border-radius: 10px; padding: 20px; min-width: 320px; max-width: 500px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); }
+  .dialog h2 { font-size: 16px; margin-bottom: 12px; color: #ffd96a; }
+  .dialog p { font-size: 13px; margin-bottom: 12px; line-height: 1.5; }
+  .dialog .row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .dialog .row label { min-width: 60px; font-size: 12px; color: #8fa4bf; }
+  .dialog .row input[type=number] { width: 60px; padding: 4px 6px; background: #0f1a2a; border: 1px solid #3e5a85; color: #fff; border-radius: 4px; }
+  .dialog .btn-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  .dialog button { padding: 6px 14px; background: #2d4a7a; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  .dialog button:hover { background: #3e63a0; }
+  .dialog button.cancel { background: #4a3a3a; }
+  .dialog .res-row { display: flex; gap: 4px; flex-wrap: wrap; }
+  .dialog .res-btn { padding: 6px 10px; background: #223148; border: 1px solid #3e5a85; color: #fff; border-radius: 4px; cursor: pointer; font-size: 12px; }
+  .dialog .res-btn:hover { background: #2d4a7a; }
+  .dialog .res-btn.selected { background: #c87a3a; }
+  .hint { font-size: 11px; color: #7b8ba3; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div id="board-area">
+      <canvas id="board" width="840" height="720"></canvas>
+      <div id="overlay">
+        <div><strong>操作提示</strong></div>
+        <div id="hint">点击顶点建村 · 点击边建路 · 点击六角移动盗贼</div>
+      </div>
+      <div id="phase-banner">初始化...</div>
+    </div>
+    <div id="sidebar">
+      <div class="panel">
+        <h3>玩家</h3>
+        <div id="player-list" class="player-list"></div>
+      </div>
+      <div class="panel">
+        <h3>你的资源</h3>
+        <div id="my-resources" class="resources"></div>
+        <div style="margin-top:8px; font-size:12px; color:#8fa4bf;">
+          发展卡: <span id="my-dev-cards">-</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>操作</h3>
+        <div class="actions">
+          <button class="action primary" id="btn-roll">🎲 掷骰</button>
+          <button class="action" id="btn-road">建路 <span class="cost">1木1砖</span></button>
+          <button class="action" id="btn-settlement">建村 <span class="cost">1木1砖1羊1麦</span></button>
+          <button class="action" id="btn-city">升城 <span class="cost">2麦3矿</span></button>
+          <button class="action" id="btn-devcard">买发展卡 <span class="cost">1羊1麦1矿</span></button>
+          <button class="action" id="btn-play-dev">打发展卡</button>
+          <button class="action" id="btn-trade-bank">银行交易</button>
+          <button class="action" id="btn-trade-player">玩家交易</button>
+          <button class="action danger" id="btn-end-turn" style="grid-column: 1 / 3;">结束回合</button>
+        </div>
+      </div>
+      <div class="panel" style="flex: 1; display: flex; flex-direction: column; padding: 0; overflow: hidden;">
+        <h3 style="padding: 12px 14px 0;">事件日志</h3>
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+  <div id="dialog-root"></div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

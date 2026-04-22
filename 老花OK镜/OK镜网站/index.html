@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 — 全球首款老花OK镜</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --void: #050508;
+  --deep: #0a0a10;
+  --surface: #111118;
+  --elevated: #1a1a24;
+  --muted: #3a3a4a;
+  --subtle: #6a6a7a;
+  --text: #c8c8d4;
+  --bright: #e8e8f0;
+  --white: #f4f4fa;
+  --accent: #4af0c8;
+  --accent-dim: #2ab898;
+  --accent-glow: rgba(74, 240, 200, 0.15);
+  --gold: #d4a853;
+  --gold-dim: rgba(212, 168, 83, 0.2);
+  --cornea: radial-gradient(ellipse at 40% 35%, rgba(120, 200, 240, 0.08) 0%, transparent 60%);
+  --grain: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html {
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: var(--muted) var(--void);
+}
+
+body {
+  font-family: 'Noto Sans SC', sans-serif;
+  background: var(--void);
+  color: var(--text);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Grain overlay ── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: var(--grain);
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.4;
+}
+
+/* ── Custom cursor glow ── */
+.cursor-glow {
+  position: fixed;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(74, 240, 200, 0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 9998;
+  transform: translate(-50%, -50%);
+  transition: opacity 0.3s;
+}
+
+/* ── Navigation ── */
+nav {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  z-index: 1000;
+  padding: 1.5rem 3rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  backdrop-filter: blur(20px);
+  background: rgba(5, 5, 8, 0.7);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  transition: all 0.4s;
+}
+
+nav.scrolled {
+  padding: 1rem 3rem;
+  background: rgba(5, 5, 8, 0.92);
+}
+
+.logo {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem;
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  color: var(--bright);
+  text-transform: uppercase;
+}
+
+.logo span {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.nav-links {
+  display: flex;
+  gap: 2.5rem;
+  list-style: none;
+}
+
+.nav-links a {
+  color: var(--subtle);
+  text-decoration: none;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: color 0.3s;
+  position: relative;
+}
+
+.nav-links a::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+
+.nav-links a:hover { color: var(--accent); }
+.nav-links a:hover::after { width: 100%; }
+
+/* ── Hero ── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 40%, rgba(74, 240, 200, 0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 80% at 20% 70%, rgba(100, 140, 255, 0.03) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(212, 168, 83, 0.02) 0%, transparent 40%);
+}
+
+/* Animated cornea rings */
+.cornea-rings {
+  position: absolute;
+  width: 700px;
+  height: 700px;
+  right: 5%;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.6;
+}
+
+.ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: ring-pulse 6s ease-in-out infinite;
+}
+
+.ring:nth-child(1) {
+  width: 300px; height: 300px;
+  border-color: rgba(74, 240, 200, 0.12);
+  animation-delay: 0s;
+}
+.ring:nth-child(2) {
+  width: 420px; height: 420px;
+  border-color: rgba(74, 240, 200, 0.08);
+  animation-delay: 1s;
+}
+.ring:nth-child(3) {
+  width: 540px; height: 540px;
+  border-color: rgba(74, 240, 200, 0.05);
+  animation-delay: 2s;
+}
+.ring:nth-child(4) {
+  width: 660px; height: 660px;
+  border-color: rgba(74, 240, 200, 0.03);
+  animation-delay: 3s;
+}
+
+/* Cornea center glow */
+.cornea-center {
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(74, 240, 200, 0.1) 0%, rgba(74, 240, 200, 0.03) 40%, transparent 70%);
+  border-radius: 50%;
+  animation: breathe 4s ease-in-out infinite;
+}
+
+@keyframes ring-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  50% { transform: translate(-50%, -50%) scale(1.05); opacity: 0.6; }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+  50% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; }
+}
+
+.hero-content {
+  position: relative;
+  z-index: 10;
+  max-width: 720px;
+  padding: 0 3rem;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border: 1px solid rgba(212, 168, 83, 0.3);
+  border-radius: 100px;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 2.5rem;
+  backdrop-filter: blur(10px);
+  background: rgba(212, 168, 83, 0.05);
+  animation: fade-up 1s ease-out 0.2s both;
+}
+
+.hero-badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.hero h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(3rem, 6vw, 5.5rem);
+  font-weight: 300;
+  line-height: 1.1;
+  color: var(--white);
+  letter-spacing: -0.02em;
+  margin-bottom: 1.5rem;
+  animation: fade-up 1s ease-out 0.4s both;
+}
+
+.hero h1 em {
+  font-style: italic;
+  color: var(--accent);
+  position: relative;
+}
+
+.hero h1 em::after {
+  content: '';
+  position: absolute;
+  bottom: 0.05em;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  opacity: 0.4;
+}
+
+.hero-sub {
+  font-size: 1.1rem;
+  font-weight: 300;
+  line-height: 1.8;
+  color: var(--subtle);
+  max-width: 520px;
+  margin-bottom: 3rem;
+  animation: fade-up 1s ease-out 0.6s both;
+}
+
+.hero-cta {
+  display: flex;
+  gap: 1.5rem;
+  animation: fade-up 1s ease-out 0.8s both;
+}
+
+.btn-primary {
+  padding: 0.9rem 2.2rem;
+  background: var(--accent);
+  color: var(--void);
+  border: none;
+  border-radius: 2px;
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.2) 50%, transparent 70%);
+  transform: translateX(-100%);
+  transition: transform 0.6s;
+}
+
+.btn-primary:hover::before { transform: translateX(100%); }
+.btn-primary:hover { box-shadow: 0 0 30px rgba(74, 240, 200, 0.3); }
+
+.btn-ghost {
+  padding: 0.9rem 2.2rem;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--muted);
+  border-radius: 2px;
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Stats bar ── */
+.stats-bar {
+  border-top: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  padding: 3rem 0;
+  background: var(--deep);
+}
+
+.stats-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2rem;
+  padding: 0 3rem;
+}
+
+.stat-item {
+  text-align: center;
+  opacity: 0;
+  animation: fade-up 0.8s ease-out forwards;
+}
+
+.stat-item:nth-child(1) { animation-delay: 0.1s; }
+.stat-item:nth-child(2) { animation-delay: 0.2s; }
+.stat-item:nth-child(3) { animation-delay: 0.3s; }
+.stat-item:nth-child(4) { animation-delay: 0.4s; }
+
+.stat-number {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 2.5rem;
+  font-weight: 300;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.stat-number .unit {
+  font-size: 1rem;
+  color: var(--accent-dim);
+  margin-left: 0.2rem;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--subtle);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 0.5rem;
+}
+
+/* ── Sections shared ── */
+section {
+  padding: 8rem 3rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--accent);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 300;
+  color: var(--white);
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.01em;
+}
+
+.section-desc {
+  font-size: 1rem;
+  font-weight: 300;
+  line-height: 1.9;
+  color: var(--subtle);
+  max-width: 600px;
+}
+
+/* ── Problem section ── */
+.problem-section {
+  position: relative;
+}
+
+.problem-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  margin-top: 4rem;
+  align-items: start;
+}
+
+.problem-visual {
+  position: relative;
+  height: 400px;
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vision-demo {
+  position: relative;
+  width: 280px;
+  height: 280px;
+}
+
+.vision-circle {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.vision-circle.clear {
+  width: 160px;
+  height: 160px;
+  top: 20px;
+  left: 20px;
+  background: radial-gradient(circle, rgba(74, 240, 200, 0.08) 0%, transparent 70%);
+  border-color: rgba(74, 240, 200, 0.15);
+}
+
+.vision-circle.blur {
+  width: 160px;
+  height: 160px;
+  bottom: 20px;
+  right: 20px;
+  background: radial-gradient(circle, rgba(255, 100, 100, 0.06) 0%, transparent 70%);
+  border-color: rgba(255, 100, 100, 0.1);
+  filter: blur(1px);
+}
+
+.vision-label {
+  position: absolute;
+  font-size: 0.65rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+.vision-label.near {
+  bottom: 0;
+  left: 20px;
+  color: rgba(255, 100, 100, 0.5);
+}
+
+.vision-label.far {
+  top: 0;
+  right: 20px;
+  color: rgba(74, 240, 200, 0.5);
+}
+
+.vision-line {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,100,100,0.2), rgba(74,240,200,0.2));
+  transform-origin: left center;
+  transform: rotate(-35deg);
+}
+
+.problem-points {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin-top: 1rem;
+}
+
+.problem-point {
+  padding-left: 1.5rem;
+  border-left: 2px solid var(--muted);
+  transition: border-color 0.3s;
+}
+
+.problem-point:hover {
+  border-color: var(--accent);
+}
+
+.problem-point h3 {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--bright);
+  margin-bottom: 0.4rem;
+}
+
+.problem-point p {
+  font-size: 0.9rem;
+  color: var(--subtle);
+  line-height: 1.7;
+  font-weight: 300;
+}
+
+/* ── Solution / Tech ── */
+.tech-section {
+  position: relative;
+}
+
+.tech-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent, var(--accent-dim));
+}
+
+.tech-showcase {
+  margin-top: 4rem;
+  display: grid;
+  gap: 2rem;
+}
+
+.tech-card {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 4px;
+  padding: 3rem;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s;
+}
+
+.tech-card:hover {
+  border-color: rgba(74, 240, 200, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+
+.tech-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-dim), transparent);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.tech-card:hover::before { opacity: 1; }
+
+.tech-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 2rem;
+}
+
+.tech-card-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.tech-number {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+}
+
+.tech-card-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.6rem;
+  font-weight: 400;
+  color: var(--white);
+}
+
+.tech-feature {
+  padding: 1.5rem;
+  background: rgba(255,255,255,0.015);
+  border-radius: 3px;
+  border: 1px solid rgba(255,255,255,0.03);
+  transition: all 0.3s;
+}
+
+.tech-feature:hover {
+  background: rgba(74, 240, 200, 0.03);
+  border-color: rgba(74, 240, 200, 0.08);
+}
+
+.tech-feature-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.8rem;
+  display: block;
+}
+
+.tech-feature h4 {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--bright);
+  margin-bottom: 0.5rem;
+}
+
+.tech-feature p {
+  font-size: 0.8rem;
+  color: var(--subtle);
+  line-height: 1.7;
+  font-weight: 300;
+}
+
+/* ── Comparison ── */
+.comparison-section {
+  position: relative;
+}
+
+.comparison-table {
+  margin-top: 4rem;
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.comparison-table thead th {
+  padding: 1.2rem 1.5rem;
+  text-align: left;
+  font-size: 0.7rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--subtle);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-weight: 400;
+}
+
+.comparison-table thead th:first-child {
+  color: var(--muted);
+}
+
+.comparison-table thead th.highlight {
+  color: var(--accent);
+  position: relative;
+}
+
+.comparison-table thead th.highlight::after {
+  content: '✦ 推荐';
+  font-size: 0.6rem;
+  margin-left: 0.5rem;
+  color: var(--gold);
+  vertical-align: super;
+}
+
+.comparison-table tbody td {
+  padding: 1.2rem 1.5rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  font-weight: 300;
+}
+
+.comparison-table tbody td:first-child {
+  color: var(--subtle);
+  font-size: 0.8rem;
+}
+
+.comparison-table tbody td.highlight {
+  color: var(--accent);
+  font-weight: 400;
+  background: rgba(74, 240, 200, 0.02);
+}
+
+.comparison-table tbody tr:hover td {
+  background: rgba(255,255,255,0.01);
+}
+
+.comparison-table tbody tr:hover td.highlight {
+  background: rgba(74, 240, 200, 0.04);
+}
+
+.check { color: var(--accent); }
+.cross { color: rgba(255, 100, 100, 0.5); }
+
+/* ── Timeline / Journey ── */
+.journey-section {
+  position: relative;
+}
+
+.journey-timeline {
+  margin-top: 4rem;
+  position: relative;
+  padding-left: 3rem;
+}
+
+.journey-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(to bottom, var(--accent-dim), var(--muted), transparent);
+}
+
+.journey-step {
+  position: relative;
+  padding: 2rem 0 3rem 3rem;
+}
+
+.journey-step::before {
+  content: '';
+  position: absolute;
+  left: -3rem;
+  top: 2.3rem;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 15px rgba(74, 240, 200, 0.3);
+  margin-left: -3px;
+}
+
+.journey-step-num {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--accent-dim);
+  letter-spacing: 0.15em;
+  margin-bottom: 0.5rem;
+}
+
+.journey-step h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem;
+  font-weight: 400;
+  color: var(--white);
+  margin-bottom: 0.5rem;
+}
+
+.journey-step p {
+  font-size: 0.9rem;
+  color: var(--subtle);
+  line-height: 1.8;
+  font-weight: 300;
+  max-width: 500px;
+}
+
+.journey-step-time {
+  display: inline-block;
+  margin-top: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--gold);
+  padding: 0.2rem 0.8rem;
+  border: 1px solid rgba(212, 168, 83, 0.2);
+  border-radius: 2px;
+  background: rgba(212, 168, 83, 0.03);
+}
+
+/* ── Testimonial ── */
+.testimonial-section {
+  position: relative;
+  padding: 8rem 0;
+}
+
+.testimonial-section::before,
+.testimonial-section::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+}
+
+.testimonial-section::before { top: 0; }
+.testimonial-section::after { bottom: 0; }
+
+.testimonial-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 3rem;
+}
+
+.testimonial-grid {
+  margin-top: 4rem;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 2rem;
+}
+
+.testimonial-card {
+  background: var(--surface);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 4px;
+  padding: 2.5rem;
+  position: relative;
+  transition: all 0.3s;
+}
+
+.testimonial-card:hover {
+  border-color: rgba(74, 240, 200, 0.08);
+}
+
+.testimonial-quote {
+  font-size: 3rem;
+  font-family: 'Cormorant Garamond', serif;
+  color: var(--accent-dim);
+  line-height: 1;
+  margin-bottom: 0.5rem;
+  opacity: 0.4;
+}
+
+.testimonial-text {
+  font-size: 0.95rem;
+  line-height: 1.9;
+  color: var(--text);
+  font-weight: 300;
+  margin-bottom: 1.5rem;
+}
+
+.testimonial-author {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.testimonial-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: var(--accent);
+  border: 1px solid rgba(74, 240, 200, 0.15);
+}
+
+.testimonial-name {
+  font-size: 0.85rem;
+  color: var(--bright);
+  font-weight: 500;
+}
+
+.testimonial-role {
+  font-size: 0.75rem;
+  color: var(--subtle);
+  margin-top: 0.15rem;
+}
+
+/* ── CTA ── */
+.cta-section {
+  text-align: center;
+  padding: 10rem 3rem;
+  position: relative;
+}
+
+.cta-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 50% at 50% 50%, rgba(74, 240, 200, 0.04) 0%, transparent 70%);
+}
+
+.cta-content {
+  position: relative;
+  z-index: 1;
+}
+
+.cta-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(2.5rem, 5vw, 4.5rem);
+  font-weight: 300;
+  color: var(--white);
+  line-height: 1.15;
+  margin-bottom: 1.5rem;
+}
+
+.cta-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.cta-sub {
+  font-size: 1rem;
+  color: var(--subtle);
+  font-weight: 300;
+  margin-bottom: 3rem;
+  line-height: 1.8;
+}
+
+.cta-form {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.cta-input {
+  flex: 1;
+  padding: 0.9rem 1.2rem;
+  background: var(--surface);
+  border: 1px solid var(--muted);
+  border-radius: 2px;
+  color: var(--bright);
+  font-family: 'Noto Sans SC', sans-serif;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color 0.3s;
+}
+
+.cta-input::placeholder {
+  color: var(--muted);
+}
+
+.cta-input:focus {
+  border-color: var(--accent-dim);
+}
+
+/* ── Footer ── */
+footer {
+  border-top: 1px solid rgba(255,255,255,0.04);
+  padding: 3rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-left {
+  font-size: 0.75rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+}
+
+.footer-links {
+  display: flex;
+  gap: 2rem;
+  list-style: none;
+}
+
+.footer-links a {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-decoration: none;
+  letter-spacing: 0.05em;
+  transition: color 0.3s;
+}
+
+.footer-links a:hover {
+  color: var(--accent);
+}
+
+/* ── Scroll reveal ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  nav { padding: 1rem 1.5rem; }
+  .nav-links { display: none; }
+  section, .testimonial-inner { padding: 5rem 1.5rem; }
+  .hero-content { padding: 0 1.5rem; }
+  .cornea-rings { width: 350px; height: 350px; right: -20%; opacity: 0.3; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); padding: 0 1.5rem; }
+  .problem-grid { grid-template-columns: 1fr; gap: 2rem; }
+  .tech-card-grid { grid-template-columns: 1fr; }
+  .testimonial-grid { grid-template-columns: 1fr; }
+  .comparison-table { font-size: 0.8rem; }
+  .comparison-table thead th,
+  .comparison-table tbody td { padding: 0.8rem; }
+  .cta-form { flex-direction: column; padding: 0 1.5rem; }
+  footer { flex-direction: column; gap: 1.5rem; text-align: center; }
+}
+</style>
+</head>
+<body>
+
+<div class="cursor-glow" id="cursorGlow"></div>
+
+<!-- Navigation -->
+<nav id="navbar">
+  <div class="logo">高视<span>高清</span></div>
+  <ul class="nav-links">
+    <li><a href="#problem">问题</a></li>
+    <li><a href="#tech">技术</a></li>
+    <li><a href="#compare">对比</a></li>
+    <li><a href="#journey">流程</a></li>
+    <li><a href="#contact">预约</a></li>
+  </ul>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="cornea-rings">
+    <div class="ring"></div>
+    <div class="ring"></div>
+    <div class="ring"></div>
+    <div class="ring"></div>
+    <div class="cornea-center"></div>
+  </div>
+  <div class="hero-content">
+    <div class="hero-badge">全球首创</div>
+    <h1>夜间配戴<br><em>白天清晰</em><br>远近自如</h1>
+    <p class="hero-sub">全球首款兼具近视防控与老花矫正功能的角膜塑形镜。夜间配戴，重塑角膜形态，白天摘镜后实现远近全程清晰视力。</p>
+    <div class="hero-cta">
+      <button class="btn-primary" onclick="document.getElementById('contact').scrollIntoView({behavior:'smooth'})">预约体验</button>
+      <button class="btn-ghost" onclick="document.getElementById('tech').scrollIntoView({behavior:'smooth'})">了解技术</button>
+    </div>
+  </div>
+</section>
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="stats-grid">
+    <div class="stat-item">
+      <div class="stat-number">1<span class="unit">st</span></div>
+      <div class="stat-label">全球首款老花OK镜</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">98<span class="unit">%</span></div>
+      <div class="stat-label">日间脱镜率</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">0.8<span class="unit">+</span></div>
+      <div class="stat-label">近视力提升</div>
+    </div>
+    <div class="stat-item">
+      <div class="stat-number">8<span class="unit">h</span></div>
+      <div class="stat-label">夜间配戴时间</div>
+    </div>
+  </div>
+</div>
+
+<!-- Problem -->
+<section class="problem-section" id="problem">
+  <div class="reveal">
+    <div class="section-label">01 — 现状困境</div>
+    <div class="section-title">40岁后，眼睛的<br>双重困境</div>
+    <div class="section-desc">近视与老花同时存在，传统方案只能妥协——看远戴近视镜，看近要摘镜或换镜。每天在远近之间反复切换。</div>
+  </div>
+  <div class="problem-grid reveal">
+    <div class="problem-visual">
+      <div class="vision-demo">
+        <div class="vision-circle clear"></div>
+        <div class="vision-circle blur"></div>
+        <div class="vision-line"></div>
+        <span class="vision-label far">远 — 清晰</span>
+        <span class="vision-label near">近 — 模糊</span>
+      </div>
+    </div>
+    <div class="problem-points">
+      <div class="problem-point">
+        <h3>框架眼镜的束缚</h3>
+        <p>近视镜看近费力，渐进片视野受限，双光镜有跳跃感。每天在不同眼镜间切换，生活品质大打折扣。</p>
+      </div>
+      <div class="problem-point">
+        <h3>隐形眼镜的局限</h3>
+        <p>多焦点软镜设计妥协，视觉质量不稳定，长时间配戴干涩不适，且无法控制近视进展。</p>
+      </div>
+      <div class="problem-point">
+        <h3>手术的犹豫</h3>
+        <p>屈光手术不可逆，老花会持续进展，一次手术无法应对不断变化的视力需求。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Tech -->
+<section class="tech-section" id="tech">
+  <div class="reveal">
+    <div class="section-label">02 — 核心技术</div>
+    <div class="section-title">一个镜片，<br>两种光学区</div>
+    <div class="section-desc">通过精密的多弧段角膜塑形设计，在角膜上同时塑造远用光学区与近用光学区，实现真正的全程视力。</div>
+  </div>
+  <div class="tech-showcase">
+    <div class="tech-card reveal">
+      <div class="tech-card-header">
+        <span class="tech-number">01</span>
+        <span class="tech-card-title">Dual-Zone 双光学区设计</span>
+      </div>
+      <div class="tech-card-grid">
+        <div class="tech-feature">
+          <span class="tech-feature-icon">◎</span>
+          <h4>中央远用区</h4>
+          <p>角膜中央区域塑形为近视矫正曲率，确保日间远视力达到最佳矫正水平。</p>
+        </div>
+        <div class="tech-feature">
+          <span class="tech-feature-icon">◉</span>
+          <h4>中周近用区</h4>
+          <p>精密设计的近用附加光区，利用瞳孔在看近时自然扩大的生理特性，提供充足的近用阅读视力。</p>
+        </div>
+        <div class="tech-feature">
+          <span class="tech-feature-icon">⬡</span>
+          <h4>平滑过渡带</h4>
+          <p>独创渐变曲率过渡技术，消除像跳与眩光，远近切换自然流畅，无视觉断层感。</p>
+        </div>
+      </div>
+    </div>
+    <div class="tech-card reveal">
+      <div class="tech-card-header">
+        <span class="tech-number">02</span>
+        <span class="tech-card-title">智能化定制体系</span>
+      </div>
+      <div class="tech-card-grid">
+        <div class="tech-feature">
+          <span class="tech-feature-icon">◇</span>
+          <h4>角膜地形引导</h4>
+          <p>基于全角膜地形图数据，AI算法自动计算最优弧段参数，每片镜片都是独一无二的精密光学器件。</p>
+        </div>
+        <div class="tech-feature">
+          <span class="tech-feature-icon">△</span>
+          <h4>瞳孔响应匹配</h4>
+          <p>根据个体瞳孔直径及调节反应特性，优化双光学区尺寸与位置，最大化功能性视野。</p>
+        </div>
+        <div class="tech-feature">
+          <span class="tech-feature-icon">▽</span>
+          <h4>动态验配系统</h4>
+          <p>配戴后通过数字化随访平台追踪角膜形态变化，支持远程微调配方，持续优化视觉效果。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Comparison -->
+<section class="comparison-section" id="compare">
+  <div class="reveal">
+    <div class="section-label">03 — 方案对比</div>
+    <div class="section-title">为什么选择<br>老花OK镜</div>
+  </div>
+  <div class="reveal">
+    <table class="comparison-table">
+      <thead>
+        <tr>
+          <th>对比维度</th>
+          <th>渐进多焦框架镜</th>
+          <th>多焦软性隐形</th>
+          <th>老花OK镜</th>
+          <th class="highlight">高视高清</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>远视力矫正</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td class="highlight"><span class="check">✓</span> 优</td>
+        </tr>
+        <tr>
+          <td>近视力质量</td>
+          <td>视野受限</td>
+          <td>一般</td>
+          <td>良好</td>
+          <td class="highlight">优 · 全程视力</td>
+        </tr>
+        <tr>
+          <td>日间脱镜</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span> 需日戴</td>
+          <td><span class="check">✓</span></td>
+          <td class="highlight"><span class="check">✓</span> 完全脱镜</td>
+        </tr>
+        <tr>
+          <td>近视防控</td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="cross">✗</span></td>
+          <td><span class="check">✓</span></td>
+          <td class="highlight"><span class="check">✓</span> 独有优势</td>
+        </tr>
+        <tr>
+          <td>运动友好</td>
+          <td><span class="cross">✗</span></td>
+          <td>一般</td>
+          <td><span class="check">✓</span></td>
+          <td class="highlight"><span class="check">✓</span></td>
+        </tr>
+        <tr>
+          <td>可逆可调</td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td><span class="check">✓</span></td>
+          <td class="highlight"><span class="check">✓</span> 停戴即恢复</td>
+        </tr>
+        <tr>
+          <td>角膜安全性</td>
+          <td>—</td>
+          <td>一般</td>
+          <td>良好</td>
+          <td class="highlight">高透氧材料</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Journey -->
+<section class="journey-section" id="journey">
+  <div class="reveal">
+    <div class="section-label">04 — 验配流程</div>
+    <div class="section-title">从检查到清晰<br>只需四步</div>
+  </div>
+  <div class="journey-timeline reveal">
+    <div class="journey-step">
+      <div class="journey-step-num">STEP 01</div>
+      <h3>精密眼部检查</h3>
+      <p>全角膜地形图、眼轴测量、瞳孔动态检测、调节功能评估。全方位采集眼部数据，建立个人光学模型。</p>
+      <span class="journey-step-time">约 60 min</span>
+    </div>
+    <div class="journey-step">
+      <div class="journey-step-num">STEP 02</div>
+      <h3>AI 定制设计</h3>
+      <p>基于检查数据，AI验配系统自动计算双光学区参数，生成专属镜片设计方案，提交精密加工。</p>
+      <span class="journey-step-time">约 7-10 个工作日</span>
+    </div>
+    <div class="journey-step">
+      <div class="journey-step-num">STEP 03</div>
+      <h3>取镜与指导</h3>
+      <p>专业视光师一对一配适评估，确认镜片定位与荧光图，手把手指导配戴与护理，确保安全无忧。</p>
+      <span class="journey-step-time">约 45 min</span>
+    </div>
+    <div class="journey-step">
+      <div class="journey-step-num">STEP 04</div>
+      <h3>全程随访优化</h3>
+      <p>配戴后1天、1周、1月、3月定期复查，数字化平台实时追踪视力变化，必要时远程微调参数。</p>
+      <span class="journey-step-time">持续跟踪</span>
+    </div>
+  </div>
+</section>
+
+<!-- Testimonials -->
+<section class="testimonial-section">
+  <div class="testimonial-inner">
+    <div class="reveal">
+      <div class="section-label">05 — 用户反馈</div>
+      <div class="section-title">真实体验，<br>真实改变</div>
+    </div>
+    <div class="testimonial-grid reveal">
+      <div class="testimonial-card">
+        <div class="testimonial-quote">"</div>
+        <p class="testimonial-text">以前开会看PPT要戴近视镜，记笔记又要摘掉，非常尴尬。现在晚上戴着睡觉，白天远近都能看清楚，终于找回了十年前的感觉。</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">王</div>
+          <div>
+            <div class="testimonial-name">王女士</div>
+            <div class="testimonial-role">47岁 · 企业高管 · 配戴3个月</div>
+          </div>
+        </div>
+      </div>
+      <div class="testimonial-card">
+        <div class="testimonial-quote">"</div>
+        <p class="testimonial-text">作为眼科医生，我一直在等这样的产品。既有OK镜的近视控制效果，又能解决老花问题，给患者多了一个真正有价值的非手术选择。</p>
+        <div class="testimonial-author">
+          <div class="testimonial-avatar">李</div>
+          <div>
+            <div class="testimonial-name">李医生</div>
+            <div class="testimonial-role">52岁 · 眼科主任医师 · 临床观察者</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" id="contact">
+  <div class="cta-content reveal">
+    <div class="section-label">预约体验</div>
+    <div class="cta-title">开启你的<br><em>无镜</em>新视界</div>
+    <p class="cta-sub">首批体验名额开放中，专业视光团队为您量身定制方案</p>
+    <div class="cta-form">
+      <input type="text" class="cta-input" placeholder="您的姓名">
+      <input type="tel" class="cta-input" placeholder="手机号码">
+      <button class="btn-primary">提交预约</button>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="footer-left">© 2026 高视高清科技 · 全球首款老花OK镜</div>
+  <ul class="footer-links">
+    <li><a href="#">关于我们</a></li>
+    <li><a href="#">学术文献</a></li>
+    <li><a href="#">验配中心</a></li>
+    <li><a href="#">联系合作</a></li>
+  </ul>
+</footer>
+
+<script>
+// Cursor glow
+const glow = document.getElementById('cursorGlow');
+let mouseX = 0, mouseY = 0, glowX = 0, glowY = 0;
+
+document.addEventListener('mousemove', (e) => {
+  mouseX = e.clientX;
+  mouseY = e.clientY;
+});
+
+function animateGlow() {
+  glowX += (mouseX - glowX) * 0.08;
+  glowY += (mouseY - glowY) * 0.08;
+  glow.style.left = glowX + 'px';
+  glow.style.top = glowY + 'px';
+  requestAnimationFrame(animateGlow);
+}
+animateGlow();
+
+// Nav scroll
+const nav = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 50);
+});
+
+// Scroll reveal
+const reveals = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+reveals.forEach(el => observer.observe(el));
+
+// Stat counter animation
+const statObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      const nums = entry.target.querySelectorAll('.stat-number');
+      nums.forEach(num => {
+        const text = num.textContent;
+        const match = text.match(/^([\d.]+)/);
+        if (match) {
+          const target = parseFloat(match[1]);
+          const unit = num.querySelector('.unit');
+          const unitText = unit ? unit.outerHTML : '';
+          const isFloat = match[1].includes('.');
+          const duration = 1500;
+          const start = performance.now();
+          function tick(now) {
+            const progress = Math.min((now - start) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const current = isFloat
+              ? (target * eased).toFixed(1)
+              : Math.round(target * eased);
+            num.innerHTML = current + unitText;
+            if (progress < 1) requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+        }
+      });
+      statObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.5 });
+
+document.querySelectorAll('.stats-grid').forEach(el => statObserver.observe(el));
+</script>
+
+</body>
+</html>

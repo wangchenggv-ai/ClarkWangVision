@@ -1,0 +1,27 @@
+# ========== 增量:追加到你现有 .env 末尾 ==========
+
+# ========== 溯源系统环境切换 ==========
+# 取值: mock / staging / production
+# 测试期一律用 mock,5.1 正式跑前才切 production
+SHUANG_ENV=mock
+
+# Mock 模式的 API 地址(本地 Flask 服务,默认不用改)
+SHUANG_API_BASE_MOCK=http://localhost:3001/api
+
+# 生产模式的 API 地址
+SHUANG_API_BASE_PRODUCTION=https://api.gaushclear.com/api
+
+# 生产环境二次确认(在 .env 里默认不设置!!!)
+# 只在正式跑生产时临时注入,例如:
+#   PowerShell: $env:CONFIRM_PRODUCTION="YES_I_AM_SURE"
+#   bash:       CONFIRM_PRODUCTION=YES_I_AM_SURE python daily_batch.py
+# CONFIRM_PRODUCTION=NO
+
+# ========== 批处理保护 ==========
+# 失败率阈值,超过则中止(0.05 = 5%)
+MAX_FAIL_RATE=0.05
+
+# 每次 API 调用间隔(秒)
+# Mock 环境可以设 0.05 加速测试
+# 生产环境保持 0.3 以上,避免打垮 API
+API_DELAY=0.3

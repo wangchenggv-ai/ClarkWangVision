@@ -215,3 +215,107 @@ Token 缓存 bug 暴露两个问题：系统缺自愈能力，缺低门槛运维
 **验证：**
 - 下单接口：无效 token 返回 401 "无效链接"（不再 500）
 - E2E 回归：11/11 通过（17:55）
+
+## 2026-04-22 下单库存实时扣减 + 并发安全
+
+核心目标：代理商下单时看到实时库存，下单后库存立即扣减，多代理商并发下单不超卖。
+
+### 修复 3 个 P0 bug
+
+| Bug | 现象 | 修复 |
+|-----|------|------|
+| 并发丢失更新 | 两并发读 stock=10 都写 9（应为 8） | `withLock()` per-key 异步锁 + 锁内 fresh read 单条记录 |
+| 无幂等保护 | 双击提交按钮创建两个订单 | `clientRequestId` + 10min TTL 缓存 |
+| 先扣库存后写订单 | Bitable 写入失败则库存丢失 | 预检(409) → 写订单 → 扣库存（失败标记人工） |
+
+### 修复 1 个 bug
+
+| Bug | 描述 |
+|-----|------|
+| `skuInfo?.name` 未定义 | `order.html` 的 `skuName` 变量引用不存在的 `skuInfo`，改为直接用 `sku` |
+
+### 改动文件
+
+- `server.js`：`withLock()` / `deductStockDetail` 重写 / `getStockMap(fresh)` / `/api/submit` 四阶段重构 / 幂等存储
+- `public/order.html`：`clientRequestId` / 409 冲突弹窗 / `showStockConflict()` / `closeStockConflict()`
+
+### 新流程
+
+```
+选产品+度数 → 交期徽章（只读，2分钟缓存）
+  ↓ 确认提交
+  ↓ 幂等检查 → 命中缓存直接返回
+  ↓ 预检 fresh 库存（每眼 ~200ms）→ 不够 409 + 详情
+  ↓ 写订单到飞书
+  ↓ 锁内扣库存（GET fresh + PATCH ~400ms/眼）→ 极端被抢则标记人工
+  ↓ 返回订单号
+```
+
+### 未覆盖
+
+- 寄售库存扣减（`deductAgentStock`）同样有 lost-update bug，暂不处理
+
+## 2026-04-22 标签打印系统 + 工作流可视化（Phase 1 完成）
+
+### 目标
+
+斑马 ZT230/ZT411 直连打印，扫码枪扫条形码自动出标签，全流程可视化驱动。
+
+### 新增功能
+
+**ZPL 标签直出（斑马打印机）：**
+- `buildZpl(rec)` — ZPL II 纯字符串生成，Code128 条形码(订单号) + QR 验真码 + 处方数据
+- `sendTcpZpl()` — TCP Socket 直连打印机 9100 端口（零依赖，内置 `net` 模块）
+- `sendUsbZpl()` — USB 桥接转发（预留 Phase 2）
+- `sendZplToPrinter()` — 统一入口，按 printer_config.json 选 TCP/USB
+
+**扫码即打：**
+- labels.html 顶部扫码栏，隐藏 input 持续聚焦
+- 扫枪 = USB HID 键盘楔入，150ms 击键间隔检测，Enter 触发自动打印
+- 每行快捷操作也有 🖨 按钮，选中多行可批量斑马打印
+
+**工作流步骤系统（8 步，叠加在现有 4 状态之上）：**
+- 已下单 → 已确认 → 生产中 → 质检完成 → 标签已打印 → 已打包 → 已发货 → 已签收
+- 存储在订单主表 `流程步骤` 文本字段（JSON）
+- `advanceWorkflow()` 防跳步、防回退、幂等
+- 现有 confirm/ship/deliver 端点自动推进对应步骤
+- 新增 `POST /api/admin/workflow/step` 手动推进（质检、打包）
+- submit 时自动写入 `submitted` 步骤
+
+**工作流可视化：**
+- 订单行展开后水平 stepper，绿点=完成，蓝脉冲=当前，灰点=待办
+- hover 显示时间戳
+
+**打印机配置面板：**
+- 可折叠面板，TCP/USB 切换，IP/端口/份数/自动打印开关
+- 测试打印按钮、连接检测按钮
+- 配置存储在 printer_config.json（仿 rules_config 模式）
+
+### 新 API 端点
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| POST | `/api/admin/print-label` | 生成 ZPL → 发送打印机 |
+| POST | `/api/admin/print-label/preview` | 返回 ZPL 文本 |
+| POST | `/api/admin/printer/test` | 测试标签 |
+| GET/POST | `/api/admin/printer/config` | 配置读写 |
+| GET | `/api/admin/printer/status` | TCP 连通性检测 |
+| GET | `/api/admin/workflow/:orderNo` | 查询工作流状态 |
+| POST | `/api/admin/workflow/step` | 推进工作流步骤 |
+
+### 改动文件
+
+- `server.js`：+300 行（`Socket` import、`buildZpl`、`sendTcpZpl`、`loadPrinterConfig`、`STEP_ORDER`/`advanceWorkflow`、7 个新路由、confirm/ship/deliver/submit 集成工作流步骤）
+- `public/labels.html`：+400 行（扫码栏 CSS/HTML/JS、stepper CSS/JS、打印机面板、`printZplLabels`/`quickZplPrint`、`renderDetail` 增强）
+- `printer_config.json`：新建，默认 TCP 192.168.1.100:9100
+
+### 待办
+
+| 项目 | 状态 |
+|------|------|
+| Phase 1: ZPL + TCP 打印 + 扫码即打 + 工作流 | ✅ 完成 |
+| Phase 2: USB 桥接 printer-bridge.js | 待建设 |
+| Phase 3: auto_print_on_ship 自动化钩子 | 待建设 |
+| 斑马打印机 IP 配置 | 需提供实际 IP |
+| ZPL 标签物理定位调优 | 需实际打印测试 |
+| E2E 回归测试 | 待跑 |

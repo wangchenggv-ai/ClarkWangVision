@@ -1,7 +1,7 @@
 # STATE.md — 库存系统进度快照
 
 > 本文件是**当前状态快照**（易变），记录"现在走到哪了"。长期规则请看 [CLAUDE.md](CLAUDE.md)。
-> 最后更新：**2026-04-22（v8 — 控制中心 UI 验收通过）**
+> 最后更新：**2026-04-22（v9 — 下单库存实时扣减 + 并发安全）**
 
 ---
 
@@ -116,6 +116,17 @@
 - [x] AI 助手：MiMo Agent，内置完整规则知识 + 快捷问题芯片
 - [x] 仪表盘 2 分钟缓存（首次 ~10s，后续 <100ms）
 - [x] **UI 验收通过**：读取→修改→执行→恢复全链路测试完成（详见 [控制中心指南](docs/control-center-guide.md)）
+
+### 下单库存实时扣减 + 并发安全（2026-04-22）
+
+- [x] `server.js` — per-key 异步锁 `withLock()`，promise 链序列化同一 SKU/SPH/CYL 的并发写
+- [x] `server.js` — `deductStockDetail` 重写：锁内 GET 单条 fresh 库存 → 检查 → PATCH，返回 `{success, reason}` 对象
+- [x] `server.js` — `getStockMap(fresh)` 新增 `fresh` 参数强制刷新缓存
+- [x] `server.js` — `/api/submit` 流程重组：预检 fresh 库存(409) → 写订单 → 扣库存(失败标记人工)
+- [x] `server.js` — 幂等保护：`clientRequestId` + 10分钟 TTL 缓存
+- [x] `order.html` — 409 库存冲突弹窗（显示具体度数+片数），关闭自动 reload
+- [x] `order.html` — `crypto.randomUUID()` 防双击
+- [x] 修复 `skuInfo?.name` → `sku`（未定义变量 bug）
 
 ### 测试
 
@@ -232,6 +243,6 @@ node calc_stock_plan.js --months 3 --auto-apply   # 从订单算分布 → 更�
 
 ## 六、当前已知局限
 
-- **库存无并发扣减**：当前库存数是手工维护的静态数，下单时不会自动 -1。多代理商同时抢"仅剩 3 片"的度数会超卖。解决方案放第二阶段。
+- **厂家总仓并发已修复**：per-key mutex + fresh read 解决 lost update。代理商库存（`deductAgentStock`）仍存在同样问题，暂不处理（代理商库存并发概率极低）。
 - **重启丢缓存**：`_stockCache` 是进程内存，重启后第一次请求会全表拉一次（450 行），延迟多约 500ms。可接受。
 - **度数步长固定 0.25**：非 0.25 倍数的度数（如 -1.1）会找不到对应行，直接走"排产 5-7 天"档。前端 `<input step="0.25">` 已限制。

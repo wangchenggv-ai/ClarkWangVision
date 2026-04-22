@@ -1,0 +1,100 @@
+# =====================================================
+# 高视星订单系统 .gitignore
+# =====================================================
+# 保护敏感信息,防止凭证和真实数据进入 git 历史
+# =====================================================
+
+# ========== 敏感凭证(最重要!!!) ==========
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+secrets.json
+token.json
+
+# ========== 真实业务数据(个人信息合规) ==========
+# 代理商 Excel 可能含真实顾客姓名、电话、地址
+inputs/
+outputs/
+*.xlsx
+*.xls
+*.csv
+# 允许 examples 和 templates 目录的示例文件
+!examples/
+!templates/
+!**/sample_*.xlsx
+!**/template_*.xlsx
+
+# ========== Mock 测试数据 ==========
+mock_shuang_data.jsonl
+mock_*.jsonl
+
+# ========== 审计日志(可能含真实顾客信息) ==========
+audit_*.jsonl
+*.log
+logs/
+
+# ========== Python ==========
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.coverage
+.tox/
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# ========== IDE / 编辑器 ==========
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ========== OS ==========
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ========== Jupyter ==========
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ========== 临时文件 ==========
+*.tmp
+*.bak
+*.backup
+*.old
+~$*
+
+# ========== 压缩/打包输出 ==========
+*.zip
+*.tar.gz
+*.rar
+!shuang_zips/.gitkeep
+
+# ========== 数据库备份(单独放安全位置,不入 git) ==========
+*.sql
+*.sql.gz
+*.dump
+backup/
+backups/

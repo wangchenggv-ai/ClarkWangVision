@@ -4,22 +4,35 @@
     "type": "split",
     "children": [
       {
-        "id": "e604275ed41b0e4f",
+        "id": "1293b928461d9aa8",
         "type": "tabs",
         "children": [
           {
-            "id": "4d4f2fb165940941",
+            "id": "f4fcab320812eabe",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "助理电脑环境安装指南.md",
-                "mode": "preview",
-                "source": false,
-                "backlinks": false
+                "file": "01-销售/代理商会议初步日程.md",
+                "mode": "source",
+                "source": false
               },
               "icon": "lucide-file",
-              "title": "助理电脑环境安装指南"
+              "title": "代理商会议初步日程"
+            }
+          },
+          {
+            "id": "53f7e4448eb89880",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "00-CEO驾驶舱/Q2_2026_季度目标看板.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Q2_2026_季度目标看板"
             }
           }
         ]
@@ -79,7 +92,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 200
+    "width": 269.5
   },
   "right": {
     "id": "2e20f37112f03c46",
@@ -184,53 +197,53 @@
       "bases:新建数据库": false
     }
   },
-  "active": "4d4f2fb165940941",
+  "active": "f4fcab320812eabe",
   "lastOpenFiles": [
-    "04-供应链/feishu-setup/supply-chain/README.md",
-    "04-供应链/feishu-setup/order-system/README.md",
-    "04-供应链/feishu-setup/supply-chain/sedGo0kav",
-    "04-供应链/feishu-setup/supply-chain/sedVjfYzB",
-    "04-供应链/feishu-setup/supply-chain/sedkwUIoM",
-    "04-供应链/feishu-setup/supply-chain/sedcj9tjI",
-    "04-供应链/feishu-setup/order-system/sed2ynnco",
-    "04-供应链/feishu-setup/order-system/sedLreLGr",
-    "04-供应链/feishu-setup/order-system/sed4uelxd",
-    "04-供应链/feishu-setup/order-system/sedKqcGjP",
-    "04-供应链/feishu-setup/shared/package.json",
-    "04-供应链/feishu-setup/shared/migrate_tables.js",
-    "04-供应链/feishu-setup/order-system/docs/qr-demo-report.md",
-    "04-供应链/feishu-setup/order-system/docs/qrcodes-demo-v2/A27EE7DF49520728.png",
-    "04-供应链/feishu-setup/order-system/docs/qrcodes-demo-v2/A3C99FA3AF3D2BDD.png",
+    "00-CEO驾驶舱/Q2_2026_季度目标看板.md",
+    "00-CEO驾驶舱/本周总结与下周计划_20250412.md",
+    "00-CEO驾驶舱/2026-04-11-openclaw-setup.md",
+    "00-CEO驾驶舱/高视星_端到端价值链.md",
+    "00-CEO驾驶舱/高视星_6大系统执行规划.md",
+    "📚CDSA/CDSS_本地大模型训练全链路地图_V2.md",
+    "📚CDSA/高视星_TrackB对外执行规划.md",
+    "高视星订单批处理系统_完整文档.md",
+    "多项目编程上下文管理最佳实践.md",
+    "单人6项目编程管理-架构师顶层设计.md",
+    "大镜片周会分析Agent.md",
+    "2026年度代理商会议方案_V3_完整议程版.md",
+    "2026年度代理商会议日程安排（6月召开·暑期冲量专场）.md",
+    "SKU比例.md",
+    "Q2_2026_十周执行分解.md",
+    "A系统迁云决策_20260419.md",
+    "最近这3个月的用人反思.md",
+    "助理电脑环境安装指南.md",
+    "文件索引.md",
+    "停药期自我校准.md",
+    "卡坦岛.md",
+    "供应链系统开发复盘与计划_20260414.md",
+    "高视星订单系统_混合方案实施计划.md",
+    "2026年度代理商会议方案_V2_系统赋能版.md",
+    "未确认 436717.crdownload",
+    "01-销售/代理商会议初步日程.md",
+    "04-供应链/feishu-setup/order-system/STATE.md",
+    "老花OK镜/CN_Design_Ortho-K_RD_Report.docx",
+    "老花OK镜/CN_Design_Ortho-K_RD_Report.pdf",
+    "04-供应链/feishu-setup/inventory-system/simulate_holiday.js",
+    "04-供应链/feishu-setup/inventory-system/migrate_upstream.js",
+    "04-供应链/feishu-setup/inventory-system/migrate_consignment.js",
+    "04-供应链/feishu-setup/order-system/cache.js",
+    "04-供应链/feishu-setup/order-system/field_mapping.json",
+    "04-供应链/feishu-setup/order-system/sync_all.js",
+    "04-供应链/feishu-setup/order-system/sync_orders.js",
+    "04-供应链/feishu-setup/order-system/docs/20260417-121115.jpg",
     "04-供应链/feishu-setup/order-system/docs/qrcodes-demo/947617BA067D0D92.png",
     "04-供应链/feishu-setup/order-system/docs/qrcodes-demo/7F9324009AAAF976.png",
-    "04-供应链/feishu-setup/order-system/docs/full-e2e-report.md",
-    "04-供应链/feishu-setup/order-system/docs/e2e-report-ORD-20260413-LQ6IW9.md",
-    "04-供应链/feishu-setup/order-system/docs/2026-04-12-三系统架构评估与升级方案.md",
-    "04-供应链/feishu-setup/order-system/docs/2026-04-11-three-system-architecture-design.md",
-    "04-供应链/feishu-setup/order-system/docs/2026-04-11-sync-implementation-plan.md",
-    "04-供应链/feishu-setup/order-system/qrcode-webhook/README.md",
-    "04-供应链/feishu-setup/order-system/qrcode-webhook/CHANGELOG.md",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/qrcodes/FE9E90AF69F169FC.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/qrcodes/FAC7EC6DA47A0F6D.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/qrcodes/FA37F257D6471673.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/qrcodes/FD7D07F61B534531.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/qrcodes/F9C6B31964FC4D00.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/qrcodes/F565A8A5E212124B.png",
-    "04-供应链/供应链飞轮三天冲刺计划_0414-16.md",
-    "04-供应链/供应链100天改进矩阵_流程×实践.md",
-    "04-供应链/供应链AI_Native改造项目_项目章程.md",
-    "04-供应链/feishu-setup/CHANGELOG.md",
-    "04-供应链/车房备库行动指南-db2bbe9983.md",
-    "04-供应链/供应链14周执行追踪_SKILL.md",
-    "04-供应链/混合架构1.0_飞书原生+脚本方案.md",
-    "04-供应链/README.md",
-    "04-供应链/feishu-setup-summary.md",
-    "04-供应链/feishu-setup/docs/2026-04-11-sync-implementation-plan.md",
-    "04-供应链/feishu-setup/docs/2026-04-11-three-system-architecture-design.md",
-    "04-供应链/feishu-setup/docs/2026-04-12-三系统架构评估与升级方案.md",
-    "04-供应链/Grok建议的供应链.md",
-    "04-供应链/供应链系统迁移计划_0410-0630.md",
-    "04-供应链/供应链全流程图_提效与竞争力.md",
-    "04-供应链/供应链全流程图_模具与毛坯限速步骤_提效方案.md"
+    "09-各种需要归档的文件/8KvKU.jpg",
+    "04-供应链/feishu-setup/order-system/public/qrcodes/0CDFE69BA95F0129.png",
+    "04-供应链/feishu-setup/order-system/public/qrcodes/00C0B43A0475918A.png",
+    "04-供应链/feishu-setup/order-system/public/qrcodes/0BA0B7479A179A97.png",
+    "04-供应链/feishu-setup/order-system/docs/qrcodes-demo-v2/A27EE7DF49520728.png",
+    "04-供应链/feishu-setup/order-system/docs/qrcodes-demo-v2/A3C99FA3AF3D2BDD.png",
+    "04-供应链/feishu-setup/order-system/public/qrcodes/qrcodes/FE9E90AF69F169FC.png"
   ]
 }

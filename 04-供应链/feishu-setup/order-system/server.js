@@ -19,6 +19,7 @@
  */
 
 import { createServer } from "http";
+import { Socket } from "net";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { resolve, dirname, extname } from "path";
 import { fileURLToPath } from "url";
@@ -441,7 +442,8 @@ function getModelSkus(allSkus) {
 const STOCK_TTL = 2 * 60 * 1000; // 2 分钟
 let _stockCache = { map: null, time: 0 };
 
-async function getStockMap() {
+async function getStockMap(fresh = false) {
+  if (fresh) _stockCache = { map: null, time: 0 };
   if (_stockCache.map && Date.now() - _stockCache.time < STOCK_TTL) return _stockCache.map;
   const rows = await listRecords(TABLES.stock_detail);
   const map = new Map();
@@ -459,32 +461,76 @@ async function getStockMap() {
 }
 
 function clearStockCache() { _stockCache = { map: null, time: 0 }; }
+
+// ─── Per-key 异步锁 ─────────────────────────────────────────────────────────
+// 序列化对同一 SKU|SPH|CYL 的并发扣减，避免 lost update
+const _locks = new Map(); // key → Promise（链尾）
+async function withLock(key, fn) {
+  const prev = _locks.get(key) || Promise.resolve();
+  let release;
+  const next = new Promise(r => { release = r; });
+  _locks.set(key, prev.then(() => next));
+  await prev;
+  try { return await fn(); }
+  finally { release(); if (_locks.get(key) === next) _locks.delete(key); }
+}
+
+// ─── 幂等存储 ───────────────────────────────────────────────────────────────
+// 防止双击/重试导致重复下单
+const IDEMPOTENCY_TTL = 10 * 60 * 1000;
+const _idempotency = new Map(); // clientRequestId → { time, response }
+function getIdempotent(id) {
+  if (!id) return null;
+  const c = _idempotency.get(id);
+  if (c && Date.now() - c.time < IDEMPOTENCY_TTL) return c.response;
+  return null;
+}
+function setIdempotent(id, resp) {
+  if (!id) return;
+  _idempotency.set(id, { time: Date.now(), response: resp });
+  if (_idempotency.size > 10000) {
+    const now = Date.now();
+    for (const [k, v] of _idempotency) { if (now - v.time > IDEMPOTENCY_TTL) _idempotency.delete(k); }
+  }
+}
+
 let _dashCache = null;
 
-// ─── 度数级库存扣减 ────────────────────────────────────────────────────────
-// 幂等：同一订单号重复调用不会重复扣减
+// ─── 度数级库存扣减（锁内 fresh read + write） ─────────────────────────────
 async function deductStockDetail(sku, sph, cyl, qty, orderNo) {
   const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
   const map = await getStockMap();
   const info = map.get(key);
-  if (!info || info.stock <= 0) return false;
+  if (!info) return { success: false, reason: "not_found" };
 
-  const deductQty = Math.min(qty, info.stock);
-  const newStock = info.stock - deductQty;
-  const now = new Date().toISOString();
+  return withLock(key, async () => {
+    // 锁内 fresh read — 只 GET 单条记录（~200ms，不拉全表）
+    const freshData = await feishuApi("GET",
+      `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`
+    );
+    const currentStock = Number(freshData?.record?.fields?.["当前库存"]) || 0;
 
-  const patchRes = await feishuApi("PATCH",
-    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`,
-    { fields: { "当前库存": newStock, "最近出库": now } }
-  );
-  if (!patchRes) {
-    console.error(`  ⚠️ 库存扣减写入失败: ${sku} SPH=${sph} CYL=${cyl}`);
-    return false;
-  }
+    if (currentStock < qty) {
+      console.log(`  ❌ 库存不足: ${key} 需要${qty} 现有${currentStock}`);
+      return { success: false, reason: "insufficient", available: currentStock };
+    }
 
-  clearStockCache();
-  console.log(`  📉 度数扣减: ${sku} SPH=${Number(sph).toFixed(2)} CYL=${Number(cyl).toFixed(2)} -${deductQty} → ${newStock}`);
-  return true;
+    const newStock = currentStock - qty;
+    const now = new Date().toISOString();
+
+    const patchRes = await feishuApi("PUT",
+      `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`,
+      { fields: { "当前库存": newStock, "最近出库": now } }
+    );
+    if (!patchRes) {
+      console.error(`  ⚠️ 库存扣减写入失败: ${key}`);
+      return { success: false, reason: "write_failed" };
+    }
+
+    clearStockCache();
+    console.log(`  📉 度数扣减: ${key} -${qty} → ${newStock}`);
+    return { success: true, newStock };
+  });
 }
 
 // ─── 代理商本地库存缓存 ─────────────────────────────────────────────────────
@@ -964,6 +1010,177 @@ function isAdmin(req) {
   }
 }
 
+// ─── 打印机配置 ──────────────────────────────────────────────────────────
+
+const PRINTER_CONFIG_PATH = resolve(__dirname, "printer_config.json");
+let _printerConfig = null;
+let _printerConfigTime = 0;
+const PRINTER_CONFIG_TTL = 30_000; // 30s 缓存
+
+function loadPrinterConfig() {
+  const now = Date.now();
+  if (_printerConfig && now - _printerConfigTime < PRINTER_CONFIG_TTL) return _printerConfig;
+  try {
+    _printerConfig = JSON.parse(readFileSync(PRINTER_CONFIG_PATH, "utf-8"));
+  } catch {
+    _printerConfig = {
+      default_connection: "tcp",
+      tcp: { enabled: true, host: "192.168.1.100", port: 9100, timeout_ms: 5000 },
+      usb: { enabled: false, bridge_url: "http://localhost:9101" },
+      printer_model: "ZT230", dpi: 203,
+      label_width_mm: 80, label_height_mm: 50,
+      auto_print_on_ship: false, copies: 1,
+    };
+  }
+  _printerConfigTime = now;
+  return _printerConfig;
+}
+
+function savePrinterConfig(config) {
+  writeFileSync(PRINTER_CONFIG_PATH, JSON.stringify(config, null, 2) + "\n", "utf-8");
+  _printerConfig = config;
+  _printerConfigTime = Date.now();
+}
+
+// ─── ZPL 标签生成（斑马打印机 ZPL II，80×50mm @ 203dpi）──────────────────
+
+function buildZpl(rec) {
+  const f = rec.fields || rec;
+  const orderNo = f["订单编号"] || "";
+  const customerName = f["顾客姓名"] || "";
+  const sku = f["产品型号"] || "";
+  const eye = f["眼别"] || "";
+  const isRight = eye.includes("右");
+  const eyeLabel = isRight ? "R" : "L";
+  const sph = f["球镜SPH"] ?? "";
+  const cyl = f["柱镜CYL"] ?? "";
+  const axis = f["轴位AXIS"] ?? "";
+  const lensCode = f["镜片码"] || "";
+  const agentName = f["代理商名称"] || "";
+  const agentId = f["代理商ID"] || "";
+  const verifyUrl = `${getServerBaseUrl()}/verify/${lensCode}`;
+
+  const fmt = (v) => {
+    if (v === "" || v === null || v === undefined) return "--";
+    const n = Number(v);
+    if (isNaN(n)) return String(v);
+    return (n >= 0 ? "+" : "") + n.toFixed(2);
+  };
+  const fmtAxis = (v) => (v === "" || v === null || v === undefined || Number(v) === 0) ? "--" : String(v);
+
+  // ZPL II 命令，纯字符串拼接
+  // ^CI28 = UTF-8 编码（支持中文）
+  // ^BC = Code128 条形码
+  // ^BQ = QR Code（原生生成，无需图片）
+  const zpl = [
+    "^XA",
+    "^CI28",
+    "^PW636",
+    "^LL400",
+    "",
+    // Code128 条形码 — 订单号（顶部，扫码枪可读）
+    `^FO40,15^BY2^BCN,80,Y,N,N^FD${orderNo}^FS`,
+    // 订单号文字
+    `^FO40,105^A0N,24,24^FD${orderNo}^FS`,
+    // 客户名 + SKU
+    `^FO40,135^A0N,28,28^FD${customerName}^FS`,
+    `^FO340,135^A0N,20,20^FD${sku}^FS`,
+    // 眼别
+    `^FO40,170^A0N,32,32^FD${eyeLabel} ${eye}^FS`,
+    // 处方表头
+    "^FO40,210^A0N,18,18^FDSPH^FS",
+    "^FO150,210^A0N,18,18^FDCYL^FS",
+    "^FO260,210^A0N,18,18^FDAXIS^FS",
+    // 处方值
+    `^FO40,235^A0N,28,28^FD${fmt(sph)}^FS`,
+    `^FO150,235^A0N,28,28^FD${fmt(cyl)}^FS`,
+    `^FO260,235^A0N,28,28^FD${fmtAxis(axis)}^FS`,
+    // QR 验真码（右上角）
+    `^FO480,15^BQN,2,4^FDQA,${verifyUrl}^FS`,
+    "^FO498,145^A0N,14,14^FDQR验真^FS",
+    // 镜片码
+    `^FO40,290^A0N,22,22^FD${lensCode}^FS`,
+    // 品牌
+    "^FO40,330^A0N,20,20^FDGAUSH | CLEAR^FS",
+    // 代理商
+    `^FO300,330^A0N,16,16^FD${agentId} ${agentName}^FS`,
+    // 分隔线
+    "^FO40,280^GB550,1,1^FS",
+    "^XZ",
+  ].join("\n");
+
+  return zpl;
+}
+
+// ─── 打印机通信 ──────────────────────────────────────────────────────────
+
+async function sendTcpZpl(zplString, host, port = 9100, timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const sock = new Socket();
+    sock.setTimeout(timeoutMs);
+    sock.connect(port, host, () => {
+      sock.write(Buffer.from(zplString, "utf-8"), () => {
+        sock.end();
+        resolve({ ok: true, method: "tcp", host, port });
+      });
+    });
+    sock.on("error", (err) => reject(new Error(`TCP 打印失败 (${host}:${port}): ${err.message}`)));
+    sock.on("timeout", () => { sock.destroy(); reject(new Error(`TCP 连接超时 (${host}:${port})`)); });
+  });
+}
+
+async function sendUsbZpl(zplString, bridgeUrl) {
+  const res = await fetch(`${bridgeUrl}/print`, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: zplString,
+  });
+  if (!res.ok) throw new Error(`USB 桥接失败: ${res.status}`);
+  return res.json();
+}
+
+async function sendZplToPrinter(zplString) {
+  const config = loadPrinterConfig();
+  const conn = config.default_connection || "tcp";
+  if (conn === "tcp" && config.tcp?.enabled) {
+    return sendTcpZpl(zplString, config.tcp.host, config.tcp.port, config.tcp.timeout_ms);
+  }
+  if (conn === "usb" && config.usb?.enabled) {
+    return sendUsbZpl(zplString, config.usb.bridge_url);
+  }
+  throw new Error(`打印机未配置或未启用 (connection=${conn})`);
+}
+
+// ─── 工作流步骤 ──────────────────────────────────────────────────────────
+
+const STEP_ORDER = ["submitted", "confirmed", "producing", "qc_done", "labeled", "packed", "shipped", "received"];
+const STEP_LABELS = {
+  submitted: "已下单", confirmed: "已确认", producing: "生产中",
+  qc_done: "质检完成", labeled: "标签已打印", packed: "已打包",
+  shipped: "已发货", received: "已签收",
+};
+
+function parseWorkflow(jsonStr) {
+  try { return JSON.parse(jsonStr || "{}"); }
+  catch { return { current: 0, steps: {} }; }
+}
+
+function advanceWorkflow(wf, stepKey) {
+  if (!wf.steps) wf.steps = {};
+  const targetIdx = STEP_ORDER.indexOf(stepKey);
+  if (targetIdx < 0) return { wf, ok: false, error: `未知步骤: ${stepKey}` };
+  // 幂等：已存在的步骤直接跳过
+  if (wf.steps[stepKey]) return { wf, ok: true, skipped: true };
+  // 校验：只能前进一步（允许从 confirmed 直接到 producing，因为 confirm 端点同时设置两步）
+  const currentIdx = wf.current || 0;
+  if (targetIdx > currentIdx + 1 && !(stepKey === "producing" && wf.steps["confirmed"])) {
+    return { wf, ok: false, error: `不能跳步: 当前 ${STEP_ORDER[currentIdx]}(${currentIdx})，目标 ${stepKey}(${targetIdx})` };
+  }
+  wf.steps[stepKey] = { ts: Date.now() };
+  wf.current = Math.max(currentIdx, targetIdx);
+  return { wf, ok: true };
+}
+
 // ─── 镜片明细 CRUD ──────────────────────────────────────────────────────
 
 async function createLensDetail(orderNo, fields) {
@@ -1085,6 +1302,331 @@ function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
   ];
   XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`.slice(0, 31));
   return Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
+}
+
+// ─── 随货通行单 HTML 模板 ──────────────────────────────────────────────────────
+
+function slipHTML(order) {
+  const { orderNo, customerName, agentName, agentId, shipDate, promiseDate,
+          courierName, trackingNo, rows } = order;
+  const base = getServerBaseUrl();
+
+  const eyeRow = (r) => {
+    const lc = r.lensCode || "—";
+    const qr = `https://api.qrserver.com/v1/create-qr-code/?size=64x64&ecc=M&data=${encodeURIComponent(base + "/verify/" + lc)}`;
+    return `
+    <tr>
+      <td class="eye ${r.eye === "左眼" ? "eye-l" : "eye-r"}">${r.eye === "左眼" ? "L<br><span>左眼</span>" : "R<br><span>右眼</span>"}</td>
+      <td class="sku">${r.sku || "—"}</td>
+      <td class="rx">${r.sph || "—"}</td>
+      <td class="rx">${r.cyl || "—"}</td>
+      <td class="rx">${r.axis || "—"}</td>
+      <td class="lc"><span class="lc-code">${lc}</span></td>
+      <td class="qr-cell"><img src="${qr}" alt="QR" width="52" height="52"></td>
+    </tr>`;
+  };
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>随货通行单 ${orderNo}</title>
+<style>
+  @page { size: A4; margin: 12mm 14mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; font-size: 10pt; color: #1a1a2e; background: #fff; }
+  .header { display: flex; align-items: flex-end; justify-content: space-between;
+            border-bottom: 1.5pt solid #c0392b; padding-bottom: 4mm; margin-bottom: 5mm; }
+  .brand { display: flex; flex-direction: column; gap: 1mm; }
+  .brand-name { font-size: 18pt; font-weight: 900; letter-spacing: 3px; color: #c0392b; }
+  .brand-sub  { font-size: 7.5pt; color: #888; letter-spacing: 1.5px; }
+  .doc-title  { text-align: right; }
+  .doc-title h1 { font-size: 16pt; font-weight: 800; letter-spacing: 4px; color: #1a1a2e; }
+  .doc-title p  { font-size: 7pt; color: #aaa; margin-top: 1mm; letter-spacing: 1px; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3mm;
+          background: #fdf5f5; border: 0.5pt solid #f0d0d0; border-radius: 2mm;
+          padding: 4mm 5mm; margin-bottom: 5mm; }
+  .meta-item { display: flex; flex-direction: column; gap: 0.8mm; }
+  .meta-label { font-size: 6pt; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+  .meta-value { font-size: 10pt; font-weight: 700; color: #1a1a2e; }
+  .meta-value.mono { font-family: "Courier New", monospace; font-size: 9pt; }
+  .meta-value.red  { color: #c0392b; }
+  .rx-title { font-size: 8pt; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+              color: #c0392b; margin-bottom: 2.5mm; padding-left: 2mm;
+              border-left: 2pt solid #c0392b; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6mm; }
+  thead th { background: #1a1a2e; color: white; font-size: 7pt; font-weight: 600;
+             letter-spacing: 0.5px; padding: 2.5mm 3mm; text-align: center; }
+  thead th:first-child { text-align: left; padding-left: 4mm; }
+  tbody tr { border-bottom: 0.4pt solid #eee; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  td.eye { width: 14mm; font-size: 16pt; font-weight: 900; text-align: center;
+           padding: 3mm 0; line-height: 1; }
+  td.eye span { font-size: 6pt; font-weight: 400; display: block; margin-top: 0.5mm; }
+  td.eye-r { color: #c0392b; }
+  td.eye-l { color: #2980b9; }
+  td.sku  { padding: 3mm; font-size: 8pt; font-weight: 600; }
+  td.rx   { padding: 3mm; text-align: center; font-family: "Courier New",monospace;
+            font-size: 11pt; font-weight: 700; color: #c0392b; }
+  td.lc   { padding: 3mm; }
+  .lc-code { font-family: "Courier New",monospace; font-size: 7.5pt; font-weight: 700;
+             background: #1a1a2e; color: #fff; padding: 1mm 2mm; border-radius: 1mm; letter-spacing: 1px; }
+  td.qr-cell { padding: 2mm; text-align: center; width: 18mm; }
+  .logistics { display: flex; gap: 5mm; margin-bottom: 6mm; }
+  .logistics-box { flex: 1; border: 0.5pt solid #ddd; border-radius: 2mm; padding: 4mm; }
+  .logistics-box h3 { font-size: 7pt; font-weight: 700; letter-spacing: 1.5px;
+                       text-transform: uppercase; color: #888; margin-bottom: 3mm; }
+  .tracking-no { font-family: "Courier New",monospace; font-size: 14pt; font-weight: 900;
+                 color: #1a1a2e; letter-spacing: 2px; }
+  .courier-name { font-size: 9pt; color: #555; margin-top: 1mm; }
+  .sign-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5mm; margin-bottom: 6mm; }
+  .sign-box { border: 0.5pt solid #ddd; border-radius: 2mm; padding: 4mm; min-height: 22mm; }
+  .sign-box h3 { font-size: 7pt; color: #aaa; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2mm; }
+  .sign-box .sign-line { border-bottom: 0.5pt solid #ccc; margin: 10mm 2mm 2mm; }
+  .sign-box .sign-hint { font-size: 6pt; color: #ccc; text-align: center; }
+  .footer { border-top: 0.5pt solid #eee; padding-top: 3mm; display: flex;
+            justify-content: space-between; align-items: center; }
+  .footer-left { font-size: 6.5pt; color: #bbb; }
+  .footer-right { font-size: 6pt; color: #ccc; font-family: "Courier New",monospace; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none; } }
+  .print-btn { position: fixed; bottom: 20px; right: 20px; padding: 10px 20px;
+               background: #c0392b; color: white; border: none; border-radius: 6px;
+               font-size: 13px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+</style>
+</head>
+<body>
+<button class="print-btn no-print" onclick="window.print()">打印 / 导出 PDF</button>
+<div class="header">
+  <div class="brand">
+    <div class="brand-name">GAUSH | CLEAR</div>
+    <div class="brand-sub">高视星 · 镜片溯源系统</div>
+  </div>
+  <div class="doc-title">
+    <h1>随货通行单</h1>
+    <p>PACKING SLIP / DELIVERY NOTE</p>
+  </div>
+</div>
+<div class="meta">
+  <div class="meta-item">
+    <div class="meta-label">订单号 Order No.</div>
+    <div class="meta-value mono red">${orderNo}</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">顾客 Customer</div>
+    <div class="meta-value">${customerName}</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">代理商 Agent</div>
+    <div class="meta-value">${agentName} <span style="font-size:7pt;color:#aaa">${agentId}</span></div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">发货日期 Ship Date</div>
+    <div class="meta-value">${shipDate}</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">承诺交期 Promise Date</div>
+    <div class="meta-value">${promiseDate || "—"}</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">镜片数量 Qty</div>
+    <div class="meta-value red">${rows.length} 片</div>
+  </div>
+</div>
+<div class="rx-title">处方参数 Prescription</div>
+<table>
+  <thead><tr><th>眼别</th><th>SKU / 型号</th><th>SPH 球镜</th><th>CYL 柱镜</th><th>AXIS 轴位</th><th>镜片码 Lens Code</th><th>溯源</th></tr></thead>
+  <tbody>${rows.map(eyeRow).join("\n")}</tbody>
+</table>
+<div class="logistics">
+  <div class="logistics-box">
+    <h3>物流信息 Shipping</h3>
+    <div class="tracking-no">${trackingNo || "—"}</div>
+    <div class="courier-name">${courierName || "—"}</div>
+  </div>
+  <div class="logistics-box" style="flex:2">
+    <h3>温馨提示 Notes</h3>
+    <p style="font-size:8pt;color:#555;line-height:1.8">
+      1. 请在签收前检查包装完好性，如有破损请拒收并联系代理商。<br>
+      2. 扫描各镜片上的二维码可查询溯源信息及真伪验证。<br>
+      3. 如有疑问请联系：<strong>${agentName}</strong>
+    </p>
+  </div>
+</div>
+<div class="sign-section">
+  <div class="sign-box">
+    <h3>发货方签章 Shipper</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">高视星 / GAUSH CLEAR</div>
+  </div>
+  <div class="sign-box">
+    <h3>代理商签章 Agent</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">${agentName}</div>
+  </div>
+  <div class="sign-box">
+    <h3>顾客签收 Customer Sign</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">签收日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;月&nbsp;&nbsp;日</div>
+  </div>
+</div>
+<div class="footer">
+  <div class="footer-left">高视星镜片溯源系统 GAUSH CLEAR Supply Chain v1.0 &nbsp;|&nbsp; 本单据随货附带，请妥善保存</div>
+  <div class="footer-right">打印时间 ${new Date().toLocaleString("zh-CN")} &nbsp;|&nbsp; ${orderNo}</div>
+</div>
+</body></html>`;
+}
+
+function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, orders }) {
+  const base = getServerBaseUrl();
+  const allRows = [];
+  for (const o of orders) {
+    for (const r of o.rows) {
+      allRows.push({ ...r, orderNo: o.orderNo, customerName: o.customerName });
+    }
+  }
+
+  const eyeRow = (r) => {
+    const lc = r.lensCode || "—";
+    const qr = `https://api.qrserver.com/v1/create-qr-code/?size=56x56&ecc=M&data=${encodeURIComponent(base + "/verify/" + lc)}`;
+    const isR = r.eye?.includes("右");
+    return `
+    <tr>
+      <td class="order-no">${r.orderNo}<br><span class="cname">${r.customerName}</span></td>
+      <td class="eye ${isR ? "eye-r" : "eye-l"}">${isR ? "R" : "L"}<br><span>${isR ? "右眼" : "左眼"}</span></td>
+      <td class="sku">${r.sku || "—"}</td>
+      <td class="rx">${r.sph || "—"}</td>
+      <td class="rx">${r.cyl || "—"}</td>
+      <td class="rx">${r.axis || "—"}</td>
+      <td class="lc"><span class="lc-code">${lc}</span></td>
+      <td class="qr-cell"><img src="${qr}" alt="QR" width="48" height="48"></td>
+    </tr>`;
+  };
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>合单随货通行单 — ${agentName}</title>
+<style>
+  @page { size: A4; margin: 10mm 12mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; font-size: 9.5pt; color: #1a1a2e; background:#fff; }
+  .header { display:flex; align-items:flex-end; justify-content:space-between;
+            border-bottom:1.5pt solid #c0392b; padding-bottom:3.5mm; margin-bottom:4mm; }
+  .brand-name { font-size:17pt; font-weight:900; letter-spacing:3px; color:#c0392b; }
+  .brand-sub  { font-size:7pt; color:#888; letter-spacing:1.5px; margin-top:0.8mm; }
+  .doc-title h1 { font-size:15pt; font-weight:800; letter-spacing:4px; text-align:right; }
+  .doc-title p  { font-size:6.5pt; color:#aaa; text-align:right; margin-top:0.8mm; }
+  .meta { display:grid; grid-template-columns:repeat(5,1fr); gap:2.5mm;
+          background:#fdf5f5; border:0.5pt solid #f0d0d0; border-radius:2mm;
+          padding:3.5mm 5mm; margin-bottom:4mm; }
+  .meta-label { font-size:5.5pt; color:#aaa; text-transform:uppercase; letter-spacing:1px; margin-bottom:0.5mm; }
+  .meta-value { font-size:9.5pt; font-weight:700; }
+  .meta-value.mono { font-family:"Courier New",monospace; font-size:8.5pt; }
+  .meta-value.red  { color:#c0392b; }
+  .rx-title { font-size:7.5pt; font-weight:700; letter-spacing:2px; text-transform:uppercase;
+              color:#c0392b; margin-bottom:2mm; padding-left:2mm; border-left:2pt solid #c0392b; }
+  table { width:100%; border-collapse:collapse; margin-bottom:5mm; font-size:8.5pt; }
+  thead th { background:#1a1a2e; color:#fff; font-size:6.5pt; font-weight:600;
+             padding:2mm 2.5mm; text-align:center; letter-spacing:0.5px; }
+  thead th:first-child { text-align:left; padding-left:3mm; }
+  tbody tr { border-bottom:0.4pt solid #eee; }
+  tbody tr:nth-child(even) { background:#fafafa; }
+  tbody tr:hover { background:#fef5f5; }
+  td.order-no { padding:2.5mm 3mm; font-size:7pt; font-family:"Courier New",monospace; white-space:nowrap; }
+  td.order-no .cname { font-family:"PingFang SC","Microsoft YaHei",sans-serif; font-size:8pt; font-weight:700; color:#1a1a2e; }
+  td.eye { width:11mm; font-size:14pt; font-weight:900; text-align:center; padding:2mm 0; line-height:1; }
+  td.eye span { font-size:5.5pt; font-weight:400; display:block; }
+  td.eye-r { color:#c0392b; }
+  td.eye-l { color:#2980b9; }
+  td.sku  { padding:2.5mm; font-size:7.5pt; font-weight:600; }
+  td.rx   { padding:2.5mm; text-align:center; font-family:"Courier New",monospace;
+            font-size:10pt; font-weight:700; color:#c0392b; }
+  td.lc   { padding:2.5mm; }
+  .lc-code { font-family:"Courier New",monospace; font-size:6.5pt; font-weight:700;
+             background:#1a1a2e; color:#fff; padding:0.8mm 1.5mm; border-radius:1mm; letter-spacing:1px; }
+  td.qr-cell { padding:1.5mm; text-align:center; width:16mm; }
+  .logistics { display:flex; gap:4mm; margin-bottom:5mm; }
+  .logistics-box { flex:1; border:0.5pt solid #ddd; border-radius:2mm; padding:3.5mm; }
+  .logistics-box h3 { font-size:6.5pt; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#888; margin-bottom:2.5mm; }
+  .tracking-no { font-family:"Courier New",monospace; font-size:13pt; font-weight:900; color:#1a1a2e; letter-spacing:2px; }
+  .courier-name { font-size:8.5pt; color:#555; margin-top:1mm; }
+  .sign-section { display:grid; grid-template-columns:1fr 1fr 1fr; gap:4mm; margin-bottom:5mm; }
+  .sign-box { border:0.5pt solid #ddd; border-radius:2mm; padding:3.5mm; min-height:20mm; }
+  .sign-box h3 { font-size:6.5pt; color:#aaa; letter-spacing:1px; text-transform:uppercase; margin-bottom:1.5mm; }
+  .sign-box .sign-line { border-bottom:0.5pt solid #ccc; margin:8mm 2mm 1.5mm; }
+  .sign-box .sign-hint { font-size:5.5pt; color:#ccc; text-align:center; }
+  .footer { border-top:0.5pt solid #eee; padding-top:2.5mm; display:flex; justify-content:space-between; align-items:center; }
+  .footer-left  { font-size:6pt; color:#bbb; }
+  .footer-right { font-size:5.5pt; color:#ccc; font-family:"Courier New",monospace; }
+  @media print { body{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .no-print{display:none;} }
+  .print-btn { position:fixed; bottom:20px; right:20px; padding:10px 20px; background:#c0392b;
+               color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;
+               box-shadow:0 4px 12px rgba(0,0,0,.2); }
+</style>
+</head>
+<body>
+<button class="print-btn no-print" onclick="window.print()">打印 / 导出 PDF</button>
+<div class="header">
+  <div class="brand">
+    <div class="brand-name">GAUSH | CLEAR</div>
+    <div class="brand-sub">高视星 · 镜片溯源系统</div>
+  </div>
+  <div class="doc-title">
+    <h1>合单随货通行单</h1>
+    <p>CONSOLIDATED PACKING SLIP / DELIVERY NOTE</p>
+  </div>
+</div>
+<div class="meta">
+  <div><div class="meta-label">代理商 Agent</div><div class="meta-value red">${agentName}</div><div style="font-size:6pt;color:#aaa;margin-top:0.5mm">${agentId}</div></div>
+  <div><div class="meta-label">发货日期 Ship Date</div><div class="meta-value">${shipDate}</div></div>
+  <div><div class="meta-label">订单数 Orders</div><div class="meta-value red">${orders.length} 单</div></div>
+  <div><div class="meta-label">镜片数量 Qty</div><div class="meta-value red">${allRows.length} 片</div></div>
+  <div><div class="meta-label">快递单号 Tracking</div><div class="meta-value mono">${trackingNo || "—"}</div></div>
+</div>
+<div class="rx-title">处方明细 Prescription Details — 共 ${allRows.length} 片</div>
+<table>
+  <thead><tr><th>订单号 / 顾客</th><th>眼别</th><th>SKU</th><th>SPH</th><th>CYL</th><th>AXIS</th><th>镜片码</th><th>溯源</th></tr></thead>
+  <tbody>${allRows.map(eyeRow).join("\n")}</tbody>
+</table>
+<div class="logistics">
+  <div class="logistics-box">
+    <h3>物流信息 Shipping</h3>
+    <div class="tracking-no">${trackingNo || "—"}</div>
+    <div class="courier-name">${courierName || "—"}</div>
+  </div>
+  <div class="logistics-box" style="flex:3">
+    <h3>订单汇总 Order Summary</h3>
+    <table style="margin:0;font-size:7.5pt">
+      <thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:1.5mm;color:#555;font-weight:600">订单号</th><th style="padding:1.5mm;color:#555;font-weight:600">顾客</th><th style="padding:1.5mm;color:#555;font-weight:600">SKU</th><th style="padding:1.5mm;color:#555;font-weight:600">片数</th></tr></thead>
+      <tbody>
+        ${orders.map(o => `<tr><td style="padding:1.5mm;font-family:monospace;font-size:6.5pt">${o.orderNo}</td><td style="padding:1.5mm;font-weight:600">${o.customerName}</td><td style="padding:1.5mm">${o.rows.map(r=>r.sku).filter((v,i,a)=>a.indexOf(v)===i).join(", ")}</td><td style="padding:1.5mm;text-align:center;font-weight:700;color:#c0392b">${o.rows.length}</td></tr>`).join("")}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="sign-section">
+  <div class="sign-box">
+    <h3>发货方签章 Shipper</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">高视星 / GAUSH CLEAR</div>
+  </div>
+  <div class="sign-box">
+    <h3>代理商签收 Agent</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">${agentName}</div>
+  </div>
+  <div class="sign-box">
+    <h3>签收日期 Date</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">　　年　　月　　日</div>
+  </div>
+</div>
+<div class="footer">
+  <div class="footer-left">高视星 GAUSH CLEAR Supply Chain v1.0 &nbsp;|&nbsp; 本单据随货附带，请妥善保存 &nbsp;|&nbsp; ${agentName} 专属包裹</div>
+  <div class="footer-right">打印时间 ${new Date().toLocaleString("zh-CN")}</div>
+</div>
+</body></html>`;
 }
 
 // 生成可打印 HTML 标签（QR 内嵌为 base64 data URL）
@@ -1618,7 +2160,13 @@ const server = createServer(async (req, res) => {
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
 
       const payload = await readBody(req);
-      const { address, patients, terminalCustomer } = payload;
+      const { address, patients, terminalCustomer, clientRequestId } = payload;
+
+      // 幂等检查 — 防止双击/重试
+      if (clientRequestId) {
+        const cached = getIdempotent(clientRequestId);
+        if (cached) { jsonRes(res, 200, cached); return logReq(req, 200, start); }
+      }
 
       if (!terminalCustomer?.name?.trim()) {
         jsonRes(res, 400, { error: "请填写终端客户" });
@@ -1666,6 +2214,7 @@ const server = createServer(async (req, res) => {
       const now = Date.now();
       const orderRecords = [];    // 订单主表记录
       const lensRecords = [];     // 镜片明细表记录
+      const deductionPlan = [];   // 库存扣减计划（预检+实际扣减共用）
       const items = [];
       let totalLenses = 0;
 
@@ -1698,6 +2247,7 @@ const server = createServer(async (req, res) => {
             "订单来源": "代理商门户",
             "客户ID": customerId,
             "是否装配": assembly !== false ? "是" : "否",
+            "流程步骤": JSON.stringify({ current: 0, steps: { submitted: { ts: now } } }),
             ...(terminalCustomer?.name ? { "终端客户": terminalCustomer.name } : {}),
             ...(terminalCustomer?.contact ? { "联系人": terminalCustomer.contact } : {}),
             ...(terminalCustomer?.phone ? { "联系电话": terminalCustomer.phone } : {}),
@@ -1723,28 +2273,15 @@ const server = createServer(async (req, res) => {
             },
           });
           totalLenses++;
-        }
-
-        // 代理商库存扣减（先自有后寄售），写寄售流水
-        for (const eye of eyes) {
+          // 收集扣减计划（不在此时扣减）
           if (eye.sph != null && eye.cyl != null) {
-            const deductResult = await deductAgentStock(agent.id, sku, eye.sph, eye.cyl, quantity);
-            if (deductResult.ledgerRecords?.length > 0) {
-              await batchCreateRecords(TABLES.consignment_ledger, deductResult.ledgerRecords);
-            }
-          }
-        }
-
-        // 度数级库存扣减（厂家总仓）
-        for (const eye of eyes) {
-          if (eye.sph != null && eye.cyl != null) {
-            await deductStockDetail(sku, eye.sph, eye.cyl, quantity, orderNo);
+            deductionPlan.push({ sku, sph: eye.sph, cyl: eye.cyl, qty: quantity });
           }
         }
 
         items.push({
           sku,
-          skuName: skuInfo?.name || sku,
+          skuName: sku,
           quantity,
           lensCount: quantity * lensCount,
           customerName: customerName.trim(),
@@ -1759,19 +2296,91 @@ const server = createServer(async (req, res) => {
         return logReq(req, 400, start);
       }
 
-      // 写入订单主表
+      // ── 预检：fresh 读库存，不够则 409（不写订单） ──
+      if (deductionPlan.length > 0) {
+        const baseMap = await getStockMap();
+        const stockErrors = [];
+        const freshChecks = new Map(); // 去重：同一 key 只查一次
+        for (const d of deductionPlan) {
+          const key = `${d.sku}|${Number(d.sph).toFixed(2)}|${Number(d.cyl).toFixed(2)}`;
+          if (freshChecks.has(key)) continue;
+          const info = baseMap.get(key);
+          if (!info) { freshChecks.set(key, { available: 0 }); stockErrors.push({ ...d, available: 0 }); continue; }
+          // fresh read 单条
+          const fresh = await feishuApi("GET",
+            `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`
+          );
+          const freshStock = Number(fresh?.record?.fields?.["当前库存"]) || 0;
+          freshChecks.set(key, { available: freshStock });
+        }
+        for (const d of deductionPlan) {
+          const key = `${d.sku}|${Number(d.sph).toFixed(2)}|${Number(d.cyl).toFixed(2)}`;
+          const fc = freshChecks.get(key);
+          if (!fc || fc.available < d.qty) {
+            stockErrors.push({ ...d, available: fc?.available ?? 0 });
+          }
+        }
+        // 去重（同一 SKU|SPH|CYL 可能因双眼重复）
+        const uniqueErrors = [];
+        const seen = new Set();
+        for (const e of stockErrors) {
+          const k = `${e.sku}|${e.sph}|${e.cyl}`;
+          if (!seen.has(k)) { seen.add(k); uniqueErrors.push(e); }
+        }
+        if (uniqueErrors.length > 0) {
+          jsonRes(res, 409, {
+            error: "库存不足，请刷新后重新提交",
+            details: uniqueErrors.map(e => `${e.sku} SPH=${e.sph} CYL=${e.cyl} 需要${e.qty}片，库存仅${e.available}片`),
+            code: "STOCK_INSUFFICIENT",
+          });
+          return logReq(req, 409, start);
+        }
+      }
+
+      // ── 写入订单主表 ──
       const okOrder = await batchCreateRecords(TABLES.order, orderRecords);
       if (!okOrder) {
         jsonRes(res, 500, { error: "写入飞书失败（订单主表），请重试" });
         return logReq(req, 500, start);
       }
 
-      // 写入镜片明细表
+      // ── 写入镜片明细表 ──
       if (lensRecords.length > 0) {
         const okLens = await batchCreateRecords(TABLES.lens_detail, lensRecords);
         if (!okLens) {
           console.error(`  ⚠️ 镜片明细写入失败，订单 ${orderNo} 主表已写入`);
         }
+      }
+
+      // ── 库存扣减（订单已写入，锁内再检+扣减） ──
+      const deductErrors = [];
+      for (const d of deductionPlan) {
+        const result = await deductStockDetail(d.sku, d.sph, d.cyl, d.qty, orderNo);
+        if (!result.success) {
+          deductErrors.push({ ...d, reason: result.reason, available: result.available });
+        }
+      }
+      // 代理商库存扣减（先自有后寄售），写寄售流水
+      for (const d of deductionPlan) {
+        const deductResult = await deductAgentStock(agent.id, d.sku, d.sph, d.cyl, d.qty);
+        if (deductResult.ledgerRecords?.length > 0) {
+          await batchCreateRecords(TABLES.consignment_ledger, deductResult.ledgerRecords);
+        }
+      }
+      if (deductErrors.length > 0) {
+        console.error(`  ⚠️ 订单 ${orderNo} 部分库存扣减失败:`, deductErrors);
+        // 标记订单备注（best effort）
+        try {
+          const errNote = deductErrors.map(e => `${e.sku} SPH=${e.sph} CYL=${e.cyl}`).join(", ");
+          for (const rec of orderRecords) {
+            rec.fields["备注"] = (rec.fields["备注"] || "") + ` [系统] 库存扣减失败: ${errNote}`;
+          }
+          const encoded = encodeURIComponent(`"${orderNo}"`);
+          const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+          for (const rec of d?.items || []) {
+            await updateRecord(TABLES.order, rec.record_id, { "备注": `[系统] 部分库存扣减失败需人工处理: ${errNote}` });
+          }
+        } catch { /* best effort */ }
       }
 
       // 镜片码+QR 异步生成（不阻塞下单返回），带重试
@@ -1782,14 +2391,11 @@ const server = createServer(async (req, res) => {
             const codes = await assignLensCodes(orderNo);
             if (codes.length > 0) {
               console.log(`  镜片码已生成: ${orderNo} → ${codes.join(", ")}`);
-              // 镜片码权威来源是镜片明细表，不在此处回写到订单主表
-              // 回写留到 confirm 时按 customerName 过滤后写入
             }
-            break; // 成功则退出重试
+            break;
           } catch (e) {
             console.error(`  镜片码生成失败 (尝试 ${attempt}/${maxRetries}): ${orderNo}`, e.message);
             if (attempt === maxRetries) {
-              // 全部重试失败：在订单主表标记错误状态
               try {
                 const encoded = encodeURIComponent(`"${orderNo}"`);
                 const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
@@ -1810,12 +2416,14 @@ const server = createServer(async (req, res) => {
       delete _customerCache[agent.id];
       delete _terminalCustomerCache[agent.id];
 
-      jsonRes(res, 200, {
+      const responseData = {
         success: true,
         orderNo,
         items,
         summary: { totalPatients: patients.length, totalLenses },
-      });
+      };
+      setIdempotent(clientRequestId, responseData);
+      jsonRes(res, 200, responseData);
       return logReq(req, 200, start);
     }
 
@@ -2606,6 +3214,15 @@ const server = createServer(async (req, res) => {
               ...(mergedCodes.length > 0 ? { "镜片码": mergedCodes.join(",") } : {}),
             });
           }
+          // 推进工作流步骤
+          try {
+            for (const rec of records) {
+              const wf = parseWorkflow(rec.fields["流程步骤"]);
+              advanceWorkflow(wf, "confirmed");
+              advanceWorkflow(wf, "producing");
+              await updateRecord(TABLES.order, rec.record_id, { "流程步骤": JSON.stringify(wf) });
+            }
+          } catch (e) { console.error("⚠️ 工作流更新失败(confirm):", e.message); }
           results.push({ orderNo, ok: true, lensCodes });
         } catch (e) {
           results.push({ orderNo, ok: false, error: e.message });
@@ -2613,6 +3230,184 @@ const server = createServer(async (req, res) => {
       }
       jsonRes(res, 200, { results });
       return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/ship-preview — 发货前预览清单（处方明细+收货信息）
+    if (pathname === "/api/admin/ship-preview" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const orderNosParam = url.searchParams.get("orderNos") || "";
+      const customerParam = url.searchParams.get("customer") || "";
+      if (!orderNosParam) { jsonRes(res, 400, { error: "请提供 orderNos" }); return logReq(req, 400, start); }
+      const previewOrderNos = orderNosParam.split(",").map(s => s.trim()).filter(Boolean);
+      const previewCustomers = customerParam ? customerParam.split(",").map(s => s.trim()) : [];
+      try {
+        const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
+        const orders = [];
+        for (const orderNo of previewOrderNos) {
+          const encoded = encodeURIComponent(`"${orderNo}"`);
+          const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+          let records = d?.items || [];
+          if (previewCustomers.length) records = records.filter(r => previewCustomers.includes(r.fields["顾客姓名"] || ""));
+          if (!records.length) continue;
+          // 按顾客分组
+          const custMap = {};
+          for (const rec of records) {
+            const cn = rawVal(rec.fields["顾客姓名"]) || "未知";
+            if (!custMap[cn]) custMap[cn] = rec;
+          }
+          for (const [custName, rec] of Object.entries(custMap)) {
+            const f = rec.fields;
+            const lensDetails = await getLensDetailsByOrder(orderNo);
+            const filtered = previewCustomers.length ? lensDetails.filter(r => previewCustomers.includes(r.fields["顾客姓名"] || "")) : lensDetails;
+            const rows = filtered.map(r => {
+              const lf = r.fields;
+              return {
+                eye: rawVal(lf["眼别"]) || "—",
+                sku: rawVal(lf["产品型号"]),
+                sph: lf["球镜SPH"] ?? "",
+                cyl: lf["柱镜CYL"] ?? "",
+                axis: lf["轴位AXIS"] ?? "",
+                lensCode: rawVal(lf["镜片码"]),
+              };
+            }).sort((a, b) => a.eye.includes("右") ? -1 : 1);
+            orders.push({
+              orderNo,
+              customerName: custName,
+              agentName: rawVal(f["代理商名称"]),
+              agentId: rawVal(f["代理商ID"]),
+              contact: rawVal(f["联系人"]),
+              phone: rawVal(f["联系电话"]),
+              address: rawVal(f["收货地址"]),
+              remark: rawVal(f["备注"]),
+              quantity: Number(f["数量"]) || 0,
+              rows,
+            });
+          }
+        }
+        jsonRes(res, 200, { orders });
+        return logReq(req, 200, start);
+      } catch (e) { jsonRes(res, 500, { error: e.message }); return logReq(req, 500, start); }
+    }
+
+    // GET /api/admin/slip/:orderNo — 单订单随货通行单 HTML
+    const slipMatch = pathname.match(/^\/api\/admin\/slip\/([^/]+)$/);
+    if (slipMatch && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const orderNo = slipMatch[1];
+      try {
+        const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
+        const encoded = encodeURIComponent(`"${orderNo}"`);
+        const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+        if (!d?.items?.length) { jsonRes(res, 404, { error: "未找到订单" }); return logReq(req, 404, start); }
+        const f0 = d.items[0].fields;
+        const lensDetails = await getLensDetailsByOrder(orderNo);
+        const rows = lensDetails.map(r => {
+          const f = r.fields;
+          return {
+            eye: rawVal(f["眼别"]) || (lensDetails.indexOf(r) === 0 ? "右眼" : "左眼"),
+            sku: rawVal(f["产品型号"]),
+            sph: f["球镜SPH"] ?? "",
+            cyl: f["柱镜CYL"] ?? "",
+            axis: f["轴位AXIS"] ?? "",
+            lensCode: rawVal(f["镜片码"]),
+          };
+        }).sort((a, b) => a.eye.includes("右") ? -1 : 1);
+        const html = slipHTML({
+          orderNo,
+          customerName: rawVal(f0["顾客姓名"]),
+          agentName: rawVal(f0["代理商名称"]),
+          agentId: rawVal(f0["代理商ID"]),
+          shipDate: f0["发货时间"] ? new Date(f0["发货时间"]).toLocaleDateString("zh-CN") : new Date().toLocaleDateString("zh-CN"),
+          promiseDate: f0["预计交期"] ? new Date(f0["预计交期"]).toLocaleDateString("zh-CN") : "",
+          courierName: rawVal(f0["物流公司"]),
+          trackingNo: rawVal(f0["快递单号"]),
+          rows,
+        });
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(html);
+        return logReq(req, 200, start);
+      } catch (e) { jsonRes(res, 500, { error: e.message }); return logReq(req, 500, start); }
+    }
+
+    // GET /api/admin/slip-batch — 批量合单随货通行单（按日期+代理商）
+    if (pathname === "/api/admin/slip-batch" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const dateStr = url.searchParams.get("date") || new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const agentId = url.searchParams.get("agent") || "";
+      try {
+        const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
+        let filter = `CurrentValue.[快递单号]!=""`;
+        if (agentId) filter += `&&CurrentValue.[代理商ID]="${agentId}"`;
+        const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=500&filter=${encodeURIComponent(filter)}`);
+        const records = d?.items || [];
+        // 按日期过滤（发货时间在当天范围内）
+        const dayStart = new Date(dateStr.replace(/(\d{4})(\d{2})(\d{2})/, "$1-$2-$3")).getTime();
+        const dayEnd = dayStart + 86400000;
+        const filtered = records.filter(r => {
+          const shipTime = r.fields["发货时间"];
+          return shipTime && shipTime >= dayStart && shipTime < dayEnd;
+        });
+        if (!filtered.length) { jsonRes(res, 404, { error: `${dateStr} 无已发货记录` }); return logReq(req, 404, start); }
+        // 按代理商+快递单号分组
+        const agentMap = {};
+        for (const r of filtered) {
+          const f = r.fields;
+          const aid = rawVal(f["代理商ID"]) || "UNKNOWN";
+          const tracking = rawVal(f["快递单号"]);
+          const key = `${aid}__${tracking}`;
+          if (!agentMap[key]) agentMap[key] = { agentId: aid, agentName: rawVal(f["代理商名称"]) || aid,
+            trackingNo: tracking, courierName: rawVal(f["物流公司"]),
+            shipDate: f["发货时间"] ? new Date(f["发货时间"]).toLocaleDateString("zh-CN") : new Date().toLocaleDateString("zh-CN"),
+            records: [] };
+          agentMap[key].records.push(r);
+        }
+        const groups = Object.values(agentMap);
+        // 单分组直接返回通行单 HTML
+        if (groups.length === 1) {
+          const g = groups[0];
+          const orderMap = {};
+          for (const r of g.records) {
+            const no = rawVal(r.fields["订单编号"]);
+            if (!orderMap[no]) orderMap[no] = { orderNo: no, customerName: rawVal(r.fields["顾客姓名"]), rows: [] };
+          }
+          for (const [no, order] of Object.entries(orderMap)) {
+            const lensDetails = await getLensDetailsByOrder(no);
+            for (const ld of lensDetails) {
+              const f = ld.fields;
+              order.rows.push({ eye: rawVal(f["眼别"]) || "—", sku: rawVal(f["产品型号"]),
+                sph: f["球镜SPH"] ?? "", cyl: f["柱镜CYL"] ?? "", axis: f["轴位AXIS"] ?? "",
+                lensCode: rawVal(f["镜片码"]) });
+            }
+            order.rows.sort((a, b) => a.eye.includes("右") ? -1 : 1);
+          }
+          const html = batchSlipHTML({ ...g, orders: Object.values(orderMap) });
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+          res.end(html);
+          return logReq(req, 200, start);
+        }
+        // 多分组：返回汇总页，每组一个可点击卡片
+        let listHtml = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>随货通行单汇总 ${dateStr}</title>
+<style>body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;padding:40px;background:#f5f5f5}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;max-width:1200px;margin:0 auto}
+.card{background:#fff;border-radius:8px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer;transition:box-shadow .2s}
+.card:hover{box-shadow:0 4px 16px rgba(0,0,0,.15)}
+.card h3{margin:0 0 8px;color:#c0392b;font-size:14pt}
+.card p{margin:4px 0;color:#666;font-size:10pt}
+h1{max-width:1200px;margin:0 auto 24px;color:#1a1a2e;font-size:18pt}
+.btn{display:inline-block;margin-top:12px;padding:6px 16px;background:#c0392b;color:#fff;border:none;border-radius:4px;font-size:10pt;text-decoration:none}
+a{color:inherit;text-decoration:none}</style></head><body>
+<h1>随货通行单汇总 — ${dateStr}</h1><div class="cards">`;
+        for (const g of groups) {
+          const totalRows = g.records.length;
+          listHtml += `<a class="card" href="/api/admin/slip-batch?date=${dateStr}&agent=${g.agentId}"><h3>${g.agentName}</h3>
+<p>代理商 ID：${g.agentId}</p><p>快递单号：${g.trackingNo || "—"}</p><p>物流公司：${g.courierName || "—"}</p>
+<p>发货 ${totalRows} 条记录</p><span class="btn">查看通行单 →</span></a>`;
+        }
+        listHtml += `</div></body></html>`;
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(listHtml);
+        return logReq(req, 200, start);
+      } catch (e) { jsonRes(res, 500, { error: e.message }); return logReq(req, 500, start); }
     }
 
     // POST /api/admin/ship — 发货（逐单或批量，可按客户维度）
@@ -2684,6 +3479,15 @@ const server = createServer(async (req, res) => {
             await updateRecord(TABLES.lens_detail, rec.record_id, { "订单状态": "已发货" });
           }
 
+          // 推进工作流步骤 → shipped
+          try {
+            for (const rec of records) {
+              const wf = parseWorkflow(rec.fields["流程步骤"]);
+              advanceWorkflow(wf, "shipped");
+              await updateRecord(TABLES.order, rec.record_id, { "流程步骤": JSON.stringify(wf) });
+            }
+          } catch (e) { console.error("⚠️ 工作流更新失败(ship):", e.message); }
+
           // 飞书发货卡片
           const custName = rawVal(f0["顾客姓名"]) || "";
           const sku = rawVal(f0["产品型号"]) || "";
@@ -2744,6 +3548,15 @@ const server = createServer(async (req, res) => {
             await updateRecord(TABLES.lens_detail, rec.record_id, { "订单状态": "已签收" });
           }
 
+          // 推进工作流步骤 → received
+          try {
+            for (const rec of records) {
+              const wf = parseWorkflow(rec.fields["流程步骤"]);
+              advanceWorkflow(wf, "received");
+              await updateRecord(TABLES.order, rec.record_id, { "流程步骤": JSON.stringify(wf) });
+            }
+          } catch (e) { console.error("⚠️ 工作流更新失败(deliver):", e.message); }
+
           // 飞书签收卡片
           const f0 = records[0].fields;
           const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
@@ -2763,6 +3576,214 @@ const server = createServer(async (req, res) => {
       }
       jsonRes(res, 200, { results });
       return logReq(req, 200, start);
+    }
+
+    // ── 标签打印 API ─────────────────────────────────────────────────────────
+
+    // POST /api/admin/print-label — 生成 ZPL 发送斑马打印机
+    if (pathname === "/api/admin/print-label" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req);
+      const orderNo = (payload.orderNo || "").trim();
+      const customerName = payload.customerName || "";
+      const eye = payload.eye || ""; // "右眼" or "左眼" or "" (all)
+      if (!orderNo) { jsonRes(res, 400, { error: "请提供 orderNo" }); return logReq(req, 400, start); }
+
+      try {
+        let details = await getLensDetailsByOrder(orderNo);
+        if (!details.length) { jsonRes(res, 404, { error: "未找到镜片明细" }); return logReq(req, 404, start); }
+        if (customerName) details = details.filter(r => (r.fields["顾客姓名"] || "") === customerName);
+        if (eye) details = details.filter(r => (r.fields["眼别"] || "") === eye);
+        if (!details.length) { jsonRes(res, 404, { error: "过滤后无匹配镜片" }); return logReq(req, 404, start); }
+
+        const config = loadPrinterConfig();
+        const copies = config.copies || 1;
+        const results = [];
+
+        for (const rec of details) {
+          if (!rec.fields["镜片码"]) continue;
+          const zpl = buildZpl(rec);
+          for (let i = 0; i < copies; i++) {
+            const r = await sendZplToPrinter(zpl);
+            results.push({ lensCode: rec.fields["镜片码"], eye: rec.fields["眼别"], ...r });
+          }
+        }
+
+        // 自动推进工作流步骤 → labeled
+        try {
+          const orderEnc = encodeURIComponent(`"${orderNo}"`);
+          const od = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=10&filter=CurrentValue.[订单编号]=${orderEnc}`);
+          for (const rec of (od?.items || [])) {
+            const wf = parseWorkflow(rec.fields["流程步骤"]);
+            const adv = advanceWorkflow(wf, "labeled");
+            if (adv.ok && !adv.skipped) {
+              await updateRecord(TABLES.order, rec.record_id, { "流程步骤": JSON.stringify(adv.wf) });
+            }
+          }
+        } catch (e) { console.error("⚠️ 工作流更新失败(labeled):", e.message); }
+
+        jsonRes(res, 200, { ok: true, orderNo, lensCount: results.length, results });
+        return logReq(req, 200, start);
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+        return logReq(req, 500, start);
+      }
+    }
+
+    // POST /api/admin/print-label/preview — 返回 ZPL 文本（不实际打印）
+    if (pathname === "/api/admin/print-label/preview" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req);
+      const orderNo = (payload.orderNo || "").trim();
+      const customerName = payload.customerName || "";
+      const eye = payload.eye || "";
+      if (!orderNo) { jsonRes(res, 400, { error: "请提供 orderNo" }); return logReq(req, 400, start); }
+
+      try {
+        let details = await getLensDetailsByOrder(orderNo);
+        if (customerName) details = details.filter(r => (r.fields["顾客姓名"] || "") === customerName);
+        if (eye) details = details.filter(r => (r.fields["眼别"] || "") === eye);
+        const zpls = details.filter(r => r.fields["镜片码"]).map(r => ({
+          lensCode: r.fields["镜片码"],
+          eye: r.fields["眼别"],
+          zpl: buildZpl(r),
+        }));
+        jsonRes(res, 200, { ok: true, orderNo, count: zpls.length, zpls });
+        return logReq(req, 200, start);
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+        return logReq(req, 500, start);
+      }
+    }
+
+    // POST /api/admin/printer/test — 发送测试标签
+    if (pathname === "/api/admin/printer/test" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      try {
+        const testZpl = [
+          "^XA", "^CI28", "^PW636", "^LL400",
+          "^FO200,30^A0N,40,40^FDGAUSH TEST^FS",
+          "^FO40,90^BY2^BCN,80,Y,N,N^FDTEST-PRINT^FS",
+          "^FO40,185^A0N,24,24^FD测试标签 / Test Label^FS",
+          "^FO40,220^A0N,20,20^FD" + new Date().toLocaleString("zh-CN") + "^FS",
+          "^FO40,260^A0N,18,18^FD打印机: " + loadPrinterConfig().printer_model + "^FS",
+          "^FO40,290^BQN,2,3^FDQA,https://gaushclear.com^FS",
+          "^XZ",
+        ].join("\n");
+        const result = await sendZplToPrinter(testZpl);
+        jsonRes(res, 200, { ok: true, ...result });
+        return logReq(req, 200, start);
+      } catch (e) {
+        jsonRes(res, 500, { ok: false, error: e.message });
+        return logReq(req, 500, start);
+      }
+    }
+
+    // GET /api/admin/printer/config — 读取打印机配置
+    if (pathname === "/api/admin/printer/config" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      jsonRes(res, 200, loadPrinterConfig());
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/printer/config — 更新打印机配置
+    if (pathname === "/api/admin/printer/config" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      const current = loadPrinterConfig();
+      const merged = { ...current, ...body };
+      // 深合并 tcp/usb 子对象
+      if (body.tcp) merged.tcp = { ...current.tcp, ...body.tcp };
+      if (body.usb) merged.usb = { ...current.usb, ...body.usb };
+      savePrinterConfig(merged);
+      jsonRes(res, 200, { ok: true, config: merged });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/printer/status — 检查打印机连通性
+    if (pathname === "/api/admin/printer/status" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const config = loadPrinterConfig();
+      const status = { model: config.printer_model, connection: config.default_connection };
+      if (config.tcp?.enabled) {
+        try {
+          await sendTcpZpl("^XA^FO10,10^A0N,20,20^FDPING^FS^XZ", config.tcp.host, config.tcp.port, 3000);
+          status.tcp = { ok: true, host: config.tcp.host, port: config.tcp.port };
+        } catch (e) {
+          status.tcp = { ok: false, host: config.tcp.host, port: config.tcp.port, error: e.message };
+        }
+      }
+      if (config.usb?.enabled) {
+        try {
+          const r = await fetch(`${config.usb.bridge_url}/status`, { signal: AbortSignal.timeout(3000) });
+          status.usb = { ok: r.ok, bridge: config.usb.bridge_url };
+        } catch (e) {
+          status.usb = { ok: false, bridge: config.usb.bridge_url, error: e.message };
+        }
+      }
+      jsonRes(res, 200, status);
+      return logReq(req, 200, start);
+    }
+
+    // ── 工作流步骤 API ────────────────────────────────────────────────────────
+
+    // GET /api/admin/workflow/:orderNo — 查询工作流状态
+    const workflowMatch = pathname.match(/^\/api\/admin\/workflow\/([^/]+)$/);
+    if (workflowMatch && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const orderNo = decodeURIComponent(workflowMatch[1]);
+      try {
+        const encoded = encodeURIComponent(`"${orderNo}"`);
+        const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=10&filter=CurrentValue.[订单编号]=${encoded}`);
+        const rec = (d?.items || [])[0];
+        if (!rec) { jsonRes(res, 404, { error: "未找到订单" }); return logReq(req, 404, start); }
+        const wf = parseWorkflow(rec.fields["流程步骤"]);
+        // 补充标签显示
+        const stepsWithLabels = {};
+        for (const [k, v] of Object.entries(wf.steps || {})) {
+          stepsWithLabels[k] = { ...v, label: STEP_LABELS[k] || k };
+        }
+        jsonRes(res, 200, {
+          orderNo,
+          current: wf.current || 0,
+          currentLabel: STEP_LABELS[STEP_ORDER[wf.current || 0]] || "",
+          steps: stepsWithLabels,
+          stepOrder: STEP_ORDER,
+          stepLabels: STEP_LABELS,
+        });
+        return logReq(req, 200, start);
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+        return logReq(req, 500, start);
+      }
+    }
+
+    // POST /api/admin/workflow/step — 推进工作流步骤
+    if (pathname === "/api/admin/workflow/step" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      const orderNo = (body.orderNo || "").trim();
+      const step = (body.step || "").trim();
+      if (!orderNo || !step) { jsonRes(res, 400, { error: "需要 orderNo 和 step" }); return logReq(req, 400, start); }
+      if (!STEP_ORDER.includes(step)) { jsonRes(res, 400, { error: `未知步骤: ${step}，可选: ${STEP_ORDER.join(", ")}` }); return logReq(req, 400, start); }
+
+      try {
+        const encoded = encodeURIComponent(`"${orderNo}"`);
+        const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=10&filter=CurrentValue.[订单编号]=${encoded}`);
+        const rec = (d?.items || [])[0];
+        if (!rec) { jsonRes(res, 404, { error: "未找到订单" }); return logReq(req, 404, start); }
+
+        const wf = parseWorkflow(rec.fields["流程步骤"]);
+        const adv = advanceWorkflow(wf, step);
+        if (!adv.ok) { jsonRes(res, 400, { error: adv.error }); return logReq(req, 400, start); }
+
+        await updateRecord(TABLES.order, rec.record_id, { "流程步骤": JSON.stringify(adv.wf) });
+        jsonRes(res, 200, { ok: true, orderNo, step, label: STEP_LABELS[step], current: adv.wf.current, skipped: adv.skipped || false });
+        return logReq(req, 200, start);
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+        return logReq(req, 500, start);
+      }
     }
 
     // ── 自然语言搜索（纯代码解析，不依赖 AI）──────────────────────────────────
