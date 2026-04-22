@@ -1,7 +1,7 @@
 # STATE.md — 库存系统进度快照
 
 > 本文件是**当前状态快照**（易变），记录"现在走到哪了"。长期规则请看 [CLAUDE.md](CLAUDE.md)。
-> 最后更新：**2026-04-22（v5 — 理论备库参数系统脚本完成）**
+> 最后更新：**2026-04-22（v5 — 理论备库系统全量上线 + 度数级扣减）**
 
 ---
 
@@ -18,7 +18,7 @@
 ### 飞书 Bitable
 
 - [x] 新建「度数级成品库存」表：`tbl7U79QGG4JtQev`（App `B3xQbbqicaome1sKdZbcwdk8nWg` 下）
-- [x] 导入 **Ultra双效 + D8** 各 225 行度数组合，总 **450 行**
+- [x] 导入 **7 个 SKU** 各 225 行度数组合，总 **1575 行**（Ultra双效/D8/时空之眼A/B/PRO/MAX/小旋风）
 - [x] 两个 SKU 共用同一份度数分布（业务确认：目前两款库存结构一致）
 
 ### 代码（2026-04-22 架构重组后）
@@ -53,10 +53,12 @@
 - [x] `migrate_stock_plan.js` — 建表/导入 CSV/预览三合一脚本
 - [x] `apply_stock_plan.js` — 理论备库计算 + 回填 stock_detail 安全库存
 - [x] `calc_stock_plan.js` — 数据飞轮：从订单数据自动测算度数分布
-- [x] `shared/tables.js` — 新增 `stock_plan`（`tbluUfuETzwGdW1E`）
+- [x] `shared/tables.js` — 新增 `stock_plan`（`tbluUfuETzwGdW1E`）、更新 `forecast`（`tblK2YNUZ3RM3Zta`）
 - [x] 备库参数表已建：225 行（版本 2026-04）
-- [x] stock_detail 安全库存已填入（Ultra双效 + D8 各 225 行）
+- [x] stock_detail 安全库存已填入（全部 7 个 SKU × 225 行 = 1575 行）
 - [x] `automations.js` — rule12 度数级库存预警（当前库存 vs 理论备库）
+- [x] `server.js` — 下单自动扣减度数级库存（`deductStockDetail`，幂等设计）
+- [x] forecast 表已建（`tblK2YNUZ3RM3Zta`，待录入预测数据）
 - [x] **运行建表**：`node migrate_stock_plan.js create`
 - [x] **导入参数**：`node migrate_stock_plan.js import <tid>`
 - [x] **回填安全库存**：`node apply_stock_plan.js --dry-run` → `node apply_stock_plan.js`
@@ -137,9 +139,9 @@
 | 度数级库存表 ID | `tbl7U79QGG4JtQev` |
 | 毛坯库存表 ID | `tblrFIGHFVhTB16p` |
 | 模具台账表 ID | `tblfnVzOA2yFzbjs` |
-| 已录 SKU | `Ultra双效`、`D8`（各 225 行） |
-| 待录 SKU | 时空之眼A/B/PRO/MAX、小旋风（需要 Excel 数据） |
-| 当前库存总量 | 2340 片 × 2 SKU = 4680 片 |
+| 已录 SKU | 全部 7 个（各 225 行） |
+| 待录 SKU | 无 |
+| 当前库存总量 | 2340 片 × 2 SKU = 4680 片（新 SKU 库存=0 待补货） |
 | 度数范围 | SPH 0 ~ -6.00，CYL 0 ~ -2.00，步长 0.25 |
 | 低库存阈值 | 5 片 |
 | 寄售账期 | 90 天 |

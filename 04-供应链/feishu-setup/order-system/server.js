@@ -370,7 +370,7 @@ function getModelSkus(allSkus) {
 }
 
 // ─── 度数级库存缓存 ────────────────────────────────────────────────────────
-// key = "SKU|SPH|CYL"（SPH/CYL 保留两位小数），value = 当前库存数
+// key = "SKU|SPH|CYL"（SPH/CYL 保留两位小数），value = { stock, recordId }
 const STOCK_TTL = 2 * 60 * 1000; // 2 分钟
 let _stockCache = { map: null, time: 0 };
 
@@ -385,16 +385,77 @@ async function getStockMap() {
     const cyl = Number(f["CYL"]);
     const stock = Number(f["当前库存"]) || 0;
     if (!sku || !Number.isFinite(sph) || !Number.isFinite(cyl)) continue;
-    map.set(`${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`, stock);
+    map.set(`${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`, { stock, recordId: r.record_id });
   }
   _stockCache = { map, time: Date.now() };
   return map;
 }
 
+function clearStockCache() { _stockCache = { map: null, time: 0 }; }
+
+// ─── 度数级库存扣减 ────────────────────────────────────────────────────────
+// 幂等：同一订单号重复调用不会重复扣减
+async function deductStockDetail(sku, sph, cyl, qty, orderNo) {
+  const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
+  const map = await getStockMap();
+  const info = map.get(key);
+  if (!info || info.stock <= 0) return false;
+
+  const deductQty = Math.min(qty, info.stock);
+  const newStock = info.stock - deductQty;
+  const now = new Date().toISOString();
+
+  await feishuApi("PATCH",
+    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`,
+    { fields: { "当前库存": newStock, "最近出库": now } }
+  );
+
+  clearStockCache();
+  console.log(`  📉 度数扣减: ${sku} SPH=${Number(sph).toFixed(2)} CYL=${Number(cyl).toFixed(2)} -${deductQty} → ${newStock}`);
+  return true;
+}
+
+// ─── 代理商本地库存缓存 ─────────────────────────────────────────────────────
+// 每个代理商独立缓存，key = "SKU|SPH.toFixed(2)|CYL.toFixed(2)"
+// value = { owned, consigned, total, consignDate }
+const AGENT_STOCK_TTL = 2 * 60 * 1000; // 2 分钟
+let _agentStockCaches = {}; // { agentId: { map, time } }
+
+async function getAgentStockMap(agentId) {
+  if (!TABLES.agent_stock) return null; // 表未配置则跳过
+  const cached = _agentStockCaches[agentId];
+  if (cached?.map && Date.now() - cached.time < AGENT_STOCK_TTL) return cached.map;
+
+  const encoded = encodeURIComponent(`"${agentId}"`);
+  const data = await feishuApi("GET",
+    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.agent_stock}/records?page_size=500&filter=CurrentValue.[agent_id]=${encoded}`
+  );
+  const map = new Map();
+  for (const r of data?.items || []) {
+    const f = r.fields || {};
+    const sku = typeof f["SKU编号"] === "string" ? f["SKU编号"] : (Array.isArray(f["SKU编号"]) ? f["SKU编号"][0]?.text : "");
+    const sph = Number(f["SPH"]);
+    const cyl = Number(f["CYL"]);
+    const owned = Number(f["自有库存"]) || 0;
+    const consigned = Number(f["寄售库存"]) || 0;
+    if (!sku || !Number.isFinite(sph) || !Number.isFinite(cyl)) continue;
+    const key = `${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`;
+    const consignDate = f["寄售入库日期"] || null;
+    map.set(key, { owned, consigned, total: owned + consigned, consignDate });
+  }
+  _agentStockCaches[agentId] = { map, time: Date.now() };
+  return map;
+}
+
+function clearAgentStockCache(agentId) {
+  delete _agentStockCaches[agentId];
+}
+
 function inRange(x, [lo, hi]) { return x >= lo && x <= hi; }
 
-// 度数级交期判定 — 返回 { deliveryType, days, promiseDate, available, stock }
-async function estimateDeliveryByRx(sku, sph, cyl, qty) {
+// 度数级交期判定 — 返回 { deliveryType, days, promiseDate, available, stock, agentStock? }
+// agentId 可选：有则优先查代理商本地库存，无则走厂家总仓
+async function estimateDeliveryByRx(sku, sph, cyl, qty, agentId) {
   const now = Date.now();
   const sphN = Number(sph);
   const cylN = Number(cyl);
@@ -405,14 +466,110 @@ async function estimateDeliveryByRx(sku, sph, cyl, qty) {
     return { deliveryType: "定制7-10天", days: 10, promiseDate: now + 10 * 86400000, available: false, stock: 0 };
   }
 
-  const map = await getStockMap();
   const key = `${sku}|${sphN.toFixed(2)}|${cylN.toFixed(2)}`;
-  const stock = map.get(key) ?? 0;
+
+  // 优先查代理商本地库存
+  if (agentId) {
+    const agentMap = await getAgentStockMap(agentId);
+    if (agentMap) {
+      const aStock = agentMap.get(key);
+      if (aStock && aStock.total > 0) {
+        const result = {
+          deliveryType: aStock.total >= qty ? "有货1-2天" : "排产5-7天",
+          days: aStock.total >= qty ? 2 : 7,
+          promiseDate: now + (aStock.total >= qty ? 2 : 7) * 86400000,
+          available: aStock.total >= qty,
+          stock: aStock.total,
+          agentStock: { owned: aStock.owned, consigned: aStock.consigned },
+        };
+        return result;
+      }
+    }
+  }
+
+  // 无代理商库存或代理商库存为0 → 走厂家总仓
+  const map = await getStockMap();
+  const stock = (map.get(key) || {}).stock ?? 0;
 
   if (stock >= qty) {
     return { deliveryType: "有货1-2天", days: 2, promiseDate: now + 2 * 86400000, available: true, stock };
   }
   return { deliveryType: "排产5-7天", days: 7, promiseDate: now + 7 * 86400000, available: false, stock };
+}
+
+// ─── 代理商库存扣减（先自有后寄售） ────────────────────────────────────────
+// 返回 { deducted, ownedUsed, consignedUsed, ledgerRecords }
+async function deductAgentStock(agentId, sku, sph, cyl, qty) {
+  if (!TABLES.agent_stock || !TABLES.consignment_ledger) return { deducted: 0 };
+
+  const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
+  const agentMap = await getAgentStockMap(agentId);
+  if (!agentMap) return { deducted: 0 };
+
+  const stockInfo = agentMap.get(key);
+  if (!stockInfo || stockInfo.total <= 0) return { deducted: 0 };
+
+  const deductQty = Math.min(qty, stockInfo.total);
+  let ownedUsed = Math.min(deductQty, stockInfo.owned);
+  let consignedUsed = deductQty - ownedUsed;
+
+  // 查找记录 record_id 做更新
+  const encoded = encodeURIComponent(`"${agentId}"`);
+  const data = await feishuApi("GET",
+    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.agent_stock}/records?page_size=500&filter=CurrentValue.[agent_id]=${encoded}`
+  );
+  let recordId = null;
+  for (const r of data?.items || []) {
+    const f = r.fields || {};
+    const rKey = `${f["SKU编号"]}|${Number(f["SPH"]).toFixed(2)}|${Number(f["CYL"]).toFixed(2)}`;
+    if (rKey === key) { recordId = r.record_id; break; }
+  }
+
+  if (!recordId) return { deducted: 0 };
+
+  // 更新库存
+  const newOwned = stockInfo.owned - ownedUsed;
+  const newConsigned = stockInfo.consigned - consignedUsed;
+  await api("PATCH",
+    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.agent_stock}/records/${recordId}`,
+    { fields: { "自有库存": newOwned, "寄售库存": newConsigned } }
+  );
+
+  // 清缓存
+  clearAgentStockCache(agentId);
+
+  // 写寄售流水
+  const ledgerRecords = [];
+  if (ownedUsed > 0) {
+    ledgerRecords.push({
+      fields: {
+        "流水号": `OUT-${agentId}-${sku}-${key}-${Date.now()}-OWNED`,
+        "agent_id": agentId,
+        "类型": "消耗",
+        "SKU编号": sku,
+        "SPH": Number(sph),
+        "CYL": Number(cyl),
+        "数量": -ownedUsed,
+        "备注": "自有库存消耗",
+      },
+    });
+  }
+  if (consignedUsed > 0) {
+    ledgerRecords.push({
+      fields: {
+        "流水号": `OUT-${agentId}-${sku}-${key}-${Date.now()}-CONSIGN`,
+        "agent_id": agentId,
+        "类型": "消耗",
+        "SKU编号": sku,
+        "SPH": Number(sph),
+        "CYL": Number(cyl),
+        "数量": -consignedUsed,
+        "备注": "寄售库存消耗",
+      },
+    });
+  }
+
+  return { deducted: deductQty, ownedUsed, consignedUsed, ledgerRecords };
 }
 
 // ─── 生成编号 ──────────────────────────────────────────────────────────────
@@ -1289,8 +1446,8 @@ const server = createServer(async (req, res) => {
         return logReq(req, 400, start);
       }
 
-      // 所有 SKU 统一度数级判定
-      const est = await estimateDeliveryByRx(skuId, sphRaw, cylRaw, qty);
+      // 所有 SKU 统一度数级判定（传入 agentId 优先查代理商库存）
+      const est = await estimateDeliveryByRx(skuId, sphRaw, cylRaw, qty, agent.id);
       jsonRes(res, 200, { ...est, promiseDateFormatted: formatDate(est.promiseDate) });
       return logReq(req, 200, start);
     }
@@ -1373,11 +1530,11 @@ const server = createServer(async (req, res) => {
       for (const p of patients) {
         const { customerName, sku, quantity, eyes, assembly, remark } = p;
 
-        // 交期取双眼中最慢的（stock_detail 表判定）
+        // 交期取双眼中最慢的（优先查代理商本地库存）
         let est = { deliveryType: "定制7-10天", days: 10, promiseDate: now + 10 * 86400000 };
         for (const eye of eyes) {
           if (eye.sph != null && eye.cyl != null) {
-            const eyeEst = await estimateDeliveryByRx(sku, eye.sph, eye.cyl, quantity);
+            const eyeEst = await estimateDeliveryByRx(sku, eye.sph, eye.cyl, quantity, agent.id);
             if (eyeEst.days > est.days) est = eyeEst;
           }
         }
@@ -1426,9 +1583,21 @@ const server = createServer(async (req, res) => {
           totalLenses++;
         }
 
-        // 库存扣减（SKU表已硬编码，跳过Bitable写入）
-        if (skuInfo && skuInfo.currentStock > 0) {
-          skuInfo.currentStock = Math.max(0, skuInfo.currentStock - quantity);
+        // 代理商库存扣减（先自有后寄售），写寄售流水
+        for (const eye of eyes) {
+          if (eye.sph != null && eye.cyl != null) {
+            const deductResult = await deductAgentStock(agent.id, sku, eye.sph, eye.cyl, quantity);
+            if (deductResult.ledgerRecords?.length > 0) {
+              await batchCreateRecords(TABLES.consignment_ledger, deductResult.ledgerRecords);
+            }
+          }
+        }
+
+        // 度数级库存扣减（厂家总仓）
+        for (const eye of eyes) {
+          if (eye.sph != null && eye.cyl != null) {
+            await deductStockDetail(sku, eye.sph, eye.cyl, quantity, orderNo);
+          }
         }
 
         items.push({
@@ -1505,6 +1674,131 @@ const server = createServer(async (req, res) => {
         items,
         summary: { totalPatients: patients.length, totalLenses },
       });
+      return logReq(req, 200, start);
+    }
+
+    // ── API: 代理商库存明细 ──
+    if (pathname === "/api/agent-stock") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+
+      const agentMap = await getAgentStockMap(agent.id);
+      if (!agentMap) {
+        jsonRes(res, 200, { stock: [], hasAgentStock: false });
+        return logReq(req, 200, start);
+      }
+
+      const stock = [];
+      for (const [key, info] of agentMap) {
+        const [sku, sph, cyl] = key.split("|");
+        stock.push({
+          sku, sph, cyl,
+          owned: info.owned,
+          consigned: info.consigned,
+          total: info.total,
+          consignDate: info.consignDate,
+        });
+      }
+      jsonRes(res, 200, { stock, hasAgentStock: true });
+      return logReq(req, 200, start);
+    }
+
+    // ── API: 管理端 — 寄售账龄报告 ──
+    if (pathname === "/api/admin/consignment-report") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      if (!TABLES.agent_stock) {
+        jsonRes(res, 200, { report: [], message: "代理商库存表未配置" });
+        return logReq(req, 200, start);
+      }
+
+      const records = await listRecords(TABLES.agent_stock);
+      const now = Date.now();
+      const report = [];
+
+      for (const r of records) {
+        const f = r.fields || {};
+        const consigned = Number(f["寄售库存"]) || 0;
+        if (consigned <= 0) continue;
+
+        const consignDate = f["寄售入库日期"];
+        const ageDays = consignDate ? Math.floor((now - consignDate) / 86400000) : null;
+        let status = "正常";
+        if (ageDays !== null) {
+          if (ageDays >= 90) status = "到期转收入";
+          else if (ageDays >= 60) status = "即将到期";
+        }
+
+        report.push({
+          agentId: f["agent_id"],
+          sku: f["SKU编号"],
+          sph: f["SPH"],
+          cyl: f["CYL"],
+          owned: Number(f["自有库存"]) || 0,
+          consigned,
+          consignDate: consignDate ? new Date(consignDate).toISOString().slice(0, 10) : null,
+          ageDays,
+          status,
+        });
+      }
+
+      // 按账龄降序排列
+      report.sort((a, b) => (b.ageDays || 0) - (a.ageDays || 0));
+      jsonRes(res, 200, { report });
+      return logReq(req, 200, start);
+    }
+
+    // ── API: 管理端 — 月度对账单生成 ──
+    if (pathname === "/api/admin/monthly-statement") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      if (!TABLES.consignment_ledger || !TABLES.monthly_statement) {
+        jsonRes(res, 200, { statements: [], message: "寄售流水表或对账单表未配置" });
+        return logReq(req, 200, start);
+      }
+
+      const monthParam = url.searchParams.get("month"); // "2026-04"
+      if (!monthParam) {
+        jsonRes(res, 400, { error: "请提供月份参数 ?month=2026-04" });
+        return logReq(req, 400, start);
+      }
+
+      // 读取该月的消耗流水
+      const allLedger = await listRecords(TABLES.consignment_ledger);
+      const monthConsumptions = {};
+      for (const r of allLedger) {
+        const f = r.fields || {};
+        if (f["类型"] !== "消耗") continue;
+        const created = f["操作时间"];
+        if (!created) continue;
+        const recMonth = new Date(created).toISOString().slice(0, 7);
+        if (recMonth !== monthParam) continue;
+
+        const agentId = f["agent_id"];
+        const sku = f["SKU编号"];
+        const key = `${agentId}|${sku}`;
+        if (!monthConsumptions[key]) {
+          monthConsumptions[key] = { agent: agentId, sku, qty: 0 };
+        }
+        monthConsumptions[key].qty += Math.abs(Number(f["数量"]) || 0);
+      }
+
+      // 汇总成对账单
+      const statements = Object.values(monthConsumptions).map(s => ({
+        fields: {
+          "代理商": s.agent,
+          "月份": monthParam,
+          "SKU编号": s.sku,
+          "消耗数量": s.qty,
+          "单价": 0, // 需要业务确认价格后填写
+          "金额": 0,
+          "状态": "待确认",
+        },
+      }));
+
+      if (statements.length > 0) {
+        await batchCreateRecords(TABLES.monthly_statement, statements);
+      }
+
+      jsonRes(res, 200, { generated: statements.length, month: monthParam });
       return logReq(req, 200, start);
     }
 

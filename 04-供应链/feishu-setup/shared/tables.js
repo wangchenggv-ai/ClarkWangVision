@@ -21,7 +21,7 @@ export const TABLES = {
   blank_inventory: "tblrFIGHFVhTB16p",
   mold: "tblfnVzOA2yFzbjs",
   production: "tbltSntfaR9KCI7B",
-  forecast: "tblFLAHOXLSgWS6Q",
+  forecast: "tblK2YNUZ3RM3Zta",
   procurement: "tblZX1qW7RvcJieg",
   factory: "tblJ6RXFENJFQe9A",
   rule_config: "tbl78V8wgziRs0pt",
