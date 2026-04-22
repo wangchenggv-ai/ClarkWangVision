@@ -142,3 +142,22 @@ if (json.tenant_access_token) {
 ```
 
 **部署：** SCP 热更新 server.js 到 ECS → docker cp 到容器 → restart。验证全部代理商 token 返回 200。
+
+## 2026-04-22 运维自动化方案
+
+Token 缓存 bug 暴露两个问题：系统缺自愈能力，缺低门槛运维入口。
+
+制定了三阶段方案（详见 `docs/ops-plan.md`）：
+
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| Phase 1 | 服务端自愈 + 健康检查 | 代码完成，未部署 |
+| Phase 2 | 飞书机器人运维入口 | 规划中 |
+| Phase 3 | 定时巡检 + 自动重启 | 规划中 |
+
+### Phase 1 代码改动（待部署）
+
+1. **`feishuApi()` token 自愈** — 收到 `code: 99991663` 或 `Invalid access token` 时自动清空缓存，下次请求立即刷新，无需人工重启
+2. **`GET /health` 端点** — 返回飞书连通性、Bitable 读写、代理商数量、uptime，供巡检和机器人调用
+
+**注意：** 本地 server.js（`import { TABLES } from "../shared/tables.js"`）与 ECS 部署版（内联 TABLES）有结构差异。下次完整构建部署时需统一。当前热更新只改了 token 缓存逻辑和 /health，不影响已部署的 TABLES 结构。
