@@ -336,7 +336,8 @@ async function getFeishuToken() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ app_id: ENV.FEISHU_APP_ID, app_secret: ENV.FEISHU_APP_SECRET }),
   });
-  const json = await res.json();
+  let json;
+  try { json = await res.json(); } catch { return _feishuToken; }
   if (json.tenant_access_token) {
     _feishuToken = json.tenant_access_token;
     _feishuTokenTime = Date.now();
@@ -354,7 +355,14 @@ async function feishuApi(method, path, body) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const json = await res.json();
+  let json;
+  try {
+    json = await res.json();
+  } catch {
+    const text = await res.text().catch(() => "");
+    console.error(`  飞书 API 非 JSON 响应 [${method} ${path}]: HTTP ${res.status} ${text.slice(0, 200)}`);
+    return null;
+  }
   if (json.code !== 0) {
     console.error(`  飞书 API 错误 [${method} ${path}]:`, json.msg);
     // token 失效 → 清空缓存，下次请求自动刷新
@@ -465,10 +473,14 @@ async function deductStockDetail(sku, sph, cyl, qty, orderNo) {
   const newStock = info.stock - deductQty;
   const now = new Date().toISOString();
 
-  await feishuApi("PATCH",
+  const patchRes = await feishuApi("PATCH",
     `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`,
     { fields: { "当前库存": newStock, "最近出库": now } }
   );
+  if (!patchRes) {
+    console.error(`  ⚠️ 库存扣减写入失败: ${sku} SPH=${sph} CYL=${cyl}`);
+    return false;
+  }
 
   clearStockCache();
   console.log(`  📉 度数扣减: ${sku} SPH=${Number(sph).toFixed(2)} CYL=${Number(cyl).toFixed(2)} -${deductQty} → ${newStock}`);
@@ -778,7 +790,8 @@ async function getNotifyToken() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ app_id: ENV.NOTIFY_APP_ID, app_secret: ENV.NOTIFY_APP_SECRET }),
   });
-  const json = await r.json();
+  let json;
+  try { json = await r.json(); } catch { return null; }
   if (json.tenant_access_token) {
     _notifyToken = json.tenant_access_token;
     _notifyTokenTime = Date.now();

@@ -154,12 +154,13 @@
 | ④-7 | 勾选不同订单号导出 ZIP 无 Excel 文件 | 2 | 修复中 | `server.js` | `buildFactoryExcel` 异常被静默吞掉；`allDetails` 为空时无日志 | 增加 buffer 非空检查、详细错误日志、allDetails 为空时打日志 |
 | ④-8 | 同订单选 2 人导出，备注显示未选中的第 3 人备注 | 3 | 已修复 | `server.js` | `orderInfoMap` 查询订单主表取 `items[0]` 无客户名过滤，同订单多患者时取到未选中患者的记录 | 订单主表查询加客户名过滤，只取被选中患者的备注；多患者备注合并 |
 | ④-9 | 多订单合并导出 Excel，联系人/地址/备注全用第一个订单的信息，数量全为 1 | 2 | 已修复 | `server.js` | `orderInfoMap` 按 `orderNo|customerFilter` 做 key，无 customerFilter 时多订单共用一个 key；数量从镜片明细表读（无此字段），默认 1 | key 改为纯 orderNo；`buildFactoryExcel` 改为按每条记录的订单号查找对应 info；数量从订单主表读取 |
+| ①-12 | 下单接口 500 — deductStockDetail 调飞书 API 返回非 JSON 响应 | 1 | 已修复 | `server.js` | `feishuApi()`/`getFeishuToken()`/`getNotifyToken()` 的 `res.json()` 无 try-catch，飞书返回 HTML 错误页（502/504）时直接 SyntaxError 崩溃 | 三处 `res.json()` 全部加 try-catch，非 JSON 响应回退为文本日志并返回 null；`deductStockDetail` PATCH 失败时返回 false 而非 true |
 
 ## 汇总
 
 | 步骤 | Bug 数（含 4/21 第二批） | 最高严重度 |
 |------|--------|-----------|
-| ① 下单/Excel | 14 | 2 |
+| ① 下单/Excel | 15 | 1 |
 | ② 确认 | 2 | 4 |
 | ③ 发货 | 1 | 2 |
 | ④ 导出 ZIP | 14 | 2 |
@@ -168,4 +169,4 @@
 | ⑦ 打印标签 | 1 | 3 |
 | ⑧ 扫码验真 | 4 | 3 |
 | 安全 | 1 | 1 |
-| **合计** | **39** | |
+| **合计** | **40** | |
