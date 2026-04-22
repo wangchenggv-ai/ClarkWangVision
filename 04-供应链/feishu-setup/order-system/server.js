@@ -3265,10 +3265,10 @@ const server = createServer(async (req, res) => {
           lensDetails = allLensDetails.filter(r => rawVal(r.fields["顾客姓名"]) === customerFilter);
         }
         const f0 = orderRec.fields;
-        const rows = lensDetails.map(r => {
+        const rows = lensDetails.map((r, i) => {
           const f = r.fields;
           return {
-            eye: rawVal(f["眼别"]) || (lensDetails.indexOf(r) === 0 ? "右眼" : "左眼"),
+            eye: rawVal(f["眼别"]) || (i === 0 ? "右眼" : "左眼"),
             sku: rawVal(f["产品型号"]),
             sph: f["球镜SPH"] ?? "",
             cyl: f["柱镜CYL"] ?? "",
@@ -3330,14 +3330,15 @@ const server = createServer(async (req, res) => {
           const g = groups[0];
           // 收集所有订单号
           const orderNos = [...new Set(g.records.map(r => rawVal(r.fields["订单编号"])))];
+          // 并行查询所有订单的镜片明细
+          const allLens = await Promise.all(orderNos.map(no => getLensDetailsByOrder(no)));
           // 按顾客姓名分组（镜片明细表自带顾客姓名）
           const customerMap = {};
-          for (const no of orderNos) {
-            const lensDetails = await getLensDetailsByOrder(no);
+          for (const lensDetails of allLens) {
             for (const ld of lensDetails) {
               const f = ld.fields;
               const cname = rawVal(f["顾客姓名"]) || "未知";
-              if (!customerMap[cname]) customerMap[cname] = { orderNo: no, customerName: cname, rows: [] };
+              if (!customerMap[cname]) customerMap[cname] = { orderNo: rawVal(f["订单编号"]) || "—", customerName: cname, rows: [] };
               customerMap[cname].rows.push({ eye: rawVal(f["眼别"]) || "—", sku: rawVal(f["产品型号"]),
                 sph: f["球镜SPH"] ?? "", cyl: f["柱镜CYL"] ?? "", axis: f["轴位AXIS"] ?? "",
                 lensCode: rawVal(f["镜片码"]) });

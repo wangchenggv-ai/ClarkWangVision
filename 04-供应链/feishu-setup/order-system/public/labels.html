@@ -1704,11 +1704,11 @@ function renderOrders() {
 }
 
 function getQuickAction(o) {
-  const cn = escapeHtml(o.customerName);
+  const cn = jsAttr(o.customerName);
   if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}')">确认</button>`;
   if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}')" title="导出ZIP给工厂">导出</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="斑马打印机直出" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}')">发货</button>`;
-  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}')" title="随货通行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">签收</button>`;
-  if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#ccc;font-size:11px">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}')" title="随货通行单" style="color:#c0392b">&#128196;</button>`;
+  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货通行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">签收</button>`;
+  if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#ccc;font-size:11px">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货通行单" style="color:#c0392b">&#128196;</button>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
 }
 
@@ -1903,8 +1903,9 @@ function quickZip(orderNo) {
   window.open(url, "_blank");
 }
 
-function quickSlip(orderNo) {
-  window.open(`/api/admin/slip/${orderNo}?admin=${adminToken}`, "_blank");
+function quickSlip(orderNo, customerName) {
+  const q = customerName ? `&customer=${encodeURIComponent(customerName)}` : "";
+  window.open(`/api/admin/slip/${orderNo}?admin=${adminToken}${q}`, "_blank");
 }
 
 async function quickZplPrint(orderNo, customerName) {

@@ -11,7 +11,7 @@
 
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { writeFileSync, mkdirSync, statSync } from "fs";
+import { writeFileSync, mkdirSync, statSync, readFileSync } from "fs";
 import { createConnection } from "net";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -108,7 +108,7 @@ async function htmlToPdf(html, outPath) {
   for (const r of pv.rows) info(`  ${r.eye} ${r.sku} SPH=${r.sph} CYL=${r.cyl} AXIS=${r.axis} 码=${r.lensCode}`);
 
   step(3, "单订单测试 — 生成随货通行单 HTML");
-  const singleHtml = await api(`/api/admin/slip/${ORDER_NO}?${ADMIN_TOKEN_PARAM}`);
+  const singleHtml = await api(`/api/admin/slip/${ORDER_NO}?${ADMIN_TOKEN_PARAM}&customer=${encodeURIComponent(SINGLE_CUSTOMER)}`);
   if (typeof singleHtml !== "string" || singleHtml.length < 100) { err("通行单 HTML 异常"); process.exit(1); }
   writeFileSync(resolve(__dirname, "docs/test-slip-single.html"), singleHtml, "utf-8");
   ok(`HTML: docs/test-slip-single.html (${(singleHtml.length / 1024).toFixed(1)} KB)`);
@@ -136,22 +136,18 @@ async function htmlToPdf(html, outPath) {
   // Part 2: 合单随货通行单（3人同代理商，同一次发货 = 同一快递单号）
   // ═══════════════════════════════════════════════════════════════════════
 
-  step(5, `合单测试 — 批量发货 3 人`);
-  // 逐人发货但不传 customerName，同订单号会共享一个快递单号
-  // 不行，每个 POST /api/admin/ship 调用都生成新快递单号
-  // 改为：逐人发货，然后通过 slip-batch 汇总页获取每个的单张通行单
+  step(5, `合单测试 — 批量发货 3 人（同一次调用，共享快递单号）`);
+  // 一次 ship 调用处理整个订单，所有客户共享同一个快递单号
+  const batchShip = await api("/api/admin/ship", {
+    method: "POST", body: { orderNos: [ORDER_NO] },
+  });
   const batchShipResults = [];
-  for (const cust of BATCH_CUSTOMERS) {
-    const ship = await api("/api/admin/ship", {
-      method: "POST", body: { orderNos: [ORDER_NO], customerName: cust },
-    });
-    if (ship.results?.[0]?.ok) {
-      batchShipResults.push({ customer: cust, ...ship.results[0] });
-      ok(`${cust} 已发货  快递: ${ship.results[0].courier}  单号: ${ship.results[0].trackingNo}`);
-    } else {
-      err(`${cust} 发货失败: ${JSON.stringify(ship)}`);
-      reportData.errors.push({ step: `batch-ship-${cust}`, error: JSON.stringify(ship) });
-    }
+  if (batchShip.results?.[0]?.ok) {
+    batchShipResults.push({ customer: "全部3人", courier: batchShip.results[0].courier, trackingNo: batchShip.results[0].trackingNo });
+    ok(`已发货  快递: ${batchShip.results[0].courier}  单号: ${batchShip.results[0].trackingNo}`);
+  } else {
+    err(`批量发货失败: ${JSON.stringify(batchShip)}`);
+    reportData.errors.push({ step: "batch-ship", error: JSON.stringify(batchShip) });
   }
 
   step(6, "合单测试 — 生成合单随货通行单（按日期查全部）");
@@ -174,7 +170,9 @@ async function htmlToPdf(html, outPath) {
 
     const allSlipHtmls = [];
     for (const link of links) {
-      const slipHtml = await api(link);
+      // 确保链接包含 admin token
+      const linkWithToken = link.includes("admin=") ? link : link + (link.includes("?") ? "&" : "?") + ADMIN_TOKEN_PARAM;
+      const slipHtml = await api(linkWithToken);
       if (typeof slipHtml === "string" && slipHtml.includes("合单随货通行单")) {
         allSlipHtmls.push(slipHtml);
         ok(`获取分组通行单 (${(slipHtml.length / 1024).toFixed(1)} KB)`);
@@ -200,7 +198,7 @@ async function htmlToPdf(html, outPath) {
   }
 
   // 验证内容
-  const batchCombined = require("fs").readFileSync(resolve(__dirname, "docs/test-slip-batch.html"), "utf-8");
+  const batchCombined = readFileSync(resolve(__dirname, "docs/test-slip-batch.html"), "utf-8");
   const batchChecks = {
     agent: batchCombined.includes(AGENT_NAME),
     cust1: batchCombined.includes(BATCH_CUSTOMERS[0]),
@@ -280,11 +278,13 @@ ${(reportData.single.rows || []).map(r => `| ${r.eye} | ${r.sku} | ${r.sph} | ${
 | 分组数 | ${reportData.batch.totalSlips || 1} 个快递单号 |
 | 总镜片数 | ${BATCH_CUSTOMERS.length * 2} 片 |
 
-**发货明细：**
+**发货信息：**
 
-| 顾客 | 快递 | 单号 |
-|------|------|------|
-${batchShipResults.map(r => `| ${r.customer} | ${r.courier} | ${r.trackingNo} |`).join("\n")}
+| 项目 | 值 |
+|------|-----|
+| 快递公司 | ${batchShipResults[0]?.courier || "N/A"} |
+| 快递单号 | ${batchShipResults[0]?.trackingNo || "N/A"} |
+| 发货方式 | 3人同一次发货，共享快递单号 |
 
 **内容检查：**
 
