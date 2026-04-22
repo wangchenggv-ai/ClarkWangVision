@@ -337,8 +337,10 @@ async function getFeishuToken() {
     body: JSON.stringify({ app_id: ENV.FEISHU_APP_ID, app_secret: ENV.FEISHU_APP_SECRET }),
   });
   const json = await res.json();
-  _feishuToken = json.tenant_access_token;
-  _feishuTokenTime = Date.now();
+  if (json.tenant_access_token) {
+    _feishuToken = json.tenant_access_token;
+    _feishuTokenTime = Date.now();
+  }
   return _feishuToken;
 }
 
@@ -772,8 +774,10 @@ async function getNotifyToken() {
     body: JSON.stringify({ app_id: ENV.NOTIFY_APP_ID, app_secret: ENV.NOTIFY_APP_SECRET }),
   });
   const json = await r.json();
-  _notifyToken = json.tenant_access_token || "";
-  _notifyTokenTime = Date.now();
+  if (json.tenant_access_token) {
+    _notifyToken = json.tenant_access_token;
+    _notifyTokenTime = Date.now();
+  }
   return _notifyToken;
 }
 

@@ -121,3 +121,24 @@ A 系统迁云完成，停止优化，回到 B 脚本主线。
 - SWR 镜像: `swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/order-app:v1`
 - ECS 容器: order-app 已重启，HTTP 200 正常
 - 新 SWR 凭据已更新（旧 AK `HST3WE7E22JS62Z857O4` 已失效）
+
+## 2026-04-22 飞书 Token 缓存 Bug 修复
+
+**现象：** 全部 41 个代理商登录报"Token 无效"（401），日志大量 `Invalid access token for authorization`。
+
+**根因：** `getFeishuToken()` 缓存逻辑有 bug — 飞书 API 抖动时获取失败，`_feishuToken` 被设为 `undefined`，但 `_feishuTokenTime` 仍刷新为 `Date.now()`，导致后续 7000 秒内所有请求都用无效 token，全部 Bitable API 失败。
+
+**修复：** `server.js` 中 `getFeishuToken()` 和 `getNotifyToken()` 两个函数，只在获取成功时才更新缓存时间戳。
+```js
+// Before (bug)
+_feishuToken = json.tenant_access_token;
+_feishuTokenTime = Date.now();
+
+// After (fix)
+if (json.tenant_access_token) {
+  _feishuToken = json.tenant_access_token;
+  _feishuTokenTime = Date.now();
+}
+```
+
+**部署：** SCP 热更新 server.js 到 ECS → docker cp 到容器 → restart。验证全部代理商 token 返回 200。
