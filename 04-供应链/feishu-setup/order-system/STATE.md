@@ -381,3 +381,32 @@ Token 缓存 bug 暴露两个问题：系统缺自愈能力，缺低门槛运维
 | 3 | 库存不足→409 | ✅ STOCK_INSUFFICIENT，不写订单不扣库存 |
 | 4 | 并发下单 | ✅ 两单各扣3片，10→4（无 lost update） |
 | 5 | 双眼同度数 | ✅ 两眼各扣1片，5→3 |
+
+## 2026-04-22 库存不足不再拦截下单
+
+业务澄清：库存不足时应照常下单走生产，库存只影响交期快慢，不阻止下单。
+
+### 改动
+
+**server.js：**
+- 移除预检 409 逻辑（整段 fresh check + STOCK_INSUFFICIENT 返回删除）
+- `deductStockDetail`：库存不够时扣除可用量（`Math.min(stock, qty)`），扣至 0 不再返回 insufficient
+- 无库存时不写 `最近出库` 字段（跳过 PUT）
+
+**order.html：**
+- 删除 `stockConflictModal` 弹窗 HTML
+- 删除 `showStockConflict()` / `closeStockConflict()` 函数
+- 删除 `doSubmit()` 中 409 分支
+
+**test_stock_concurrency.mjs：**
+- Test 3 从"409拦截"改为"照常下单200+库存扣至0"
+
+### 测试结果（17/17 通过）
+
+| # | 场景 | 结果 |
+|---|------|------|
+| 1 | 正常下单→库存扣减 | ✅ 77→76 |
+| 2 | 幂等保护 | ✅ 同 requestId 返回同一订单号，库存只扣一次 |
+| 3 | 库存不足→照常下单 | ✅ 库存1片下单2片→200成功，库存扣至0，交期"定制7-10天" |
+| 4 | 并发下单 | ✅ 两单各扣3片，10→4（无 lost update） |
+| 5 | 双眼同度数 | ✅ 两眼各扣1片，5→3 |
