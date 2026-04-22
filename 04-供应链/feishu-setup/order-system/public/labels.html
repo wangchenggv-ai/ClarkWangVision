@@ -2038,6 +2038,11 @@ async function deliverOrders() {
   loadOrders();
 }
 
+function batchSlip() {
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  window.open(`/api/admin/slip-batch?date=${today}&admin=${adminToken}`, "_blank");
+}
+
 function getSelectedByStatus(status) {
   return [...selectedOrders].filter(key => {
     const [orderNo, ...rest] = key.split('|');
