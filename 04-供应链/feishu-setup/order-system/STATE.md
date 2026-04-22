@@ -182,3 +182,21 @@ Token 缓存 bug 暴露两个问题：系统缺自愈能力，缺低门槛运维
 同事在飞书群 @机器人说"重启系统"/"健康检查"即可触发。需重启 OpenClaw gateway 加载新 Skill。
 
 **注意：** 本地 server.js（`import { TABLES } from "../shared/tables.js"`）与 ECS 部署版（内联 TABLES）有结构差异。下次完整构建部署时需统一。
+
+## 2026-04-22 Bug 修复批次
+
+修复 5 个 bug（详见 BUGS.md）：
+
+| # | 描述 | 严重度 | 涉及文件 |
+|---|------|--------|----------|
+| 安-1 | admin-login?admin=xxx 自动跳转进管理后台 | 1 | `public/admin-login.html` |
+| ①-11 | Excel 备注栏被识别为新客户 | 2 | `server.js` |
+| ④-7 | 多订单导出 ZIP 无 Excel（加日志排查） | 2 | `server.js` |
+| ④-8 | 同订单选 2 人导出备注错乱 | 3 | `server.js` |
+| ④-9 | 多订单合并导出联系人/地址/备注全用第一个订单，数量为 1 | 2 | `server.js` |
+
+核心改动：
+- `buildFactoryExcel` 重构为按每条记录的订单号查找对应 info（联系人/地址/备注/数量），不再用合并的单一 info
+- `orderInfoMap` key 改为纯 orderNo，每个订单独立存储信息
+- 数量从订单主表读取，不再从镜片明细表默认 1
+- Excel buffer 增加非空检查 + 详细错误日志

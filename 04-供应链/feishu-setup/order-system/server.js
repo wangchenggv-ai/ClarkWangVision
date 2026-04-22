@@ -26,7 +26,7 @@ import { randomBytes, createHash, timingSafeEqual } from "crypto";
 import { spawn } from "child_process";
 import QRCode from "qrcode";
 import XLSX from "xlsx";
-import { TABLES } from "../shared/tables.js";
+import { TABLES } from "./shared/tables.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
@@ -217,13 +217,13 @@ async function handleExcelUpload(file) {
     const name = customerName || lastCustomerName;
     if (customerName) lastCustomerName = customerName;
 
-    if (!name) continue;
-
-    // 如果该行无产品型号、无眼别、无数数，只有备注 → 附加到上一个 patient
-    if (!productModel && !eye && remark && lastCustomerName) {
-      const prev = patients.find(p => p.customerName === lastCustomerName);
-      if (prev && !prev.remark.includes(remark)) {
-        prev.remark = prev.remark ? prev.remark + "；" + remark : remark;
+    // 无顾客名的行：有备注则附加到上一个 patient，否则跳过
+    if (!name) {
+      if (remark && lastCustomerName) {
+        const prev = patients.find(p => p.customerName === lastCustomerName);
+        if (prev && !prev.remark.includes(remark)) {
+          prev.remark = prev.remark ? prev.remark + "；" + remark : remark;
+        }
       }
       continue;
     }
@@ -1026,9 +1026,14 @@ async function generateQRPng(lensCode) {
 }
 
 // 生成工厂 Excel 文件
-// orderInfo: { remark, address, contact, phone } 来自订单主表，lens records 没有这些字段
-function buildFactoryExcel(records, orderNo, orderInfo = {}) {
-  const { remark: orderRemark = "", address = "", contact = "", phone = "" } = orderInfo;
+// orderInfoMap: { [orderNo]: { remark, address, contact, phone, quantity } } 每个订单独立的信息
+// 兼容旧调用：也支持单个 info 对象 { remark, address, contact, phone }
+function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
+  const isMap = orderInfoMap && !orderInfoMap.remark && !orderInfoMap.address;
+  const getInfo = (recOrderNo) => {
+    if (!isMap) return orderInfoMap; // 旧格式：单个 info
+    return orderInfoMap[recOrderNo] || Object.values(orderInfoMap)[0] || {};
+  };
   const sorted = [...records].sort((a, b) => {
     const nameCmp = String(a.fields["顾客姓名"] || "").localeCompare(String(b.fields["顾客姓名"] || ""), "zh-CN");
     if (nameCmp !== 0) return nameCmp;
@@ -1039,21 +1044,22 @@ function buildFactoryExcel(records, orderNo, orderInfo = {}) {
   });
   const rows = sorted.map(rec => {
     const f = rec.fields;
+    const info = getInfo(f["订单编号"] || "");
     return {
       "订单号": f["订单编号"] || "",
       "顾客": f["顾客姓名"] || "",
       "产品型号": f["产品型号"] || "",
-      "数量": Number(f["数量"]) || 1,
+      "数量": info.quantity || Number(f["数量"]) || 1,
       "眼别": f["眼别"] || "",
       "球镜SPH": f["球镜SPH"] != null ? Number(f["球镜SPH"]).toFixed(2) : "",
       "柱镜CYL": f["柱镜CYL"] != null ? Number(f["柱镜CYL"]).toFixed(2) : "",
       "轴位AXIS": f["轴位AXIS"] != null ? Number(f["轴位AXIS"]).toFixed(0) : "",
       "镜片码": f["镜片码"] || "",
       "是否装配": f["是否装配"] || "",
-      "联系人": contact,
-      "联系电话": phone,
-      "收货地址": address,
-      "备注": f["备注"] || orderRemark || "",
+      "联系人": info.contact || "",
+      "联系电话": info.phone || "",
+      "收货地址": info.address || "",
+      "备注": f["备注"] || info.remark || "",
     };
   });
 
@@ -2246,6 +2252,7 @@ const server = createServer(async (req, res) => {
         address: of4["收货地址"] || "",
         contact: of4["联系人"] || "",
         phone: of4["联系电话"] || "",
+        quantity: Number(of4["数量"]) || 1,
       };
       const lensRecords4 = await getLensDetailsByOrder(orderNo);
       const zipBuf = await buildFactoryZip(lensRecords4, orderNo, orderInfo4);
@@ -2475,18 +2482,27 @@ const server = createServer(async (req, res) => {
         }
         if (!details.length) continue;
 
-        // 获取订单主表：备注、收货地址、联系人、联系电话
+        // 获取订单主表：备注、收货地址、联系人、联系电话、数量
+        // 每个订单号独立查询，避免多订单混用信息
         if (!orderInfoMap[orderNo]) {
           const orderEnc = encodeURIComponent(`"${orderNo}"`);
           const orderData = await feishuApi("GET",
             `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${orderEnc}`
           );
-          const of = orderData?.items?.[0]?.fields || {};
+          let orderItems = orderData?.items || [];
+          // 按客户名过滤，只取被选中患者的备注
+          if (customerFilter) {
+            const names = customerFilter.split(",").map(s => s.trim()).filter(Boolean);
+            orderItems = orderItems.filter(r => names.includes(r.fields["顾客姓名"] || ""));
+          }
+          const allRemarks = orderItems.map(r => r.fields["备注"] || "").filter(Boolean);
+          const of = orderItems[0]?.fields || {};
           orderInfoMap[orderNo] = {
-            remark: of["备注"] || "",
+            remark: [...new Set(allRemarks)].join("；"),
             address: of["收货地址"] || "",
             contact: of["联系人"] || "",
             phone: of["联系电话"] || "",
+            quantity: Number(of["数量"]) || 1,
           };
         }
 
@@ -2514,12 +2530,16 @@ const server = createServer(async (req, res) => {
       // 合并所有订单到一个 Excel（④-5）
       if (allDetails.length > 0) {
         try {
-          const mergedRemark = [...new Set(Object.values(orderInfoMap).map(i => i.remark).filter(Boolean))].join("；");
-          const firstInfo = Object.values(orderInfoMap)[0] || {};
-          const mergedInfo = { ...firstInfo, remark: mergedRemark };
           const excelName = orderNos.length > 1 ? `订单_合并_${orderNos.length}单.xlsx` : `订单_${orderNos[0]}.xlsx`;
-          allFiles.push({ name: excelName, data: buildFactoryExcel(allDetails, orderNos.join("+"), mergedInfo) });
-        } catch (e) { console.error("⚠️ Excel 生成失败:", e.message); }
+          const excelBuf = buildFactoryExcel(allDetails, orderNos.join("+"), orderInfoMap);
+          if (excelBuf && excelBuf.length > 0) {
+            allFiles.push({ name: excelName, data: excelBuf });
+          } else {
+            console.error(`⚠️ Excel buffer 为空 (${allDetails.length} 条记录)`);
+          }
+        } catch (e) { console.error("⚠️ Excel 生成失败:", e.message, e.stack); }
+      } else {
+        console.error(`⚠️ batch-zip: allDetails 为空, orders=${orderNos.join(",")}, customerFilter=${customerFilter}`);
       }
 
       if (!allFiles.length) { jsonRes(res, 404, { error: "所选订单无镜片数据" }); return logReq(req, 404, start); }

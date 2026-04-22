@@ -217,22 +217,13 @@ h1 {
 </div>
 
 <script>
-// 如果 URL 带 ?admin=xxx，自动验证跳转
+// 如果 URL 带 ?admin=xxx，预填到输入框（不自动跳转）
 (function() {
   const urlAdmin = new URLSearchParams(location.search).get("admin");
   if (urlAdmin) {
-    verifyAndRedirect(urlAdmin);
+    document.getElementById("tokenInput").value = urlAdmin;
   }
 })();
-
-async function verifyAndRedirect(admin) {
-  try {
-    const res = await fetch(`/api/admin/orders?admin=${encodeURIComponent(admin)}&pageSize=1`);
-    if (res.ok) {
-      window.location.href = `/labels?admin=${encodeURIComponent(admin)}`;
-    }
-  } catch {}
-}
 
 async function handleLogin(e) {
   e.preventDefault();
