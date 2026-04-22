@@ -14,7 +14,7 @@
 |------|------|------|
 | **CRM** | `销售飞轮项目/`（独立飞书 Bitable） | 客户主数据、代理商、销售目标、会议 |
 | **订单** | `order-system/`（本目录） | 代理商门户、下单、验真、物流、CRM同步 |
-| **库存** | `inventory-system/` | 度数级库存、交期预估、9条业务规则 |
+| **库存** | `inventory-system/` | 度数级库存、交期预估、12条业务规则 |
 
 - **业务目标：** 6.30 前完成最小闭环
 - **用户三端：** 代理商（下单/追踪） / 助理（管理后台） / 消费者（扫码验真）
@@ -218,7 +218,7 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 - [logistics.js](logistics.js) — 物流 CLI + 通行单生成
 
 ### 偶尔碰的
-- [automations.js](automations.js) — 9条业务规则引擎
+- [automations.js](automations.js) — 12条业务规则引擎（含 rule12 度数级库存预警）
 - [sync_*.js](.) — CRM/旧订单同步脚本
 - [ai_analysis.js](ai_analysis.js) — AI 周分析（MiMo）
 - [dashboard.js](dashboard.js) / [dashboard.html](dashboard.html) — KPI 看板

@@ -15,7 +15,10 @@
  *   node automations.js rule7   # Auto-procurement trigger
  *   node automations.js rule8   # Factory routing
  *   node automations.js rule9   # Mold usage auto-increment
- *   node automations.js all     # Run all 9 rules sequentially
+ *   node automations.js rule10  # Consignment expiry alerts
+ *   node automations.js rule11  # Monthly statement auto-generation
+ *   node automations.js rule12  # Degree-level stock alerts (theoretical vs actual)
+ *   node automations.js all     # Run all rules sequentially
  *   node automations.js all -q  # Quiet mode (summary only, saves tokens)
  *   node automations.js all --fresh  # Bypass cache, fetch fresh from API
  *   node automations.js all -q --fresh  # Quiet + fresh
@@ -117,7 +120,7 @@ async function preloadData() {
   } else {
     console.log(`📥 Loading data from Feishu API${cs.fresh ? " (--fresh)" : ""}...`);
   }
-  const keys = ["sku", "finished_inventory", "blank_inventory", "mold", "production", "forecast", "order", "procurement", "factory"];
+  const keys = ["sku", "finished_inventory", "stock_detail", "blank_inventory", "mold", "production", "forecast", "order", "procurement", "factory", "agent_stock"];
   const results = await Promise.all(keys.map(k =>
     TABLES[k] ? cachedFetch(k, () => listRecords(TABLES[k])) : Promise.resolve([])
   ));
@@ -816,6 +819,222 @@ async function rule9() {
   console.log(`\n  累加完成: ${incremented} 条`);
 }
 
+// ─── 规则10：寄售到期预警 ──────────────────────────────────────────
+
+async function rule10() {
+  console.log("\n⏳ 规则10：寄售到期预警");
+  log("─".repeat(50));
+
+  if (!TABLES.agent_stock) {
+    console.log("  ⏭️ 代理商库存表未配置，跳过");
+    return;
+  }
+
+  const records = await cachedFetch("agent_stock", () => listRecords(TABLES.agent_stock));
+  const now = Date.now();
+  let warnings60 = 0;
+  let warnings90 = 0;
+  const alerts = [];
+
+  for (const r of records) {
+    const f = r.fields || {};
+    const consigned = Number(f["寄售库存"]) || 0;
+    if (consigned <= 0) continue;
+
+    const consignDate = f["寄售入库日期"];
+    if (!consignDate) continue;
+
+    const ageDays = Math.floor((now - consignDate) / 86400000);
+    const agentId = f["agent_id"];
+    const sku = f["SKU编号"];
+    const sph = f["SPH"];
+    const cyl = f["CYL"];
+
+    if (ageDays >= 90) {
+      warnings90++;
+      alerts.push({
+        fields: {
+          "流水号": `EXPIRE-${agentId}-${sku}-${now}`,
+          "agent_id": agentId,
+          "类型": "到期转收入",
+          "SKU编号": sku,
+          "SPH": sph,
+          "CYL": cyl,
+          "数量": consigned,
+          "备注": `寄售库存 ${ageDays} 天到期，转为代理商应付款`,
+        },
+      });
+      log(`  🔴 ${agentId} ${sku} SPH=${sph} CYL=${cyl}：${consigned} 片，${ageDays} 天 → 到期转收入`);
+    } else if (ageDays >= 60) {
+      warnings60++;
+      log(`  🟡 ${agentId} ${sku} SPH=${sph} CYL=${cyl}：${consigned} 片，${ageDays} 天 → 即将到期`);
+    }
+  }
+
+  // 批量写入到期流水
+  if (alerts.length > 0 && TABLES.consignment_ledger) {
+    for (let i = 0; i < alerts.length; i += 500) {
+      const batch = alerts.slice(i, i + 500);
+      await api("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.consignment_ledger}/records/batch_create`, { records: batch });
+    }
+  }
+
+  if (warnings60 + warnings90 > 0) {
+    await notifyBatch(
+      `⏳ 寄售到期预警`,
+      [
+        warnings60 > 0 ? `🟡 ${warnings60} 项即将到期（≥60天）` : null,
+        warnings90 > 0 ? `🔴 ${warnings90} 项已到期转收入（≥90天）` : null,
+      ].filter(Boolean),
+      warnings90 > 0 ? "red" : "yellow"
+    );
+  }
+
+  console.log(`\n  预警完成：60天=${warnings60}，90天=${warnings90}，已写入流水=${alerts.length}`);
+}
+
+// ─── 规则11：月度对账单自动生成 ─────────────────────────────────────
+
+async function rule11() {
+  console.log("\n📄 规则11：月度对账单生成");
+  log("─".repeat(50));
+
+  if (!TABLES.consignment_ledger || !TABLES.monthly_statement) {
+    console.log("  ⏭️ 寄售流水表或对账单表未配置，跳过");
+    return;
+  }
+
+  // 只在每月 1-3 日执行（避免每天重复生成）
+  const today = new Date();
+  if (today.getDate() > 3) {
+    log("  ⏭️ 非月初（1-3日），跳过自动生成");
+    return;
+  }
+
+  // 上个月
+  const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const monthStr = lastMonth.toISOString().slice(0, 7); // "2026-03"
+
+  // 检查是否已生成过
+  const existing = await listRecords(TABLES.monthly_statement);
+  const alreadyGenerated = existing.some(r => r.fields?.["月份"] === monthStr);
+  if (alreadyGenerated) {
+    log(`  ⏭️ ${monthStr} 对账单已存在，跳过`);
+    return;
+  }
+
+  // 读取该月的消耗流水
+  const ledger = await cachedFetch("consignment_ledger", () => listRecords(TABLES.consignment_ledger));
+  const monthConsumptions = {};
+
+  for (const r of ledger) {
+    const f = r.fields || {};
+    if (f["类型"] !== "消耗") continue;
+    const created = f["操作时间"];
+    if (!created) continue;
+    const recMonth = new Date(created).toISOString().slice(0, 7);
+    if (recMonth !== monthStr) continue;
+
+    const agentId = f["agent_id"];
+    const sku = f["SKU编号"];
+    const key = `${agentId}|${sku}`;
+    if (!monthConsumptions[key]) {
+      monthConsumptions[key] = { agent: agentId, sku, qty: 0 };
+    }
+    monthConsumptions[key].qty += Math.abs(Number(f["数量"]) || 0);
+  }
+
+  const statements = Object.values(monthConsumptions).map(s => ({
+    fields: {
+      "代理商": s.agent,
+      "月份": monthStr,
+      "SKU编号": s.sku,
+      "消耗数量": s.qty,
+      "单价": 0,
+      "金额": 0,
+      "状态": "待确认",
+    },
+  }));
+
+  if (statements.length > 0) {
+    for (let i = 0; i < statements.length; i += 500) {
+      const batch = statements.slice(i, i + 500);
+      await api("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.monthly_statement}/records/batch_create`, { records: batch });
+    }
+    await notifyBatch(`📄 ${monthStr} 寄售对账单已生成`, [`共 ${statements.length} 条记录，请到飞书确认`], "blue");
+  }
+
+  console.log(`\n  ${monthStr} 对账单：${statements.length} 条`);
+}
+
+// ─── 规则12：度数级库存预警（理论备库 vs 当前库存）──────────────
+
+async function rule12() {
+  console.log("\n📐 规则12：度数级库存预警");
+  log("─".repeat(50));
+
+  const stockDetail = getData("stock_detail");
+  if (stockDetail.length === 0) {
+    console.log("  ⏭️  stock_detail 为空，跳过");
+    return;
+  }
+
+  // 按 SKU 分组统计
+  const skuStats = {};  // sku -> { total, below, outOfStock, records: [] }
+  const alertItems = [];
+
+  for (const r of stockDetail) {
+    const f = r.fields;
+    const sku = typeof f["SKU编号"] === "string" ? f["SKU编号"] : (Array.isArray(f["SKU编号"]) ? f["SKU编号"][0]?.text : "");
+    if (!sku) continue;
+
+    const sph = Number(f["SPH"]);
+    const cyl = Number(f["CYL"]);
+    const current = Number(f["当前库存"]) || 0;
+    const safety = Number(f["安全库存"]) || 0;
+    if (safety <= 0) continue; // 未设置理论备库的跳过
+
+    if (!skuStats[sku]) skuStats[sku] = { total: 0, below: 0, outOfStock: 0, worst: [] };
+    skuStats[sku].total++;
+
+    if (current <= 0) {
+      skuStats[sku].outOfStock++;
+      skuStats[sku].worst.push({ sph, cyl, current, safety, gap: safety });
+    } else if (current < safety) {
+      skuStats[sku].below++;
+      skuStats[sku].worst.push({ sph, cyl, current, safety, gap: safety - current });
+    }
+  }
+
+  // 输出每个 SKU 的预警
+  for (const [sku, stats] of Object.entries(skuStats)) {
+    const alertCount = stats.below + stats.outOfStock;
+    if (alertCount === 0) {
+      log(`  ✅ ${sku}：全部 ${stats.total} 个度数库存正常`);
+      continue;
+    }
+
+    // 按缺口排序，取 Top 5 最严重的
+    stats.worst.sort((a, b) => b.gap - a.gap);
+    const top5 = stats.worst.slice(0, 5);
+    const worstStr = top5.map(w => `SPH ${w.sph.toFixed(2)}/CYL ${w.cyl.toFixed(2)}（${w.current}/${w.safety}）`).join("、");
+
+    const emoji = stats.outOfStock > 0 ? "🚨" : "⚠️";
+    const msg = `${sku}：${alertCount}/${stats.total} 个度数不足（缺货 ${stats.outOfStock} + 低库存 ${stats.below}），最严重：${worstStr}`;
+
+    logAlert(emoji, msg);
+    alertItems.push({ emoji, text: msg });
+  }
+
+  // 汇总通知
+  if (alertItems.length > 0) {
+    const totalAlerts = alertItems.length;
+    await notifyBatch(`📐 度数级库存预警：${totalAlerts} 个 SKU`, alertItems, totalAlerts > 2 ? "red" : "orange");
+  }
+
+  console.log(`\n  检查完成：${Object.keys(skuStats).length} 个 SKU，${alertItems.length} 个有预警`);
+}
+
 // ─── 主入口 ─────────────────────────────────────────────
 
 async function main() {
@@ -841,6 +1060,9 @@ async function main() {
     rule7,
     rule8,
     rule9,
+    rule10,
+    rule11,
+    rule12,
   };
 
   if (cmd === "all") {
@@ -850,7 +1072,7 @@ async function main() {
   } else if (rules[cmd]) {
     await rules[cmd]();
   } else {
-    console.error(`未知命令: ${cmd}\n用法: node automations.js [rule1|rule2|rule3|rule4|rule5|rule6|rule7|rule8|rule9|all]`);
+    console.error(`未知命令: ${cmd}\n用法: node automations.js [rule1-rule12|all]`);
     process.exit(1);
   }
 

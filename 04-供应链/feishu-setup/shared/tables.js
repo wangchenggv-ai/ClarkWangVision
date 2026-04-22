@@ -17,13 +17,19 @@ export const TABLES = {
   sku: "tblwQsvGAahoeoJV",
   finished_inventory: "tblUF49B6i53MV2O",
   stock_detail: "tbl7U79QGG4JtQev",
-  blank_inventory: "tbladv6bQTXlNOlM",
-  mold: "tblkZ4ODg3v63prW",
+  stock_plan: "tbluUfuETzwGdW1E",
+  blank_inventory: "tblrFIGHFVhTB16p",
+  mold: "tblfnVzOA2yFzbjs",
   production: "tbltSntfaR9KCI7B",
   forecast: "tblFLAHOXLSgWS6Q",
   procurement: "tblZX1qW7RvcJieg",
   factory: "tblJ6RXFENJFQe9A",
   rule_config: "tbl78V8wgziRs0pt",
+
+  // ── 寄售库存 ──
+  agent_stock: "",          // TODO: migrate_consignment.js create-tables 后填入
+  consignment_ledger: "",   // TODO: 同上
+  monthly_statement: "",    // TODO: 同上
 
   // ── 分析 ──
   ai_analysis: "tbl8W9F9K2RbaL0k",

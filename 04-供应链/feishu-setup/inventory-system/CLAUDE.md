@@ -24,12 +24,12 @@
 ## 二、架构地位
 
 本目录存放：
-1. **库存表迁移 / 维护脚本**（[migrate_stock_v2.js](migrate_stock_v2.js)）
+1. **库存表迁移 / 维护脚本**（[migrate_stock_v2.js](migrate_stock_v2.js)、[migrate_stock_plan.js](migrate_stock_plan.js) 等）
 2. **库存系统的文档**（CLAUDE.md、STATE.md）
 
 运行时代码在 `../order-system/`：
 - `server.js` — `getStockMap()` + `estimateDeliveryByRx()` + `/api/delivery-estimate`
-- `automations.js` — 9条业务规则（库存告警、采购触发、排产等）
+- `automations.js` — 12条业务规则（库存告警、采购触发、排产等，含 rule12 度数级预警）
 
 表 ID 从 `../shared/tables.js` 引用（单一真相源），APP_TOKEN 从 `../shared/.env` 读取。
 
@@ -51,6 +51,8 @@
 | `SPH` | NUMBER (0.00) | 球镜值，负数或 0 |
 | `CYL` | NUMBER (0.00) | 柱镜值，负数或 0 |
 | `当前库存` | NUMBER (0) | 片数 |
+| `安全库存` | NUMBER (0) | 低于此值触发低库存告警 |
+| `最近出库` | DATE | 未来下单扣减时自动写入 |
 | `更新时间` | MODIFIED_TIME | 飞书自动维护 |
 
 ### 度数标准范围（常规备货）
@@ -60,6 +62,29 @@
 - **超出范围 = 自动走定制档位**（不查库存表）
 
 单 SKU 完整覆盖度数组合数 = 25 × 9 = **225 行**
+
+### 备库参数表（理论备库）
+
+- **Table ID：** `TABLES.stock_plan`（`tbluUfuETzwGdW1E`）
+- **表名：** 备库参数表
+- **粒度：** 一行 = 一个 `(SPH, CYL)` 组合 × 一个版本月份
+- **可追溯：** 每月一个版本，不覆盖历史
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `SPH_CYL` | TEXT | 去重键 `"SPH\|CYL"` |
+| `SPH` | NUMBER | 球镜值 |
+| `CYL` | NUMBER | 柱镜值 |
+| `备库数量` | NUMBER | 该组合的原始统计数量（来自 CSV 或订单测算） |
+| `占比` | NUMBER | 归一化比例（0~1），= 备库数量 / 总和 |
+| `版本月份` | TEXT | 如 `"2026-04"`，标识数据来源月份 |
+
+**公式：** `理论备库 = max(ceil(月预测 × 季节系数 × 2 × 占比), 1)`
+
+- 月预测 = forecast 表本月各周预测销量之和（周→月 × 4.33）
+- 季节系数 = summer 1.3 / school 1.2 / CNY 0.8 / default 1.0（复用 rule4 配置）
+- 2 = 2 个月库存周转目标
+- 占比 = 备库参数表中该 SPH/CYL 组合的归一化比例
 
 ---
 
@@ -100,14 +125,46 @@
 
 ---
 
-## 五、迁移脚本（[migrate_stock_v2.js](migrate_stock_v2.js)）
+## 五、迁移脚本
 
-### 三个子命令
+### [migrate_stock_v2.js](migrate_stock_v2.js) — 成品库存
 
 ```bash
 node migrate_stock_v2.js preview              # 仅解析 Excel，不写飞书
 node migrate_stock_v2.js create               # 新建一张度数级库存表，打印 table_id
 node migrate_stock_v2.js import <tableId>     # 向指定表导入数据（先清空再全量写）
+```
+
+### [migrate_upstream.js](migrate_upstream.js) — 上游物料 + stock_detail 加字段 + 表单视图
+
+```bash
+node migrate_upstream.js create-tables    # 新建毛坯库存表 + 模具台账表，打印 table_id
+node migrate_upstream.js add-fields       # stock_detail 新增 安全库存 + 最近出库
+node migrate_upstream.js create-forms     # 三张表各配一个表单视图
+node migrate_upstream.js all              # 以上全做
+```
+
+### [migrate_stock_plan.js](migrate_stock_plan.js) — 备库参数表
+
+```bash
+node migrate_stock_plan.js preview                # 预览 CSV + 归一化
+node migrate_stock_plan.js create                 # 建表，打印 table_id
+node migrate_stock_plan.js import <tid> [month]   # 导入（默认当前月）
+```
+
+### [apply_stock_plan.js](apply_stock_plan.js) — 理论备库计算 + 回填
+
+```bash
+node apply_stock_plan.js --dry-run                                    # 预览计算结果
+node apply_stock_plan.js                                              # 写入 stock_detail 安全库存
+node apply_stock_plan.js --targets "Ultra双效=6000,D8=6000"          # 手动指定 SKU 总目标（forecast 不可用时）
+```
+
+### [calc_stock_plan.js](calc_stock_plan.js) — 数据飞轮（从订单自动测算）
+
+```bash
+node calc_stock_plan.js --months 3 --auto-apply   # 近3月订单 → 更新参数表 → 回填安全库存
+node calc_stock_plan.js --months 6 --dry-run      # 预览近6月分布
 ```
 
 ### 当前默认值
@@ -141,19 +198,118 @@ node migrate_stock_v2.js import <tableId>     # 向指定表导入数据（先�
 | 调整缓存 TTL | `server.js` 里 `STOCK_TTL` 常量 |
 | 手动改库存数字 | 直接在飞书 Bitable 界面改 `tbl7U79QGG4JtQev` 的"当前库存"字段 |
 | 清空 + 全量重导 | `node migrate_stock_v2.js import tbl7U79QGG4JtQev` — 脚本会先清空 |
+| 更新理论备库参数 | 更新 CSV → `node migrate_stock_plan.js import <tid>` → `node apply_stock_plan.js` |
+| 从订单自动测算备库分布 | `node calc_stock_plan.js --months 3 --auto-apply` |
+| 手动指定 SKU 备库目标 | `node apply_stock_plan.js --targets "SKU=数量"` （forecast 表不可用时） |
 
 ---
 
-## 七、下一阶段（暂未动手）
+## 七、寄售库存方案（备库合作）
 
-- **销售历史消耗分析** — Excel 的 `1月/2月/3月` 三张销售矩阵；可做月均消耗 → 自动补货建议
-- **多维度库存告警** — 当前库存 < 安全库存 → 飞书 IM 通知
-- **在产量 / 毛坯量字段** — 现在只有"当前库存"，不管在产
-- **并发下单扣减** — 当前库存是手工维护的静态数，下单不扣减。已知局限，不是 bug
+代理商备库 = **自有库存(50%) + 厂家寄售库存(50%)**，物理库存全在代理商处。
+
+### 核心规则
+
+| 规则 | 说明 |
+|------|------|
+| 自有库存 | 代理商已购买，无时间压力 |
+| 寄售库存 | 厂家所有权，90 天账期到期转代理商应付款 |
+| 消耗顺序 | **先消耗自有，再消耗寄售**（系统强制） |
+| 月度结算 | 每月 1 日自动生成寄售消耗对账单 |
+| 超龄预警 | 60 天黄色预警，90 天红色预警 + 写到期流水 |
+
+### 数据模型
+
+| 表 | 说明 |
+|----|------|
+| `agent_stock` | 代理商库存表（agent_id × SKU × SPH × CYL，自有/寄售分拆） |
+| `consignment_ledger` | 寄售流水表（入库/消耗/到期转收入/退货） |
+| `monthly_statement` | 月度对账单 |
+| agent 表新增 | 寄售账期天数、结算方式、备库比例 |
+
+### 新增 API
+
+| 端点 | 说明 |
+|------|------|
+| `GET /api/agent-stock` | 代理商看自己的库存明细（自有/寄售分拆） |
+| `GET /api/admin/consignment-report` | 管理端看寄售账龄报告 |
+| `GET /api/admin/monthly-statement?month=2026-04` | 生成/查看月度对账单 |
+
+### 新增自动化规则
+
+| 规则 | 说明 |
+|------|------|
+| rule10 | 寄售到期预警（60天黄 / 90天红 + 写流水） |
+| rule11 | 月度对账单自动生成（每月 1-3 日） |
+
+### 下一阶段（暂未动手）
+
+- **寄售建表** — `migrate_consignment.js` 建三张表 + agent 表新增字段
+- **寄售 API** — `/api/agent-stock`、`/api/admin/consignment-report`、月度对账单
+- **寄售规则** — rule10（到期预警）、rule11（月度对账单生成）
 
 ---
 
-## 八、开发铁律
+## 八、上游物料表（已建表）
+
+库存系统不只是成品，上游物料直接影响产能和交期。生产在外部，只管状态管理。
+
+### 毛坯库存表（`blank_inventory`，`tblrFIGHFVhTB16p`）
+
+- **粒度：批次级** — 一行 = 一个到货批次
+- **主键逻辑：** 同一 `SKU × CYL` 可有多条（不同批次，AXIS 后加工所以毛坯只到 CYL）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `批次号` | TEXT | 业务主键，例 `"BLK-2026-04-001"` |
+| `SKU编号` | TEXT | 必须与 `SKU_CATALOG[].sku` 一致 |
+| `CYL档位` | NUMBER (0.00) | 柱镜档位，范围 [-2.00, 0]，步长 0.25 |
+| `数量` | NUMBER (0) | 本批次初始到货片数 |
+| `已消耗` | NUMBER (0) | 已用于生产的片数 |
+| `到货日期` | DATE | 供应商到货日期 |
+| `保质期至` | DATE | 材料有效期限（可选） |
+| `状态` | SINGLE_SELECT | 在库 / 已用完 / 已过期 / 质检中 |
+| `供应商` | TEXT | 来源供应商（可选） |
+| `备注` | TEXT | 自由文本 |
+| `更新时间` | MODIFIED_TIME | 飞书自动维护 |
+
+### 模具台账表（`mold`，`tblfnVzOA2yFzbjs`）
+
+- **粒度：单模** — 一个物理模具 = 一行，独立编号 + 独立寿命
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `模具编号` | TEXT | 物理唯一编号，例 `"MD-UC-001"` |
+| `SKU编号` | TEXT | 该模具用于哪个 SKU |
+| `总寿命` | NUMBER (0) | 最大可注塑次数 |
+| `已使用` | NUMBER (0) | 已注塑次数 |
+| `剩余寿命` | NUMBER (0) | 待迁移为公式字段（当前手动） |
+| `状态` | SINGLE_SELECT | 正常 / 预警 / 需更换 / 已报废 |
+| `投入使用日` | DATE | 首次投产日期 |
+| `最近使用日` | DATE | 最近一次注塑日期 |
+| `供应商` | TEXT | 模具供应商（可选） |
+| `备注` | TEXT | 自由文本 |
+| `更新时间` | MODIFIED_TIME | 飞书自动维护 |
+
+### 表单视图（同事录入入口）
+
+三张表各配了一个表单视图，同事扫码/点链接直接填数据，不用进 Bitable 后台找表。
+
+### 表间关系
+
+```
+SKU_CATALOG (server.js 静态常量)
+  ├── stock_detail     (SKU × SPH × CYL → 成品片数 / 安全库存)
+  ├── stock_plan       (SPH × CYL × 月份 → 占比，理论备库计算源)
+  ├── blank_inventory  (SKU × CYL × 批次 → 毛坯片数)
+  └── mold             (SKU × 模具编号 → 剩余寿命)
+
+数据飞轮：lens_detail(订单) → calc_stock_plan → stock_plan → apply → stock_detail.安全库存 → rule12 度数级预警
+```
+
+---
+
+## 九、开发铁律
 
 - 脚本与 order-system 共用同一个飞书 App Token，APP_TOKEN 从 `../shared/.env` 读，不硬编码
 - 表 ID 从 `../shared/tables.js` 引用，不硬编码
