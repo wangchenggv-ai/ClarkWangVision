@@ -31,7 +31,7 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { notifyBatch } from "./notify.js";
 import { cachedFetch, cacheStatus } from "./cache.js";
-import { TABLES, APP_TOKEN } from "../shared/tables.js";
+import { TABLES, APP_TOKEN } from "./shared/tables.js";
 
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

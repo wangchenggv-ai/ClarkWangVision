@@ -6,6 +6,7 @@ WORKDIR /app
 RUN echo '{"type":"module","dependencies":{"qrcode":"^1.5","xlsx":"^0.18"}}' > package.json && npm install
 
 # Copy application files
+COPY shared/ ./shared/
 COPY server.js .
 COPY automations.js .
 COPY logistics.js .

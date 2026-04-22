@@ -151,37 +151,26 @@ Token 缓存 bug 暴露两个问题：系统缺自愈能力，缺低门槛运维
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
-| Phase 1 | 服务端自愈 + 健康检查 | 代码完成，未部署 |
-| Phase 2 | 运维 API（/ops/*） | 代码完成，未部署 |
-| Phase 3 | OpenClaw 接入 | Skill 已创建 |
+| Phase 1 | 服务端自愈 + 健康检查 | ✅ 已部署 |
+| Phase 2 | 运维 API（/ops/*） | ✅ 已部署 |
+| Phase 3 | OpenClaw 接入 | ✅ 已打通 |
 
-### Phase 1 代码改动（待部署）
+### 部署内容
 
-1. **`feishuApi()` token 自愈** — 收到 `code: 99991663` 或 `Invalid access token` 时自动清空缓存，下次请求立即刷新，无需人工重启
-2. **`GET /health` 端点** — 返回飞书连通性、Bitable 读写、代理商数量、uptime，供巡检和机器人调用
+1. **`feishuApi()` token 自愈** — 收到 `code: 99991663` 或 `Invalid access token` 时自动清空缓存，下次请求立即刷新
+2. **`GET /health`** — 飞书连通性 / Bitable 读写 / 代理商数 / uptime
+3. **`GET /ops/logs?tail=N`** — 最近 N 条请求日志（内存缓冲 500 条）
+4. **`GET /ops/check-token`** — 测试飞书 token + Bitable 连通性
+5. **`POST /ops/restart`** — process.exit(1) → Docker 自动重启
 
-### Phase 2 代码改动（待部署）
+### 部署步骤
 
-运维 API（全部需 `?admin=TOKEN` 认证）：
+- `server.js` / `automations.js` 的 TABLES 导入路径从 `../shared/tables.js` 改为 `./shared/tables.js`
+- `shared/tables.js` 复制到 order-system 内，Dockerfile 新增 `COPY shared/`
+- 安全组入方向添加 128.14.152.197/32:443（OpenClaw 服务器公网 IP）
+- OpenClaw 已手动发送 SKILL.md 内容学习，无需重启 gateway
 
-| 端点 | 方法 | 功能 |
-|------|------|------|
-| `/ops/logs?tail=N` | GET | 最近 N 条请求日志（内存缓冲 500 条） |
-| `/ops/check-token` | GET | 测试飞书 token + Bitable 连通性 |
-| `/ops/restart` | POST | process.exit(1) → Docker 自动重启 |
-
-不暴露 SSH，OpenClaw 只能调这几个预定义端点。
-
-### Phase 3 OpenClaw Skill（已就绪）
-
-在 `~/.openclaw-autoclaw/workspace/.opencode/skills/order-ops/` 创建了运维 Skill（SKILL.md），包含：
-- API 端点调用命令（curl）
-- 故障排查流程（健康检查 → 重启 → 再检查）
-- 安全规则
-
-同事在飞书群 @机器人说"重启系统"/"健康检查"即可触发。需重启 OpenClaw gateway 加载新 Skill。
-
-**注意：** 本地 server.js（`import { TABLES } from "../shared/tables.js"`）与 ECS 部署版（内联 TABLES）有结构差异。下次完整构建部署时需统一。
+**注意：** TABLES 导入结构差异已统一，本地和 ECS 走同一个 `./shared/tables.js`。
 
 ## 2026-04-22 Bug 修复批次
 
