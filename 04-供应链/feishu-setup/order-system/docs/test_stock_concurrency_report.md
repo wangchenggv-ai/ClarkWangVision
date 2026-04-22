@@ -1,6 +1,6 @@
 # 库存实时扣减 + 并发安全 测试报告
 
-> 测试时间：2026/4/22 22:41:32
+> 测试时间：2026/4/22 23:34:07
 > 测试环境：localhost:3210
 > 测试 SKU：Ultra双效 SPH=-1 CYL=-0.5
 
@@ -15,19 +15,19 @@
 ## 测试详情
 
 | ✅ | 下单返回 200 | status=200 |
-| ✅ | 下单成功 | ORD-20260422-D36E000E |
-| ✅ | 返回订单号 | ORD-20260422-D36E000E |
+| ✅ | 下单成功 | ORD-20260422-A702CAEE |
+| ✅ | 返回订单号 | ORD-20260422-A702CAEE |
 | ✅ | 库存扣减正确 | 扣减前=77 扣减后=76 期望=76 |
 | ✅ | 第一次下单成功 | status=200 |
 | ✅ | 第二次返回 200 | status=200 |
-| ✅ | 第二次是幂等命中 | 第一次=ORD-20260422-E977DF6F 第二次=ORD-20260422-E977DF6F |
+| ✅ | 第二次是幂等命中 | 第一次=ORD-20260422-A8DBA37D 第二次=ORD-20260422-A8DBA37D |
 | ✅ | 只创建了一个订单 | 订单行数=1 |
 | ✅ | 库存只扣一次 | 扣减前=77 扣减后=76 |
 | ✅ | 下单返回 200（不拦截） | status=200 |
-| ✅ | 下单成功 | {"success":true,"orderNo":"ORD-20260422-753199A6","items":[{"sku":"Ultra双效","skuName":"Ultra双效","quantity":2,"lensCount":2,"customerName":"测试患者570a","deliveryType":"定制7-10天","promiseDate":1777732825931,"promiseDateFormatted":"2026/05/02"}],"summary":{"totalPatients":1,"totalLenses":1}} |
-| ✅ | 返回订单号 | ORD-20260422-753199A6 |
+| ✅ | 下单成功 | {"success":true,"orderNo":"ORD-20260422-5F636316","items":[{"sku":"Ultra双效","skuName":"Ultra双效","quantity":2,"lensCount":2,"customerName":"测试患者61aa","deliveryType":"定制7-10天","promiseDate":1777735983267,"promiseDateFormatted":"2026/05/02"}],"summary":{"totalPatients":1,"totalLenses":1}} |
+| ✅ | 返回订单号 | ORD-20260422-5F636316 |
 | ✅ | 库存扣至0（有1扣1） | 库存=0 |
-| ✅ | 两单状态合理 | res1=200 res2=200 |
+| ✅ | 两单都返回 200 | res1=200 res2=200 |
 | ✅ | 并发扣减正确 | 扣减前=10 扣减后=4 期望=4 |
 | ✅ | 双眼同度数下单成功 | status=200 |
 | ✅ | 双眼扣减正确 | 扣减前=5 扣减后=3 期望=3 |
@@ -45,7 +45,6 @@
 ## 关键改动
 
 - `withLock()` per-key 异步锁 — 序列化同一 SKU/SPH/CYL 的并发扣减
-- `deductStockDetail` 锁内 fresh read 单条记录（~200ms）
-- `/api/submit` 四阶段：预检(409) → 写订单 → 扣库存(失败标记人工)
+- `deductStockDetail` 锁内 fresh read 单条记录（~200ms），库存不足时扣至 0
+- `/api/submit` 无预检拦截：库存不足照常下单，交期自动变长
 - `clientRequestId` 幂等保护（10min TTL）
-- 前端 409 库存冲突弹窗
