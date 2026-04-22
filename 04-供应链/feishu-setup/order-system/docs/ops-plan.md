@@ -17,8 +17,8 @@
 | 阶段 | 内容 | 状态 |
 |------|------|------|
 | **Phase 1** | 服务端自愈 + 健康检查 | ✅ 已完成代码 |
-| **Phase 2** | 飞书机器人运维入口 | 规划中 |
-| **Phase 3** | 定时巡检 + 自动重启 | 规划中 |
+| **Phase 2** | 运维 API（/ops/*） | ✅ 已完成代码 |
+| **Phase 3** | OpenClaw 接入 | 规划中 |
 
 ---
 
@@ -69,42 +69,61 @@
 
 ---
 
-## Phase 2: 飞书机器人运维入口（规划）
+## Phase 2: 运维 API（/ops/*）
+
+### 设计原则
+
+**不给 SSH，只给 HTTP API。** OpenClaw / 飞书机器人只能调预定义端点，不能执行任意命令。即使 LLM 幻觉，也只能调这几个操作。
+
+### API 列表
+
+全部需 `?admin=TOKEN` 认证。
+
+| 端点 | 方法 | 功能 | 安全级别 |
+|------|------|------|---------|
+| `/health` | GET | 健康检查（飞书/Bitable/代理商数） | 无需认证 |
+| `/ops/logs?tail=N` | GET | 最近 N 条请求日志（上限 500） | 只读 |
+| `/ops/check-token` | GET | 测试飞书 token + Bitable 连通性 | 只读 |
+| `/ops/restart` | POST | 重启服务（process.exit + Docker restart policy） | 危险 |
+
+### /ops/restart 机制
+
+服务器以 `--restart=unless-stopped` 运行（Docker Compose）。`process.exit(1)` 触发 Docker 自动重启，等效于 `docker restart`，但不需要 SSH 权限。
+
+### OpenClaw 接入方式
+
+OpenClaw 配置一个 HTTP tool，指向 `https://lab.gaushclear.com/ops/*?admin=GaushOrderMock`。MiMo Pro 理解用户意图 → 选择对应端点 → 调用 → 返回结果给飞书。
+
+### 日志缓冲
+
+`logReq()` 会将最近 500 条请求记录存在内存 `_reqLog` 数组中，供 `/ops/logs` 读取。重启后清空（Docker 日志仍保留完整记录）。
+
+---
+
+## Phase 3: OpenClaw 接入（规划）
 
 ### 架构
 
 ```
-同事在飞书群 @运维机器人
+同事在飞书群 @机器人："重启订单系统"
     ↓
-飞书事件订阅（WebSocket）
+OpenClaw（MiMo Pro）
+    ↓ HTTP tool
+/ops/restart?admin=TOKEN
     ↓
-运维 Agent（Node.js 服务）
-    ├─ 健康检查 → 调 /health
-    ├─ 重启服务 → SSH docker restart
-    ├─ 查看日志 → SSH docker logs
-    ├─ 检查 Token → 调飞书 API 验证
-    └─ 回复结果 → 飞书 IM
+process.exit(1) → Docker 自动重启
+    ↓
+回复飞书："已重启，服务恢复正常"
 ```
 
-### 命令列表
+### OpenClaw 配置要点
 
-| 命令 | 功能 | 权限 |
-|------|------|------|
-| `健康检查` | 调 /health 返回系统状态 | 所有人 |
-| `重启订单系统` | docker restart order-app | 管理员 |
-| `查看最近日志` | docker logs --tail 50 | 管理员 |
-| `检查飞书连接` | 测试 tenant_access_token | 管理员 |
-| `查看代理商` | 列出代理商表状态 | 所有人 |
+- HTTP tool 基地址: `https://lab.gaushclear.com`
+- 认证: `?admin=GaushOrderMock` 附加到每个请求
+- 只暴露 /health、/ops/* 端点，不暴露其他 API
+- 重启等危险操作可在 OpenClaw 侧配置二次确认
 
-### 安全考虑
-
-- SSH 密钥不暴露给机器人，通过 ECS 上的本地 agent 通信
-- 重启等危险操作需要管理员确认（飞书卡片确认按钮）
-- 所有操作写审计日志
-
----
-
-## Phase 3: 定时巡检（规划）
+### 定时巡检（可选）
 
 - cron 每 5 分钟调 `/health`
 - `agent_count == 0` 或 `ok == false` → 自动重启 → 飞书群告警
@@ -112,9 +131,27 @@
 
 ---
 
-## 当前运维手册（临时）
+## 当前运维手册（Phase 2 部署前）
 
-直到 Phase 2 完成前，运维仍需 SSH：
+部署前仍需 SSH。部署后可通过 API 或 OpenClaw 操作。
+
+### HTTP API（部署后）
+
+```bash
+# 健康检查
+curl https://lab.gaushclear.com/health
+
+# 查看最近 50 条日志
+curl "https://lab.gaushclear.com/ops/logs?tail=50&admin=GaushOrderMock"
+
+# 检查飞书连接
+curl "https://lab.gaushclear.com/ops/check-token?admin=GaushOrderMock"
+
+# 重启服务
+curl -X POST "https://lab.gaushclear.com/ops/restart?admin=GaushOrderMock"
+```
+
+### SSH（应急）
 
 ```bash
 # SSH 登录

@@ -1486,6 +1486,46 @@ const server = createServer(async (req, res) => {
       return logReq(req, ok ? 200 : 503, start);
     }
 
+    // ── 运维 API（需 admin 权限）──
+    if (pathname.startsWith("/ops/")) {
+      if (!isAdmin(req)) { jsonRes(res, 403, { error: "需要管理员权限" }); return logReq(req, 403, start); }
+
+      // GET /ops/logs?tail=50
+      if (pathname === "/ops/logs" && req.method === "GET") {
+        const n = Math.min(Number(url.searchParams.get("tail")) || 50, 500);
+        jsonRes(res, 200, { logs: _reqLog.slice(-n) });
+        return logReq(req, 200, start);
+      }
+
+      // GET /ops/check-token
+      if (pathname === "/ops/check-token" && req.method === "GET") {
+        const result = { feishu: false, bitable: false, error: "" };
+        try {
+          const t = await getFeishuToken();
+          result.feishu = !!t;
+          if (t) {
+            const agents = await loadAgents();
+            result.bitable = agents.length > 0;
+            result.agent_count = agents.length;
+          }
+        } catch (e) { result.error = e.message; }
+        jsonRes(res, 200, result);
+        return logReq(req, 200, start);
+      }
+
+      // POST /ops/restart
+      if (pathname === "/ops/restart" && req.method === "POST") {
+        jsonRes(res, 200, { ok: true, message: "服务重启中..." });
+        logReq(req, 200, start);
+        console.log("  ⚡ 运维指令：服务重启（/ops/restart）");
+        setTimeout(() => process.exit(1), 500);
+        return;
+      }
+
+      jsonRes(res, 404, { error: "未知运维指令" });
+      return logReq(req, 404, start);
+    }
+
     // ── API: 代理商信息 ──
     if (pathname === "/api/agent") {
       const agent = await findAgent(token);
@@ -3261,8 +3301,12 @@ function applyOrderFilters(orders, { filterStatus, filterSku, filterFrom, filter
   return orders;
 }
 
+const _reqLog = [];
 function logReq(req, status, start) {
-  console.log(`  ${req.method} ${req.url} → ${status} (${Date.now() - start}ms)`);
+  const line = `${req.method} ${req.url} → ${status} (${Date.now() - start}ms)`;
+  console.log(`  ${line}`);
+  _reqLog.push(line);
+  if (_reqLog.length > 500) _reqLog.shift();
 }
 
 server.listen(PORT, () => {
