@@ -1498,13 +1498,14 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
     return aR - bR;
   });
 
-  const eyeRow = (r) => {
+  const eyeRow = (r, i) => {
     const lc = r.lensCode || "—";
     const qr = `https://api.qrserver.com/v1/create-qr-code/?size=56x56&ecc=M&data=${encodeURIComponent(base + "/verify/" + lc)}`;
     const isR = r.eye?.includes("右");
+    const showName = i === 0 || allRows[i - 1]?.customerName !== r.customerName;
     return `
     <tr>
-      <td class="order-no">${r.orderNo}<br><span class="cname">${r.customerName}</span></td>
+      <td class="order-no">${showName ? `${r.orderNo}<br><span class="cname">${r.customerName}</span>` : ""}</td>
       <td class="eye ${isR ? "eye-r" : "eye-l"}">${isR ? "R" : "L"}<br><span>${isR ? "右眼" : "左眼"}</span></td>
       <td class="sku">${r.sku || "—"}</td>
       <td class="rx">${r.sph || "—"}</td>
