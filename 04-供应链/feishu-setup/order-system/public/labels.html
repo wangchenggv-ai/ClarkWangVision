@@ -1697,10 +1697,10 @@ function renderOrders() {
     const overdue = isOverdue(o.status, getOrderDays(o.date));
     return `
     <tr class="data-row ${overdue ? 'overdue' : ''}" data-status="${o.status}" id="${rowId}">
-      <td><input type="checkbox" data-order="${o.orderNo}" data-customer="${escapeHtml(o.customerName)}" ${selectedOrders.has(o.orderNo+'|'+o.customerName)?'checked':''} onchange="toggleOrder('${o.orderNo}','${jsAttr(o.customerName)}')"></td>
-      <td><button class="expand-btn" onclick="toggleRowExpand('${i}', '${o.orderNo}', '${jsAttr(o.customerName)}')" title="展开详情">&#9654;</button></td>
+      <td><input type="checkbox" data-order="${o.orderNo}" data-customer="${escapeHtml(o.customerName)}" data-pair-index="${o.pairIndex || 1}" ${selectedOrders.has(o.orderNo+'|'+o.customerName+'|'+(o.pairIndex||1))?'checked':''} onchange="toggleOrder('${o.orderNo}','${jsAttr(o.customerName)}',${o.pairIndex || 1})"></td>
+      <td><button class="expand-btn" onclick="toggleRowExpand('${i}', '${o.orderNo}', '${jsAttr(o.customerName)}', ${o.pairIndex || 1})" title="展开详情">&#9654;</button></td>
       <td style="font-family:monospace;font-size:12px">${o.orderNo}</td>
-      <td>${o.customerName}</td>
+      <td>${o.customerName}${o.pairIndex > 1 ? ` <span style="color:#888;font-size:11px">第${o.pairIndex}副</span>` : ''}</td>
       <td>${o.agentName}</td>
       <td>${o.sku}</td>
       <td>${o.quantity}</td>
@@ -1720,17 +1720,18 @@ function renderOrders() {
 
 function getQuickAction(o) {
   const cn = jsAttr(o.customerName);
-  if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}')">确认</button>`;
-  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}','${cn}')" title="导出Excel给工厂">导出</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="入队等待本地打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}')">发货</button>`;
-  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货同行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">待签收</button>`;
-  if (o.status === "待签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
-  if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
+  const pi = o.pairIndex || 1;
+  if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}',${pi})">确认</button>`;
+  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}','${cn}')" title="导出Excel给工厂">导出</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}',${pi})" title="入队等待本地打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}',${pi})">发货</button>`;
+  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}',${pi})" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}',${pi})">待签收</button>`;
+  if (o.status === "待签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}',${pi})" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
+  if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
 }
 
 // ─── 展开行详情 ─────────────────────────────────────────────────────
 
-async function toggleRowExpand(idx, orderNo, customerName) {
+async function toggleRowExpand(idx, orderNo, customerName, pairIndex) {
   const detailRow = document.getElementById(`detail-${idx}`);
   const btn = document.querySelector(`#row-${idx} .expand-btn`);
 
@@ -1746,7 +1747,7 @@ async function toggleRowExpand(idx, orderNo, customerName) {
   const panel = document.getElementById(`detail-panel-${idx}`);
   panel.dataset.orderNo = orderNo;
 
-  const cacheKey = orderNo + '|' + customerName;
+  const cacheKey = orderNo + '|' + customerName + '|' + (pairIndex || 1);
   if (detailCache[cacheKey]) {
     renderDetail(panel, detailCache[cacheKey]);
     return;
@@ -1755,9 +1756,12 @@ async function toggleRowExpand(idx, orderNo, customerName) {
   panel.innerHTML = '<div class="no-data">加载中...</div>';
   try {
     const data = await api(`/api/admin/order/${orderNo}/lens-details`);
-    // 按客户名过滤（②-1）
+    // 按客户名+序号过滤
     if (customerName && data?.lenses) {
       data.lenses = data.lenses.filter(l => l.customerName === customerName);
+    }
+    if (pairIndex && data?.lenses) {
+      data.lenses = data.lenses.filter(l => (l.pairIndex || 1) === pairIndex);
     }
     // 按顾客名+眼别排序（右眼在上左眼在下）
     if (data?.lenses) {
@@ -1797,18 +1801,27 @@ function renderDetail(panel, data) {
 
 // ─── 选择逻辑 ───────────────────────────────────────────────────────
 
-function toggleOrder(orderNo, customerName) {
-  const key = orderNo + '|' + customerName;
+function toggleOrder(orderNo, customerName, pairIndex) {
+  const key = orderNo + '|' + customerName + '|' + (pairIndex || 1);
   if (selectedOrders.has(key)) selectedOrders.delete(key);
   else selectedOrders.add(key);
   updateSelectedCount();
   updateContextualActions();
 }
 
+function parseKey(key) {
+  const parts = key.split('|');
+  const last = Number(parts[parts.length - 1]);
+  if (parts.length >= 3 && Number.isInteger(last) && last > 0) {
+    return { orderNo: parts[0], customerName: parts.slice(1, -1).join('|'), pairIndex: last };
+  }
+  return { orderNo: parts[0], customerName: parts.slice(1).join('|'), pairIndex: 1 };
+}
+
 function toggleSelectAll() {
   const checked = document.getElementById("selectAll").checked;
-  if (checked) allOrders.forEach(o => selectedOrders.add(o.orderNo + '|' + o.customerName));
-  else allOrders.forEach(o => selectedOrders.delete(o.orderNo + '|' + o.customerName));
+  if (checked) allOrders.forEach(o => selectedOrders.add(o.orderNo + '|' + o.customerName + '|' + (o.pairIndex || 1)));
+  else allOrders.forEach(o => selectedOrders.delete(o.orderNo + '|' + o.customerName + '|' + (o.pairIndex || 1)));
   renderOrders();
 }
 
@@ -1819,9 +1832,8 @@ function updateSelectedCount() {
 function updateContextualActions() {
   const statuses = new Set();
   selectedOrders.forEach(key => {
-    const [orderNo, ...rest] = key.split('|');
-    const customerName = rest.join('|');
-    const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName);
+    const { orderNo, customerName, pairIndex } = parseKey(key);
+    const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName && (x.pairIndex || 1) === pairIndex);
     if (o) statuses.add(o.status);
   });
 
@@ -1944,19 +1956,23 @@ async function quickZplPrint(orderNo, customerName) {
   }
 }
 
-async function quickConfirm(orderNo, customerName) {
-  const ok = await showConfirmModal({ title: "确认订单", body: `确认 <b>${orderNo}</b> · <b>${customerName}</b>？<br>状态将变为"生产中"并生成镜片码。` });
+async function quickConfirm(orderNo, customerName, pairIndex) {
+  const pi = pairIndex || 1;
+  const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
+  const ok = await showConfirmModal({ title: "确认订单", body: `确认 <b>${orderNo}</b> · <b>${customerName}</b>${badge}？<br>状态将变为"生产中"并生成镜片码。` });
   if (!ok) return;
-  const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName });
+  const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName, pairIndex: pi });
   const r = data.results[0];
   if (r.ok) { showToast(`${orderNo} ${customerName} 已确认`, "success"); loadOrders(); }
   else showToast(`确认失败: ${r.error}`, "error");
 }
 
-async function quickShip(orderNo, customerName) {
-  const ok = await showConfirmModal({ title: "确认发货", body: `发货 <b>${orderNo}</b> · <b>${customerName}</b>？<br>将自动生成快递单号。` });
+async function quickShip(orderNo, customerName, pairIndex) {
+  const pi = pairIndex || 1;
+  const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
+  const ok = await showConfirmModal({ title: "确认发货", body: `发货 <b>${orderNo}</b> · <b>${customerName}</b>${badge}？<br>将自动生成快递单号。` });
   if (!ok) return;
-  const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName });
+  const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName, pairIndex: pi });
   const r = data.results[0];
   if (r.ok) {
     showToast(`${orderNo} ${customerName} 已发货: ${r.courier} ${r.trackingNo}`, "success");
@@ -1964,10 +1980,12 @@ async function quickShip(orderNo, customerName) {
   } else showToast(`发货失败: ${r.error}`, "error");
 }
 
-async function quickDeliver(orderNo, customerName) {
-  const ok = await showConfirmModal({ title: "标记待签收", body: `标记 <b>${orderNo}</b> · <b>${customerName}</b> 为"待签收"？<br><small style="color:#888">快递签收后将自动变更为"已签收"</small>` });
+async function quickDeliver(orderNo, customerName, pairIndex) {
+  const pi = pairIndex || 1;
+  const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
+  const ok = await showConfirmModal({ title: "标记待签收", body: `标记 <b>${orderNo}</b> · <b>${customerName}</b>${badge} 为"待签收"？<br><small style="color:#888">快递签收后将自动变更为"已签收"</small>` });
   if (!ok) return;
-  const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName });
+  const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName, pairIndex: pi });
   const r = data.results[0];
   if (r.ok) { showToast(`${orderNo} ${customerName} 已标记待签收`, "success"); loadOrders(); }
   else showToast(`标记失败: ${r.error}`, "error");
@@ -1982,9 +2000,8 @@ async function confirmOrders() {
   if (!ok) return;
   let done = 0, fail = 0;
   for (const key of keys) {
-    const [orderNo, ...rest] = key.split('|');
-    const customerName = rest.join('|');
-    const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName });
+    const { orderNo, customerName, pairIndex } = parseKey(key);
+    const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName, pairIndex });
     if (data.results?.[0]?.ok) done++; else fail++;
   }
   showToast(`确认完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
@@ -1998,10 +2015,9 @@ async function shipOrders() {
   // 1. 发货前预览
   const orderNosSet = new Set(), customersSet = new Set();
   for (const key of keys) {
-    const [orderNo, ...rest] = key.split('|');
+    const { orderNo, customerName } = parseKey(key);
     orderNosSet.add(orderNo);
-    const cn = rest.join('|');
-    if (cn) customersSet.add(cn);
+    if (customerName) customersSet.add(customerName);
   }
   const preview = await adminApi(`/api/admin/ship-preview?orderNos=${[...orderNosSet].join(",")}&customer=${[...customersSet].join(",")}`);
   let previewHtml = "";
@@ -2016,7 +2032,7 @@ async function shipOrders() {
         `<tr><td class="eye-${r.eye.includes('右') ? 'r' : 'l'}">${r.eye.includes('右') ? 'R' : 'L'}</td><td>${r.sku}</td><td>${r.sph != null ? Number(r.sph).toFixed(2) : ''}</td><td>${r.cyl != null ? Number(r.cyl).toFixed(2) : ''}</td><td>${r.axis}</td><td style="font-family:monospace;font-size:8pt">${r.lensCode}</td></tr>`
       ).join("");
       return `<div style="margin-bottom:12px;padding:10px;background:#fafafa;border-radius:6px;border:1px solid #eee">
-        <div style="font-weight:700;margin-bottom:4px">${o.customerName} <span style="color:#888;font-size:9pt">${o.orderNo}</span></div>
+        <div style="font-weight:700;margin-bottom:4px">${o.customerName}${o.pairIndex > 1 ? ' <span style="color:#e67e22;font-size:9pt">第' + o.pairIndex + '副</span>' : ''} <span style="color:#888;font-size:9pt">${o.orderNo}</span></div>
         <div style="font-size:9pt;color:#555;margin-bottom:6px">${o.agentName} · ${o.contact || ""} ${o.phone || ""} · ${o.address || ""}</div>
         <table style="width:100%;border-collapse:collapse;font-size:9pt"><thead><tr style="background:#1a1a2e;color:#fff;font-size:8pt">
           <th style="padding:3px 6px">眼</th><th style="padding:3px 6px">SKU</th><th style="padding:3px 6px">SPH</th><th style="padding:3px 6px">CYL</th><th style="padding:3px 6px">AXIS</th><th style="padding:3px 6px">镜片码</th></tr></thead>
@@ -2030,9 +2046,8 @@ async function shipOrders() {
   let done = 0, fail = 0;
   const details = [];
   for (const key of keys) {
-    const [orderNo, ...rest] = key.split('|');
-    const customerName = rest.join('|');
-    const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName });
+    const { orderNo, customerName, pairIndex } = parseKey(key);
+    const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName, pairIndex });
     if (data.results?.[0]?.ok) {
       done++;
       details.push(`${orderNo} ${customerName}: ${data.results[0].courier} ${data.results[0].trackingNo}`);
@@ -2055,9 +2070,8 @@ async function deliverOrders() {
   if (!ok) return;
   let done = 0, fail = 0;
   for (const key of keys) {
-    const [orderNo, ...rest] = key.split('|');
-    const customerName = rest.join('|');
-    const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName });
+    const { orderNo, customerName, pairIndex } = parseKey(key);
+    const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName, pairIndex });
     if (data.results?.[0]?.ok) done++; else fail++;
   }
   showToast(`标记待签收完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
@@ -2071,9 +2085,8 @@ function batchSlip() {
 
 function getSelectedByStatus(status) {
   return [...selectedOrders].filter(key => {
-    const [orderNo, ...rest] = key.split('|');
-    const customerName = rest.join('|');
-    const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName);
+    const { orderNo, customerName, pairIndex } = parseKey(key);
+    const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName && (x.pairIndex || 1) === pairIndex);
     return o && o.status === status;
   });
 }
@@ -2085,7 +2098,7 @@ document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "a") {
     if (document.activeElement.tagName !== "INPUT") {
       e.preventDefault();
-      allOrders.forEach(o => selectedOrders.add(o.orderNo + '|' + o.customerName));
+      allOrders.forEach(o => selectedOrders.add(o.orderNo + '|' + o.customerName + '|' + (o.pairIndex || 1)));
       document.getElementById("selectAll").checked = true;
       renderOrders();
       showToast(`已全选 ${allOrders.length} 项`, "info");
@@ -2190,10 +2203,9 @@ async function printLabels() {
   if (keys.length === 0) { showToast("请选择生产中的订单", "info"); return; }
   let done = 0, fail = 0;
   for (const key of keys) {
-    const [orderNo, ...rest] = key.split('|');
-    const customerName = rest.join('|');
+    const { orderNo, customerName, pairIndex } = parseKey(key);
     try {
-      const data = await adminApi("/api/admin/print-queue", { orderNo, customerName });
+      const data = await adminApi("/api/admin/print-queue", { orderNo, customerName, pairIndex });
       if (data.ok) done++; else fail++;
     } catch { fail++; }
   }
@@ -2400,10 +2412,9 @@ async function printZplLabels() {
   let totalQueued = 0;
   let totalFailed = 0;
   for (const key of keys) {
-    const [orderNo, ...rest] = key.split('|');
-    const customerName = rest.join('|');
+    const { orderNo, customerName, pairIndex } = parseKey(key);
     try {
-      const data = await adminApi("/api/admin/print-queue", { orderNo, customerName });
+      const data = await adminApi("/api/admin/print-queue", { orderNo, customerName, pairIndex });
       if (data.ok) totalQueued += data.lensCount;
       else totalFailed++;
     } catch { totalFailed++; }

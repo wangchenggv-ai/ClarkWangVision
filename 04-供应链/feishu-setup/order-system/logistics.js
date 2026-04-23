@@ -511,7 +511,7 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
     const isR = r.eye?.includes("右");
     return `
     <tr>
-      <td class="order-no">${r.orderNo}<br><span class="cname">${r.customerName}</span></td>
+      <td class="order-no">${r.orderNo}<br><span class="cname">${r.customerName}</span>${r.pairIndex > 1 ? '<br><span style="color:#e67e22;font-size:6pt">第' + r.pairIndex + '副</span>' : ''}</td>
       <td class="eye ${isR ? "eye-r" : "eye-l"}">${isR ? "R" : "L"}<br><span>${isR ? "右眼" : "左眼"}</span></td>
       <td class="sku">${r.sku || "—"}</td>
       <td class="rx">${r.sph || "—"}</td>
@@ -706,13 +706,16 @@ async function slipBatch() {
     const orderMap = {};
     for (const r of group.records) {
       const no = rawVal(r.fields["订单编号"]);
-      if (!orderMap[no]) orderMap[no] = { orderNo: no, customerName: rawVal(r.fields["顾客姓名"]), rows: [] };
+      const pi = r.fields["序号"] || 1;
+      const key = `${no}|${pi}`;
+      if (!orderMap[key]) orderMap[key] = { orderNo: no, customerName: rawVal(r.fields["顾客姓名"]), pairIndex: pi, rows: [] };
     }
     // 查每个订单的镜片明细
-    for (const [no, order] of Object.entries(orderMap)) {
-      const lensDetails = await getLensDetailsByOrder(no);
+    for (const [key, order] of Object.entries(orderMap)) {
+      const lensDetails = await getLensDetailsByOrder(order.orderNo);
       for (const ld of lensDetails) {
         const f = ld.fields;
+        if ((f["序号"] || 1) !== order.pairIndex) continue;
         order.rows.push({
           eye:      rawVal(f["眼别"]) || "—",
           customerName: rawVal(f["顾客姓名"]) || "",
@@ -721,12 +724,15 @@ async function slipBatch() {
           cyl:      f["柱镜CYL"] ?? "",
           axis:     f["轴位AXIS"] ?? "",
           lensCode: rawVal(f["镜片码"]),
+          pairIndex: f["序号"] || 1,
         });
       }
     }
 
-    // 按顾客+眼别排序（右眼在上，左眼在下）
+    // 按序号+顾客+眼别排序（右眼在上，左眼在下）
     for (const o of Object.values(orderMap)) o.rows.sort((a, b) => {
+      const pi = (a.pairIndex || 1) - (b.pairIndex || 1);
+      if (pi !== 0) return pi;
       const nc = (a.customerName || "").localeCompare(b.customerName || "", "zh-CN");
       if (nc !== 0) return nc;
       return a.eye.includes("右") ? -1 : 1;
@@ -1138,11 +1144,14 @@ async function generateSlip() {
       cyl:      f["柱镜CYL"] ?? "",
       axis:     f["轴位AXIS"] ?? "",
       lensCode: rawVal(f["镜片码"]),
+      pairIndex: f["序号"] || 1,
     };
   });
 
-  // 按顾客+眼别排序（右眼在上，左眼在下）
+  // 按序号+顾客+眼别排序（右眼在上，左眼在下）
   rows.sort((a, b) => {
+    const pi = (a.pairIndex || 1) - (b.pairIndex || 1);
+    if (pi !== 0) return pi;
     const nc = (a.customerName || "").localeCompare(b.customerName || "", "zh-CN");
     if (nc !== 0) return nc;
     return a.eye.includes("右") ? -1 : 1;

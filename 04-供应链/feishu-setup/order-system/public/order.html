@@ -644,6 +644,7 @@ function updateSummary() {
 function collectPatients() {
   const cards = document.querySelectorAll(".patient-card");
   const patients = [];
+  const pairCount = {}; // "name|sku" → count
   for (const card of cards) {
     const id = card.id.replace("patient-", "");
     const name = document.getElementById(`name-${id}`)?.value.trim();
@@ -664,7 +665,11 @@ function collectPatients() {
     const assemblyEl = document.querySelector(`input[name="assembly-${id}"]:checked`);
     const assembly = assemblyEl?.value === "yes";
     const remark = document.getElementById(`remark-${id}`)?.value.trim() || "";
-    if (eyes.length > 0) patients.push({ id, customerName: name, sku, quantity, eyes, assembly, remark });
+    if (eyes.length > 0) {
+      const key = `${name}|${sku}`;
+      pairCount[key] = (pairCount[key] || 0) + 1;
+      patients.push({ id, customerName: name, sku, quantity, eyes, assembly, remark, pairIndex: pairCount[key] });
+    }
   }
   return patients;
 }
