@@ -388,9 +388,9 @@ async function rule3() {
   const alertItems = [];
   for (const r of molds) {
     const f = r.fields;
-    const id = f["模芯编号"];
-    const total = f["总寿命（次）"] || 0;
-    const used = f["已使用次数"] || 0;
+    const id = f["模具编号"];
+    const total = f["总寿命"] || 0;
+    const used = f["已使用"] || 0;
     const remaining = total - used;
     const threshold = f["预警阈值"] || cfg("rule3", "default_warning_threshold", 500);
     const criticalRemaining = cfg("rule3", "critical_remaining", 50);
@@ -411,9 +411,9 @@ async function rule3() {
       log(`  🟢 ${id}（${f["产品型号"]}）剩余 ${remaining} 次，正常`);
     }
 
-    // 更新剩余次数和状态
+    // 更新剩余寿命和状态
     await updateRecord(TABLES.mold, r.record_id, {
-      "剩余次数": remaining,
+      "剩余寿命": remaining,
       "状态": status,
     });
   }
@@ -642,12 +642,12 @@ async function rule7() {
   // Check molds needing replacement
   for (const r of molds) {
     const f = r.fields;
-    const remaining = (f["总寿命（次）"] || 0) - (f["已使用次数"] || 0);
+    const remaining = (f["总寿命"] || 0) - (f["已使用"] || 0);
     const moldThreshold = f["预警阈值"] || cfg("rule3", "default_warning_threshold", 500);
     if (remaining < moldThreshold) {
       const key = `模具_${f["产品型号"]}`;
       if (openPO.has(key)) {
-        log(`  ⏭️  ${f["模芯编号"]} 已有在途采购，跳过`);
+        log(`  ⏭️  ${f["模具编号"]} 已有在途采购，跳过`);
         continue;
       }
       const moldLeadDays = cfg("rule7", "mold_lead_days", 28);
@@ -658,11 +658,11 @@ async function rule7() {
         "发起日期": Date.now(),
         "预计到货": Date.now() + moldLeadDays * 24 * 60 * 60 * 1000,
         "状态": "待下单",
-        "触发来源": `模芯${f["模芯编号"]}剩余${remaining}次`,
+        "触发来源": `模芯${f["模具编号"]}剩余${remaining}次`,
       });
       openPO.add(key);
-      alertItems.push({ emoji: "🔧", text: `模具采购: ${f["产品型号"]}（模芯${f["模芯编号"]}剩余${remaining}次）` });
-      log(`  📌 创建模具采购: ${f["产品型号"]}（模芯${f["模芯编号"]}剩余${remaining}次）`);
+      alertItems.push({ emoji: "🔧", text: `模具采购: ${f["产品型号"]}（模芯${f["模具编号"]}剩余${remaining}次）` });
+      log(`  📌 创建模具采购: ${f["产品型号"]}（模芯${f["模具编号"]}剩余${remaining}次）`);
       created++;
     }
   }
@@ -806,12 +806,12 @@ async function rule9() {
     // Pick the first active mold for this SKU
     const mold = skuMolds[0];
     const mf = mold.fields;
-    const newUsed = (mf["已使用次数"] || 0) + qty;
-    const remaining = (mf["总寿命（次）"] || 0) - newUsed;
+    const newUsed = (mf["已使用"] || 0) + qty;
+    const remaining = (mf["总寿命"] || 0) - newUsed;
 
     await updateRecord(TABLES.mold, mold.record_id, {
-      "已使用次数": newUsed,
-      "剩余次数": remaining,
+      "已使用": newUsed,
+      "剩余寿命": remaining,
     });
 
     // Mark production as counted
@@ -820,9 +820,9 @@ async function rule9() {
     });
 
     // Update local cache
-    mf["已使用次数"] = newUsed;
+    mf["已使用"] = newUsed;
 
-    log(`  🔧 ${f["周次"]} ${f["产品型号"]} × ${qty} → 模芯${mf["模芯编号"]} 使用+${qty}, 剩余${remaining}次`);
+    log(`  🔧 ${f["周次"]} ${f["产品型号"]} × ${qty} → 模芯${mf["模具编号"]} 使用+${qty}, 剩余${remaining}次`);
     incremented++;
   }
 
@@ -1263,13 +1263,13 @@ async function rule14() {
     if (skuMolds && skuMolds.length > 0) {
       const mold = skuMolds[0];
       const mf = mold.fields;
-      const newUsed = (mf["已使用次数"] || 0) + qty;
-      const remaining = (mf["总寿命（次）"] || 0) - newUsed;
+      const newUsed = (mf["已使用"] || 0) + qty;
+      const remaining = (mf["总寿命"] || 0) - newUsed;
       await updateRecord(TABLES.mold, mold.record_id, {
-        "已使用次数": newUsed,
-        "剩余次数": remaining,
+        "已使用": newUsed,
+        "剩余寿命": remaining,
       });
-      log(`  🔧 模芯${mf["模芯编号"]} 使用+${qty}, 剩余${remaining}次`);
+      log(`  🔧 模芯${mf["模具编号"]} 使用+${qty}, 剩余${remaining}次`);
     }
 
     log(`  ✅ ${sku} SPH=${Number(sph).toFixed(2)} CYL=${Number(cyl).toFixed(2)}：${oldStock} → ${newStock}（+${qty}，${reason}）`);
