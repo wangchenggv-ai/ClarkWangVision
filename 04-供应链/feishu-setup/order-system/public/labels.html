@@ -83,6 +83,9 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
 .stat-card[data-status="已发货"] { border-left-color: #389e0d; }
 .stat-card[data-status="已发货"] .val { color: #389e0d; }
 .stat-card[data-status="已发货"].active { background: #f6ffed; }
+.stat-card[data-status="待签收"] { border-left-color: #13c2c2; }
+.stat-card[data-status="待签收"] .val { color: #13c2c2; }
+.stat-card[data-status="待签收"].active { background: #e6fffb; }
 .stat-card[data-status="已签收"] { border-left-color: #237804; }
 .stat-card[data-status="已签收"] .val { color: #237804; }
 .stat-card[data-status="已签收"].active { background: #f0f9e8; }
@@ -250,6 +253,7 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
 .admin-table tr.data-row[data-status="待处理"] { border-left-color: var(--gold); }
 .admin-table tr.data-row[data-status="生产中"] { border-left-color: var(--brand); }
 .admin-table tr.data-row[data-status="已发货"] { border-left-color: var(--success); }
+.admin-table tr.data-row[data-status="待签收"] { border-left-color: #13c2c2; }
 .admin-table tr.data-row[data-status="已签收"] { border-left-color: #00875A; }
 .admin-table tr.data-row[data-status="完成"] { border-left-color: #00875A; }
 .admin-table tr.data-row.overdue { background: var(--error-light) !important; }
@@ -349,6 +353,7 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
 .status-dot.pending { background: #faad14; }
 .status-dot.producing { background: #1677ff; }
 .status-dot.shipped { background: #52c41a; }
+.status-dot.pending-receive { background: #13c2c2; }
 .status-dot.received { background: #237804; }
 .status-dot.done { background: #d9d9d9; }
 
@@ -1075,6 +1080,12 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
       <div class="lbl">已发货</div>
       <div class="avg-days" id="avgDaysShipped"></div>
     </div>
+    <div class="stat-card" data-status="待签收" onclick="filterByStatus('待签收')">
+      <div class="icon">&#128230;</div>
+      <div class="val" id="statPendingReceive">-</div>
+      <div class="lbl">待签收</div>
+      <div class="avg-days" id="avgDaysPendingReceive"></div>
+    </div>
     <div class="stat-card" data-status="已签收" onclick="filterByStatus('已签收')">
       <div class="icon">&#10003;</div>
       <div class="val" id="statReceived">-</div>
@@ -1150,8 +1161,8 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
           <div class="flow-step">
             <div class="step-num c7">7</div>
             <div class="step-content">
-              <div class="step-title">助理签收</div>
-              <div class="step-desc">已发货 &rarr; 已签收 &rarr; 飞书签收卡片</div>
+              <div class="step-title">签收确认</div>
+              <div class="step-desc">已发货 &rarr; 待签收（手动）&rarr; 已签收（快递回调自动）</div>
             </div>
             <span class="step-actor actor-assistant">助理</span>
           </div>
@@ -1172,6 +1183,8 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
           <span class="flow-branch-item" style="border-color:#91caff;color:#0958d9">生产中</span>
           <span style="color:#ccc">&rarr;</span>
           <span class="flow-branch-item" style="border-color:#b7eb8f;color:#389e0d">已发货</span>
+          <span style="color:#ccc">&rarr;</span>
+          <span class="flow-branch-item" style="border-color:#87e8de;color:#13c2c2">待签收</span>
           <span style="color:#ccc">&rarr;</span>
           <span class="flow-branch-item" style="border-color:#d9f7be;color:#237804">已签收</span>
         </div>
@@ -1350,11 +1363,11 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
       <button class="btn btn-outline ctx-btn act-confirm-btn" style="color:#1677ff;border-color:#1677ff" onclick="confirmOrders()">确认订单</button>
       <button class="btn btn-outline" style="color:#0958d9;border-color:#91caff" onclick="downloadZip()">导出Excel给工厂</button>
       <button class="btn btn-outline" style="color:#531dab;border-color:#d3adf7" onclick="previewSelected()">预览标签</button>
-      <button class="btn btn-outline" style="color:#722ed1;border-color:#d3adf7" onclick="printLabels()">打印标签</button>
+      <button class="btn btn-outline" style="color:#722ed1;border-color:#d3adf7" onclick="printLabels()">批量打印标签</button>
       <button class="btn btn-outline" style="color:#eb2f96;border-color:#ffadd2" onclick="printZplLabels()">&#128424; 入队打印</button>
       <button class="btn btn-outline ctx-btn act-ship-btn" style="color:#52c41a;border-color:#52c41a" onclick="shipOrders()">确认发货</button>
-      <button class="btn btn-outline ctx-btn act-slip-btn" style="color:#c0392b;border-color:#f0d0d0" onclick="batchSlip()">通行单</button>
-      <button class="btn btn-outline ctx-btn act-deliver-btn" style="color:#237804;border-color:#b7eb8f" onclick="deliverOrders()">标记签收</button>
+      <button class="btn btn-outline ctx-btn act-slip-btn" style="color:#c0392b;border-color:#f0d0d0" onclick="batchSlip()">同行单</button>
+      <button class="btn btn-outline ctx-btn act-deliver-btn" style="color:#13c2c2;border-color:#87e8de" onclick="deliverOrders()">标记待签收</button>
     </div>
     <span class="count" id="selectedCount">已选 0 个订单</span>
   </div>
@@ -1485,8 +1498,8 @@ function jsAttr(s) {
 }
 
 function statusBadge(s) {
-  const dotMap = { "待处理":"pending","生产中":"producing","已发货":"shipped","已签收":"received","完成":"done" };
-  const clsMap = { "待处理":"badge-pending","生产中":"badge-producing","已发货":"badge-shipped","已签收":"badge-received","完成":"badge-done" };
+  const dotMap = { "待处理":"pending","生产中":"producing","已发货":"shipped","待签收":"pending-receive","已签收":"received","完成":"done" };
+  const clsMap = { "待处理":"badge-pending","生产中":"badge-producing","已发货":"badge-shipped","待签收":"badge-pending-receive","已签收":"badge-received","完成":"badge-done" };
   const dot = dotMap[s] ? `<span class="status-dot ${dotMap[s]}"></span>` : '';
   return `<span class="badge ${clsMap[s]||'badge-pending'}">${dot}${s||'未知'}</span>`;
 }
@@ -1576,7 +1589,8 @@ async function loadOrders() {
   document.getElementById("statPending").textContent = s.pending || 0;
   document.getElementById("statProducing").textContent = s.producing || 0;
   document.getElementById("statShipped").textContent = s.shipped || 0;
-  document.getElementById("statReceived").textContent = s.received || 0;
+  document.getElementById("statPendingReceive").textContent = s.received || 0;
+  document.getElementById("statReceived").textContent = s.delivered || 0;
 
   // 更新平均天数
   updateAvgDays(allOrders, s);
@@ -1708,8 +1722,9 @@ function getQuickAction(o) {
   const cn = jsAttr(o.customerName);
   if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}')">确认</button>`;
   if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}','${cn}')" title="导出Excel给工厂">导出</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="入队等待本地打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}')">发货</button>`;
-  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货通行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">签收</button>`;
-  if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#ccc;font-size:11px">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货通行单" style="color:#c0392b">&#128196;</button>`;
+  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货同行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">待签收</button>`;
+  if (o.status === "待签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
+  if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
 }
 
@@ -1813,10 +1828,11 @@ function updateContextualActions() {
   const showConfirm = statuses.has("待处理");
   const showShip = statuses.has("生产中");
   const showDeliver = statuses.has("已发货");
+  const showSlip = statuses.has("已发货") || statuses.has("待签收") || statuses.has("已签收");
 
   document.querySelector(".act-confirm-btn").classList.toggle("visible", showConfirm);
   document.querySelector(".act-ship-btn").classList.toggle("visible", showShip);
-  document.querySelector(".act-slip-btn").classList.toggle("visible", showDeliver);
+  document.querySelector(".act-slip-btn").classList.toggle("visible", showSlip);
   document.querySelector(".act-deliver-btn").classList.toggle("visible", showDeliver);
 }
 
@@ -1949,12 +1965,12 @@ async function quickShip(orderNo, customerName) {
 }
 
 async function quickDeliver(orderNo, customerName) {
-  const ok = await showConfirmModal({ title: "标记签收", body: `标记 <b>${orderNo}</b> · <b>${customerName}</b> 为"已签收"？` });
+  const ok = await showConfirmModal({ title: "标记待签收", body: `标记 <b>${orderNo}</b> · <b>${customerName}</b> 为"待签收"？<br><small style="color:#888">快递签收后将自动变更为"已签收"</small>` });
   if (!ok) return;
   const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName });
   const r = data.results[0];
-  if (r.ok) { showToast(`${orderNo} ${customerName} 已签收`, "success"); loadOrders(); }
-  else showToast(`签收失败: ${r.error}`, "error");
+  if (r.ok) { showToast(`${orderNo} ${customerName} 已标记待签收`, "success"); loadOrders(); }
+  else showToast(`标记失败: ${r.error}`, "error");
 }
 
 // ─── 批量操作 ───────────────────────────────────────────────────────
@@ -2013,7 +2029,6 @@ async function shipOrders() {
   // 2. 执行发货
   let done = 0, fail = 0;
   const details = [];
-  const agentIds = new Set();
   for (const key of keys) {
     const [orderNo, ...rest] = key.split('|');
     const customerName = rest.join('|');
@@ -2021,27 +2036,22 @@ async function shipOrders() {
     if (data.results?.[0]?.ok) {
       done++;
       details.push(`${orderNo} ${customerName}: ${data.results[0].courier} ${data.results[0].trackingNo}`);
-      // 收集代理商ID用于生成通行单
-      const ord = preview.orders?.find(o => o.orderNo === orderNo);
-      if (ord?.agentId) agentIds.add(ord.agentId);
     } else fail++;
   }
 
-  // 3. 发货完成，显示结果 + 通行单按钮
+  // 3. 发货完成，显示结果 + 同行单按钮
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  const slipUrl = agentIds.size === 1
-    ? `/api/admin/slip-batch?date=${today}&agent=${[...agentIds][0]}`
-    : `/api/admin/slip-batch?date=${today}`;
+  const slipUrl = `/api/admin/slip-batch?date=${today}`;
   let resultHtml = details.join("<br>");
-  resultHtml += `<div style="margin-top:12px"><a href="${slipUrl}" target="_blank" class="btn btn-primary" style="display:inline-block;padding:6px 16px;text-decoration:none">生成随货通行单</a></div>`;
+  resultHtml += `<div style="margin-top:12px"><a href="${slipUrl}" target="_blank" class="btn btn-primary" style="display:inline-block;padding:6px 16px;text-decoration:none">生成随货同行单</a></div>`;
   await showConfirmModal({ title: "发货完成", body: `成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, confirmText: "关闭", cancelText: "", resultHtml });
   loadOrders();
 }
 
 async function deliverOrders() {
   const keys = getSelectedByStatus("已发货");
-  if (keys.length === 0) { showToast("没有已发货的订单可签收", "info"); return; }
-  const ok = await showConfirmModal({ title: "批量签收", body: `标记 <b>${keys.length}</b> 项为"已签收"？` });
+  if (keys.length === 0) { showToast("没有已发货的订单可标记待签收", "info"); return; }
+  const ok = await showConfirmModal({ title: "批量标记待签收", body: `标记 <b>${keys.length}</b> 项为"待签收"？<br><small style="color:#888">快递签收后将自动变更为"已签收"</small>` });
   if (!ok) return;
   let done = 0, fail = 0;
   for (const key of keys) {
@@ -2050,7 +2060,7 @@ async function deliverOrders() {
     const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName });
     if (data.results?.[0]?.ok) done++; else fail++;
   }
-  showToast(`签收完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
+  showToast(`标记待签收完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
   loadOrders();
 }
 
@@ -2130,8 +2140,12 @@ function toggleKeyboardHints() {
 async function previewSelected() {
   if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
 
-  const orderNos = [...new Set([...selectedOrders].map(k => k.split('|')[0]))].join(",");
-  const data = await api(`/api/admin/labels/batch?orderNos=${encodeURIComponent(orderNos)}`);
+  const keys = [...selectedOrders];
+  const orderNos = [...new Set(keys.map(k => k.split('|')[0]))].join(",");
+  const customers = [...new Set(keys.map(k => k.split('|')[1]).filter(Boolean))].join(",");
+  let url = `/api/admin/labels/batch?orderNos=${encodeURIComponent(orderNos)}`;
+  if (customers) url += `&customer=${encodeURIComponent(customers)}`;
+  const data = await api(url);
 
   const section = document.getElementById("previewSection");
   const grid = document.getElementById("previewGrid");
@@ -2171,11 +2185,19 @@ function clearPreview() {
   document.getElementById("previewGrid").innerHTML = "";
 }
 
-function printLabels() {
-  if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
-  previewSelected().then(() => {
-    setTimeout(() => window.print(), 500);
-  });
+async function printLabels() {
+  const keys = getSelectedByStatus("生产中");
+  if (keys.length === 0) { showToast("请选择生产中的订单", "info"); return; }
+  let done = 0, fail = 0;
+  for (const key of keys) {
+    const [orderNo, ...rest] = key.split('|');
+    const customerName = rest.join('|');
+    try {
+      const data = await adminApi("/api/admin/print-queue", { orderNo, customerName });
+      if (data.ok) done++; else fail++;
+    } catch { fail++; }
+  }
+  showToast(`批量打印：成功 ${done} 单${fail ? "，失败 " + fail + " 单" : ""}`, fail ? "error" : "success");
 }
 
 function downloadZip(customer) {
@@ -2394,7 +2416,7 @@ async function printZplLabels() {
 // ─── 工作流 Stepper 渲染 ──────────────────────────────────────────────
 
 const STEP_KEYS = ["submitted","confirmed","producing","qc_done","labeled","packed","shipped","received"];
-const STEP_NAMES = ["已下单","已确认","生产中","质检","标签","打包","发货","签收"];
+const STEP_NAMES = ["已下单","已确认","生产中","质检","标签","打包","发货","待签收"];
 
 function renderWorkflow(container, wfData) {
   if (!wfData || !wfData.steps) {

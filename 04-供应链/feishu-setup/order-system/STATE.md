@@ -716,6 +716,86 @@ Clark 要求整体审视三系统架构（CRM + 订单 + 库存），产出两�
 - `printer_config.json`（尺寸字段）
 - `public/labels.html`（步骤描述文字）
 
+## 2026-04-23 产品型号表外置
+
+将产品目录从 server.js 硬编码改为 Bitable 表驱动：
+- 新建表 `产品型号`（`tblU25NQ3RuaJJfc`）：产品型号(文本) + 排序号(数字)
+- 写入 7 个现有产品，按 1-7 排序
+- `getSkusWithInventory()` 改为从 Bitable 读取，按排序号排列，5分钟缓存
+- 删除 `SKU_CATALOG` 硬编码数组
+- `shared/tables.js`（2份同步）新增 `product_model`
+- `CLAUDE.md` + `ARCHITECTURE.md` 同步更新
+
+以后增删产品型号直接在飞书表里操作，不用改代码。
+
+## 2026-04-23 随货同行单改造：统一命名 + 按地址合并
+
+### 改名："随货通行单" → "随货同行单"
+
+统一所有用户可见文本，历史文件（STATE.md/BUGS.md/docs/）不动。
+
+改动文件：
+- `public/labels.html` — 3 处（按钮/行操作 title/发货完成弹窗）
+- `ARCHITECTURE.md` — 4 处
+- `README.md` — 1 处
+- `pull-print.js` — 2 处（注释/日志）
+- `docs/slip_e2e_report.md`、`test_slip_e2e.mjs`、`run_full_e2e.js`、`test_e2e_5agents.js`
+
+### 业务逻辑：按顾客+收货地址分组
+
+**核心改动：**
+- `slipHTML()` — 支持 `orderNos[]` 数组 + `address` 收货地址字段
+- `batchSlipHTML()` — **删除**（死代码，被 slipHTML 替代）
+- `GET /api/admin/slip-batch` — 分组从 `代理商+快递单号` 改为 `顾客+收货地址`，支持 `key` 查询参数精确跳转
+- `GET /api/admin/slip/:orderNo` — 新增 `address` 传入
+- `labels.html` — 简化 shipOrders 去掉 agentIds 收集
+
+**新流程：**
+```
+点"同行单" → slip-batch?date=today
+  → 多组：汇总卡片页（每顾客+地址一张卡）
+  → 单组：直接渲染同行单
+点击卡片 → slip-batch?date=...&key=顾客__地址
+  → 渲染该顾客+地址的同行单（含所有订单号+镜片明细）
+```
+
+## 2026-04-23 状态链扩展：新增"待签收"
+
+快递签收后自动变更为"已签收"，无需人工点击。
+
+**新状态链：** `待处理 → 生产中 → 已发货 → 待签收 → 已签收`
+
+### 改动
+
+**server.js：**
+- `POST /api/admin/deliver` — 写 "待签收"（订单表+镜片明细表）
+- `STEP_LABELS` received → "待签收"
+- `STATUS_STEP_KEY` — `"待签收": "received"`，移除 "已签收" 映射
+- 仪表盘新增 `delivered` 计数器（已签收数）
+- 查询/AI 区分"待签收"和"已签收"（"签收"关键词→待签收，"已签收"→已签收）
+
+**logistics.js：**
+- 新增 `updateLensRecord()` 函数
+- `/webhook/delivered` 回调 — 写 "已签收" + 同步镜片明细表
+- 模拟签收 — 同步镜片明细表
+
+**labels.html：**
+- 新增 "待签收" 统计卡（青色 #13c2c2）
+- CSS：新增待签收行边框色+badge dot
+- 行操作：
+  - "已发货" → 点"待签收"按钮
+  - "待签收" → 同行单+重打标签
+  - "已签收" → 只读（仅同行单）
+- 底部按钮："标记签收" → "标记待签收"
+- 确认弹窗提示"快递签收后将自动变更为已签收"
+- 流程图/状态分支更新
+- `STEP_NAMES` "签收" → "待签收"
+- 同行单按钮可见性：已发货/待签收/已签收均可见
+
+**CLAUDE.md：**
+- 核心状态机更新为 5 步
+- 开发铁律 5.3 状态流转同步更新
+
 ## 2026-04-23 同事测试反馈修复（第三批）
 
 同事反馈 3 个问题：眼别排序不对、备注混入系统信息、速度慢。
@@ -772,3 +852,31 @@ Clark 要求整体审视三系统架构（CRM + 订单 + 库存），产出两�
 - `public/order.html`：前端并行加载
 - `public/labels.html`：眼别排序修复（ship-preview）
 - `logistics.js`：眼别排序修复（2处）
+
+## 2026-04-23 导出Excel + 标签预览 + 验真时间修复
+
+### 导出Excel修复
+- batch-zip 端点：移除 ZIP 打包（QR/标签/说明.txt），直接返回 `.xlsx`，Content-Type 改为 Excel MIME
+- Content-Disposition 中文文件名导致 `ERR_INVALID_CHAR`：改用 RFC 5987 `filename*=UTF-8''...` 编码
+- 导出数量固定为 1（按顾客维度，每行一个顾客）
+- `buildFactoryExcel` 的 `getInfo()` 支持 `orderNo|customerName` 精确匹配
+- 备注只取订单主表 `info.remark`，不再拼接镜片明细 `f["备注"]`
+- `quickZip(orderNo)` → `quickZip(orderNo, customerName)`，单行导出也传顾客名
+
+### 标签预览修复
+- `buildLabelHtml` / `buildLabelHtmlFromFields`：body 和 .label 的 `height:40mm` + `overflow:hidden` 改为 `min-height:40mm`，预览完整展开
+- `labels/batch` 端点新增 `customer` 参数过滤
+- `previewSelected()` 改为传顾客名，选中一个顾客只预览她的标签
+
+### 批量打印标签
+- "打印标签" 按钮文案改为"批量打印标签"
+- `printLabels()` 从浏览器打印改为逐个入队到打印队列（→ 斑马打印机）
+
+### 验真时间修复
+- `/verify/:lensCode` 验真时间从订单创建时间改为扫码当前时间
+
+### 随货同行单
+- 打印按钮放大：padding 13px 28px，字号 16px，加粗
+
+### 库存扣减提醒
+- 移除 `/api/submit` 中库存扣减失败写入订单备注的逻辑（`[系统] 库存扣减失败/异常需人工处理`），仅保留 console.error
