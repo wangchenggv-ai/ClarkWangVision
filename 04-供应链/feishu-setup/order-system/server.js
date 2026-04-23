@@ -1304,13 +1304,15 @@ async function generateQRPng(lensCode) {
 }
 
 // 生成工厂 Excel 文件
-// orderInfoMap: { [orderNo]: { remark, address, contact, phone, quantity } } 每个订单独立的信息
+// orderInfoMap: { ["orderNo|customerName"]: { remark, address, contact, phone, quantity } } 按顾客维度
 // 兼容旧调用：也支持单个 info 对象 { remark, address, contact, phone }
 function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
   const isMap = orderInfoMap && !orderInfoMap.remark && !orderInfoMap.address;
-  const getInfo = (recOrderNo) => {
+  const getInfo = (recOrderNo, recCustomer) => {
     if (!isMap) return orderInfoMap; // 旧格式：单个 info
-    return orderInfoMap[recOrderNo] || Object.values(orderInfoMap)[0] || {};
+    // 新格式：先按 "orderNo|customerName" 精确匹配，再按 orderNo 回退
+    const exactKey = `${recOrderNo}|${recCustomer}`;
+    return orderInfoMap[exactKey] || orderInfoMap[recOrderNo] || Object.values(orderInfoMap)[0] || {};
   };
   const sorted = [...records].sort((a, b) => {
     const nameCmp = String(a.fields["顾客姓名"] || "").localeCompare(String(b.fields["顾客姓名"] || ""), "zh-CN");
@@ -1322,7 +1324,7 @@ function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
   });
   const rows = sorted.map(rec => {
     const f = rec.fields;
-    const info = getInfo(f["订单编号"] || "");
+    const info = getInfo(f["订单编号"] || "", f["顾客姓名"] || "");
     return {
       "订单号": f["订单编号"] || "",
       "顾客": f["顾客姓名"] || "",
@@ -1337,7 +1339,7 @@ function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
       "联系人": info.contact || "",
       "联系电话": info.phone || "",
       "收货地址": info.address || "",
-      "备注": f["备注"] || info.remark || "",
+      "备注": info.remark || "",
     };
   });
 
@@ -2382,18 +2384,6 @@ const server = createServer(async (req, res) => {
       }
       if (deductErrors.length > 0) {
         console.error(`  ⚠️ 订单 ${orderNo} 部分库存扣减失败:`, deductErrors);
-        // 标记订单备注（best effort）
-        try {
-          const errNote = deductErrors.map(e => `${e.sku} SPH=${e.sph} CYL=${e.cyl}(${e.reason})`).join(", ");
-          for (const rec of orderRecords) {
-            rec.fields["备注"] = (rec.fields["备注"] || "") + ` [系统] 库存扣减失败: ${errNote}`;
-          }
-          const encoded = encodeURIComponent(`"${orderNo}"`);
-          const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
-          for (const rec of d?.items || []) {
-            await updateRecord(TABLES.order, rec.record_id, { "备注": `[系统] 库存扣减异常需人工处理: ${errNote}` });
-          }
-        } catch { /* best effort */ }
       }
 
       // 镜片码+QR 异步生成（不阻塞下单返回），带重试
@@ -3094,7 +3084,7 @@ const server = createServer(async (req, res) => {
       return logReq(req, 200, start);
     }
 
-    // GET /api/admin/batch-zip — 批量导出 ZIP（多订单合并为一个 ZIP）
+    // GET /api/admin/batch-zip — 批量导出 Excel（按顾客维度）
     const batchZipMatch = pathname.match(/^\/api\/admin\/batch-zip$/);
     if (batchZipMatch && req.method === "GET") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
@@ -3104,38 +3094,33 @@ const server = createServer(async (req, res) => {
 
       const orderNos = orderNosParam.split(",").map(s => s.trim()).filter(Boolean);
       const customerFilter = url.searchParams.get("customer") || "";
-      const allFiles = [];
-      const allDetails = [];   // 合并所有订单的镜片记录
-      const orderInfoMap = {}; // orderNo → orderInfo
+      const allDetails = [];
+      const orderInfoMap = {}; // "orderNo|customerName" → { remark, address, contact, phone, quantity }
 
       for (const orderNo of orderNos) {
         let details = await getLensDetailsByOrder(orderNo);
         if (!details.length) continue;
 
-        // 按顾客姓名过滤（④-6），支持逗号分隔多客户名
+        // 按顾客姓名过滤，支持逗号分隔多客户名
         if (customerFilter) {
           const names = customerFilter.split(",").map(s => s.trim()).filter(Boolean);
           details = details.filter(r => names.includes(r.fields["顾客姓名"] || ""));
         }
         if (!details.length) continue;
 
-        // 获取订单主表：备注、收货地址、联系人、联系电话、数量
-        // 每个订单号独立查询，避免多订单混用信息
-        if (!orderInfoMap[orderNo]) {
+        // 每个顾客独立查询订单主表信息
+        const customersInOrder = [...new Set(details.map(r => r.fields["顾客姓名"] || ""))];
+        for (const customerName of customersInOrder) {
+          const infoKey = `${orderNo}|${customerName}`;
+          if (orderInfoMap[infoKey]) continue;
           const orderEnc = encodeURIComponent(`"${orderNo}"`);
           const orderData = await feishuApi("GET",
             `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${orderEnc}`
           );
-          let orderItems = orderData?.items || [];
-          // 按客户名过滤，只取被选中患者的备注
-          if (customerFilter) {
-            const names = customerFilter.split(",").map(s => s.trim()).filter(Boolean);
-            orderItems = orderItems.filter(r => names.includes(r.fields["顾客姓名"] || ""));
-          }
-          const allRemarks = orderItems.map(r => r.fields["备注"] || "").filter(Boolean);
-          const of = orderItems[0]?.fields || {};
-          orderInfoMap[orderNo] = {
-            remark: [...new Set(allRemarks)].join("；"),
+          const customerRec = (orderData?.items || []).find(r => (r.fields["顾客姓名"] || "") === customerName);
+          const of = customerRec?.fields || {};
+          orderInfoMap[infoKey] = {
+            remark: of["备注"] || "",
             address: of["收货地址"] || "",
             contact: of["联系人"] || "",
             phone: of["联系电话"] || "",
@@ -3144,54 +3129,21 @@ const server = createServer(async (req, res) => {
         }
 
         allDetails.push(...details);
-
-        // QR + 标签按订单分子目录
-        const prefix = orderNos.length > 1 ? `${orderNo}/` : "";
-        for (const rec of details) {
-          const f = rec.fields;
-          const lensCode = f["镜片码"];
-          if (!lensCode) continue;
-
-          const qrPath = resolve(QR_DIR, `${lensCode}.png`);
-          if (existsSync(qrPath)) {
-            allFiles.push({ name: `${prefix}qrcodes/${lensCode}.png`, data: readFileSync(qrPath) });
-          }
-
-          const labelEntry = await buildLabelHtml(rec, orderNo);
-          if (labelEntry) {
-            allFiles.push({ name: `${prefix}${labelEntry.name}`, data: labelEntry.data });
-          }
-        }
       }
 
-      // 合并所有订单到一个 Excel（④-5）
-      if (allDetails.length > 0) {
-        try {
-          const excelName = orderNos.length > 1 ? `订单_合并_${orderNos.length}单.xlsx` : `订单_${orderNos[0]}.xlsx`;
-          const excelBuf = buildFactoryExcel(allDetails, orderNos.join("+"), orderInfoMap);
-          if (excelBuf && excelBuf.length > 0) {
-            allFiles.push({ name: excelName, data: excelBuf });
-          } else {
-            console.error(`⚠️ Excel buffer 为空 (${allDetails.length} 条记录)`);
-          }
-        } catch (e) { console.error("⚠️ Excel 生成失败:", e.message, e.stack); }
-      } else {
-        console.error(`⚠️ batch-zip: allDetails 为空, orders=${orderNos.join(",")}, customerFilter=${customerFilter}`);
-      }
+      if (!allDetails.length) { jsonRes(res, 404, { error: "所选订单无镜片数据" }); return logReq(req, 404, start); }
 
-      if (!allFiles.length) { jsonRes(res, 404, { error: "所选订单无镜片数据" }); return logReq(req, 404, start); }
+      // 生成 Excel
+      const excelName = orderNos.length > 1 ? `订单_合并_${orderNos.length}单.xlsx` : `订单_${orderNos[0]}.xlsx`;
+      const excelBuf = buildFactoryExcel(allDetails, orderNos.join("+"), orderInfoMap);
+      if (!excelBuf || !excelBuf.length) { jsonRes(res, 500, { error: "Excel 生成失败" }); return logReq(req, 500, start); }
 
-      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-      const readme = `工厂导出包 — ${dateStr}\n共 ${orderNos.length} 个订单\n`;
-      allFiles.push({ name: "说明.txt", data: Buffer.from(readme, "utf-8") });
-
-      const zipBuf = buildZipBuffer(allFiles);
       res.writeHead(200, {
-        "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="factory-export-${dateStr}.zip"`,
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="${excelName}"`,
         "Access-Control-Allow-Origin": "*",
       });
-      res.end(zipBuf);
+      res.end(excelBuf);
       return logReq(req, 200, start);
     }
 
@@ -3278,12 +3230,17 @@ const server = createServer(async (req, res) => {
               return {
                 eye: rawVal(lf["眼别"]) || "—",
                 sku: rawVal(lf["产品型号"]),
+                customerName: rawVal(lf["顾客姓名"]) || "",
                 sph: lf["球镜SPH"] ?? "",
                 cyl: lf["柱镜CYL"] ?? "",
                 axis: lf["轴位AXIS"] ?? "",
                 lensCode: rawVal(lf["镜片码"]),
               };
-            }).sort((a, b) => a.eye.includes("右") ? -1 : 1);
+            }).sort((a, b) => {
+              const nc = (a.customerName || "").localeCompare(b.customerName || "", "zh-CN");
+              if (nc !== 0) return nc;
+              return a.eye.includes("右") ? -1 : 1;
+            });
             orders.push({
               orderNo,
               customerName: custName,
@@ -3330,12 +3287,17 @@ const server = createServer(async (req, res) => {
           return {
             eye: rawVal(f["眼别"]) || (i === 0 ? "右眼" : "左眼"),
             sku: rawVal(f["产品型号"]),
+            customerName: rawVal(f["顾客姓名"]) || "",
             sph: f["球镜SPH"] ?? "",
             cyl: f["柱镜CYL"] ?? "",
             axis: f["轴位AXIS"] ?? "",
             lensCode: rawVal(f["镜片码"]),
           };
-        }).sort((a, b) => a.eye.includes("右") ? -1 : 1);
+        }).sort((a, b) => {
+          const nc = (a.customerName || "").localeCompare(b.customerName || "", "zh-CN");
+          if (nc !== 0) return nc;
+          return a.eye.includes("右") ? -1 : 1;
+        });
         const html = slipHTML({
           orderNo,
           customerName: rawVal(f0["顾客姓名"]),
@@ -4270,8 +4232,8 @@ a{color:inherit;text-decoration:none}</style></head><body>
       if (producingCount > 0) {
         suggestions.push({
           priority: "medium",
-          action: "导出工厂包",
-          detail: `${producingCount} 个生产中订单可导出ZIP给工厂`,
+          action: "导出Excel给工厂",
+          detail: `${producingCount} 个生产中订单可导出Excel给工厂`,
           actionType: "export-zip",
         });
       }

@@ -711,6 +711,7 @@ async function slipBatch() {
         const f = ld.fields;
         order.rows.push({
           eye:      rawVal(f["眼别"]) || "—",
+          customerName: rawVal(f["顾客姓名"]) || "",
           sku:      rawVal(f["产品型号"]),
           sph:      f["球镜SPH"] ?? "",
           cyl:      f["柱镜CYL"] ?? "",
@@ -720,8 +721,12 @@ async function slipBatch() {
       }
     }
 
-    // 右眼排前面
-    for (const o of Object.values(orderMap)) o.rows.sort((a, b) => a.eye.includes("右") ? -1 : 1);
+    // 按顾客+眼别排序（右眼在上，左眼在下）
+    for (const o of Object.values(orderMap)) o.rows.sort((a, b) => {
+      const nc = (a.customerName || "").localeCompare(b.customerName || "", "zh-CN");
+      if (nc !== 0) return nc;
+      return a.eye.includes("右") ? -1 : 1;
+    });
 
     const orders = Object.values(orderMap);
     const slipData = { agentId: group.agentId, agentName: group.agentName,
@@ -1111,6 +1116,7 @@ async function generateSlip() {
     const f = r.fields;
     return {
       eye:      rawVal(f["眼别"]) || (lensDetails.indexOf(r) === 0 ? "右眼" : "左眼"),
+      customerName: rawVal(f["顾客姓名"]) || "",
       sku:      rawVal(f["产品型号"]),
       sph:      f["球镜SPH"] ?? "",
       cyl:      f["柱镜CYL"] ?? "",
@@ -1119,8 +1125,12 @@ async function generateSlip() {
     };
   });
 
-  // 右眼排前面
-  rows.sort((a, b) => (a.eye.includes("右") ? -1 : 1));
+  // 按顾客+眼别排序（右眼在上，左眼在下）
+  rows.sort((a, b) => {
+    const nc = (a.customerName || "").localeCompare(b.customerName || "", "zh-CN");
+    if (nc !== 0) return nc;
+    return a.eye.includes("右") ? -1 : 1;
+  });
 
   const order = {
     orderNo:      ORDER_NO,

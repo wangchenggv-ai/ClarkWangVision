@@ -1114,8 +1114,8 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
           <div class="flow-step">
             <div class="step-num c3">3</div>
             <div class="step-content">
-              <div class="step-title">导出ZIP给工厂</div>
-              <div class="step-desc">Excel处方 + QR码 + 标签 → ZIP 包发工厂生产</div>
+              <div class="step-title">导出Excel给工厂</div>
+              <div class="step-desc">导出Excel处方数据，发工厂生产</div>
             </div>
             <span class="step-actor actor-assistant">助理</span>
           </div>
@@ -1348,7 +1348,7 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
     <div class="divider"></div>
     <div class="action-group">
       <button class="btn btn-outline ctx-btn act-confirm-btn" style="color:#1677ff;border-color:#1677ff" onclick="confirmOrders()">确认订单</button>
-      <button class="btn btn-outline" style="color:#0958d9;border-color:#91caff" onclick="downloadZip()">导出ZIP给工厂</button>
+      <button class="btn btn-outline" style="color:#0958d9;border-color:#91caff" onclick="downloadZip()">导出Excel给工厂</button>
       <button class="btn btn-outline" style="color:#531dab;border-color:#d3adf7" onclick="previewSelected()">预览标签</button>
       <button class="btn btn-outline" style="color:#722ed1;border-color:#d3adf7" onclick="printLabels()">打印标签</button>
       <button class="btn btn-outline" style="color:#eb2f96;border-color:#ffadd2" onclick="printZplLabels()">&#128424; 入队打印</button>
@@ -1707,7 +1707,7 @@ function renderOrders() {
 function getQuickAction(o) {
   const cn = jsAttr(o.customerName);
   if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}')">确认</button>`;
-  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}')" title="导出ZIP给工厂">导出</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="入队等待本地打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}')">发货</button>`;
+  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}','${cn}')" title="导出Excel给工厂">导出</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="入队等待本地打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}')">发货</button>`;
   if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货通行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">签收</button>`;
   if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#ccc;font-size:11px">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货通行单" style="color:#c0392b">&#128196;</button>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
@@ -1907,8 +1907,9 @@ function fmtDateISO(d) {
 
 // ─── 单行快捷操作 ───────────────────────────────────────────────────
 
-function quickZip(orderNo) {
-  const url = `/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNo)}`;
+function quickZip(orderNo, customerName) {
+  let url = `/api/admin/batch-zip?admin=${adminToken}&orderNos=${encodeURIComponent(orderNo)}`;
+  if (customerName) url += `&customer=${encodeURIComponent(customerName)}`;
   window.open(url, "_blank");
 }
 
@@ -1990,7 +1991,11 @@ async function shipOrders() {
   let previewHtml = "";
   if (preview.orders?.length) {
     previewHtml = preview.orders.map(o => {
-      o.rows.sort((a, b) => (a.eye?.includes('右') ? 0 : 1) - (b.eye?.includes('右') ? 0 : 1));
+      o.rows.sort((a, b) => {
+        const nc = (a.customerName || '').localeCompare(b.customerName || '', 'zh-CN');
+        if (nc !== 0) return nc;
+        return (a.eye?.includes('右') ? 0 : 1) - (b.eye?.includes('右') ? 0 : 1);
+      });
       const rowsHtml = o.rows.map(r =>
         `<tr><td class="eye-${r.eye.includes('右') ? 'r' : 'l'}">${r.eye.includes('右') ? 'R' : 'L'}</td><td>${r.sku}</td><td>${r.sph != null ? Number(r.sph).toFixed(2) : ''}</td><td>${r.cyl != null ? Number(r.cyl).toFixed(2) : ''}</td><td>${r.axis}</td><td style="font-family:monospace;font-size:8pt">${r.lensCode}</td></tr>`
       ).join("");

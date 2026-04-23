@@ -327,7 +327,11 @@ async function showDetail(orderNo) {
         <th>备注</th>
       </tr></thead><tbody>`;
 
-    const sortedItems = [...data.items].sort((a, b) => (a.eye?.includes("右") ? 0 : 1) - (b.eye?.includes("右") ? 0 : 1));
+    const sortedItems = [...data.items].sort((a, b) => {
+      const nc = (a.customerName || "").localeCompare(b.customerName || "", "zh-CN");
+      if (nc !== 0) return nc;
+      return (a.eye?.includes("右") ? 0 : 1) - (b.eye?.includes("右") ? 0 : 1);
+    });
     for (const item of sortedItems) {
       const eyeBadge = item.eye?.includes("右")
         ? '<span style="background:#fff1f0;color:#cf1322;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">右</span>'
