@@ -2241,7 +2241,6 @@ const server = createServer(async (req, res) => {
       const customerId = await getOrCreateCustomer(agent.name);
       const orderNo = genOrderNo();
       const now = Date.now();
-      const initWf = JSON.stringify({ current: 0, steps: { submitted: { ts: now } } });
       const orderRecords = [];    // 订单主表记录
       const lensRecords = [];     // 镜片明细表记录
       const deductionPlan = [];   // 库存扣减计划（预检+实际扣减共用）
@@ -2277,7 +2276,6 @@ const server = createServer(async (req, res) => {
             "订单来源": "代理商门户",
             "客户ID": customerId,
             "是否装配": assembly !== false ? "是" : "否",
-            "流程步骤": initWf,
             ...(terminalCustomer?.name ? { "终端客户": terminalCustomer.name } : {}),
             ...(terminalCustomer?.contact ? { "联系人": terminalCustomer.contact } : {}),
             ...(terminalCustomer?.phone ? { "联系电话": terminalCustomer.phone } : {}),
