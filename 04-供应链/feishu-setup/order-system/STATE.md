@@ -715,3 +715,60 @@ Clark 要求整体审视三系统架构（CRM + 订单 + 库存），产出两�
 - `print_labels.js`（全量 CSS 更新 + A4 网格）
 - `printer_config.json`（尺寸字段）
 - `public/labels.html`（步骤描述文字）
+
+## 2026-04-23 同事测试反馈修复（第三批）
+
+同事反馈 3 个问题：眼别排序不对、备注混入系统信息、速度慢。
+
+### 眼别排序根因修复
+
+**根因：** track.html 第 330 行 `sort` 只按 eye 排序（`a.eye==="右" ? 0 : 1`），不按顾客分组。导致所有人的右眼排前面、所有人的左眼排后面，同一个人的双眼被打散。
+
+**修复：** 所有眼别排序统一为**按顾客姓名分组 → 组内右眼在前、左眼在后**。
+
+| 文件 | 位置 | 修复 |
+|------|------|------|
+| `track.html` | showDetail 排序 | 旧：只按 eye → 新：customerName + eye |
+| `labels.html` | ship-preview 排序 | 同上 |
+| `logistics.js` | generateSlip + batchSlip | 同上（行数据新增 customerName 字段） |
+| `server.js` | ship-preview API rows | 同上 |
+| `server.js` | slip/:orderNo rows | 同上 |
+
+### 备注不再混入系统信息
+
+- 移除 `/api/submit` 中库存扣减失败自动写入备注的逻辑（`[系统] 库存扣减失败: ...`）
+- Excel 导出备注只取订单主表字段，不再拼接系统信息
+- `buildFactoryExcel` key 改为 `"orderNo|customerName"` 按顾客维度查找
+
+### SPH/CYL 格式化统一
+
+所有显示 SPH/CYL 的位置统一使用 `fmt()` 函数（+/-前缀 + 2 位小数）：
+
+| 位置 | 修复 |
+|------|------|
+| `slipHTML()` 随货同行单 | `r.sph \|\| "—"` → `fmt(r.sph)` |
+| `batchSlipHTML()` 合单通行单 | 同上 |
+| `/verify/:lensCode` 验真页 | `String(e.sph ?? "—")` → `fmt(e.sph)` |
+| 验真页眼别排序 | 新增 `eyes.sort(右眼在前)` |
+
+### 性能优化
+
+| 优化 | 之前 | 之后 |
+|------|------|------|
+| 代理商缓存 TTL | 30 秒 | 5 分钟 |
+| /api/order/:orderNo | 串行 2 次飞书调用 | Promise.all 并行 |
+| order.html init | agent → skus 串行 | 并行加载 |
+| track.html init | agent → skus → orders 串行 | agent+skus 并行，orders 不阻塞 |
+
+### Excel 导出简化
+
+- batch-zip 端点从 ZIP（Excel+QR+标签）简化为直接导出 Excel
+- `orderInfoMap` key 从纯 orderNo 改为 `"orderNo|customerName"`，每顾客独立信息
+
+### 涉及文件
+
+- `server.js`：眼别排序（2处）+ 备注清理 + Excel导出重构 + SPH/CYL格式化 + 订单详情并行
+- `public/track.html`：眼别排序修复 + 前端并行加载
+- `public/order.html`：前端并行加载
+- `public/labels.html`：眼别排序修复（ship-preview）
+- `logistics.js`：眼别排序修复（2处）
