@@ -508,6 +508,52 @@ node pull-print.js
 - [ ] slip 类型自动打开浏览器
 - [ ] E2E 全流程回归（下单→入库→打印→工作流→labeled）
 
+## 2026-04-23 架构审查 + 控制中心升级
+
+### 全景架构审查
+
+Clark 要求整体审视三系统架构（CRM + 订单 + 库存），产出两份文档：
+- `ARCHITECTURE.md` — 全面重写（4/15 → 4/23），新增度数级库存、14条规则引擎、打印队列拉模式、控制中心、寄售库存、工作流8步等模块
+- `../ARCHITECTURE-OVERVIEW.md` — 新建，三系统全景分析（19张表、数据流、现状评估、下一步方向）
+
+### Admin 控制中心升级（3 Tab → 4 Tab）
+
+**Dashboard Tab（增强）：**
+- 新增订单概览指标卡：总订单数 / 待处理 / 超24h未处理 / 今日订单 / 生产中 / 已发货
+- 新增告警 feed：聚合超期订单、低库存、排产待回补，红/黄标签
+- 新增打印队列状态卡：待打印 / 已完成 / 失败 / 总计
+- 保留原有：库存指标、SKU达标率、TOP10缺口、排产单
+
+**规则管理 Tab（增强）：**
+- 新增执行历史面板：显示最近30条规则执行记录（✓/✗ + 耗时 + 时间）
+- 执行后自动刷新历史
+
+**库存管理 Tab（新增）：**
+- 代理商库存概览：行数/代理商数/SKU数/自有/寄售/总计
+- 代理商库存明细表：按 agent_id × SKU × SPH × CYL 展示自有/寄售分拆
+
+**数据流 Tab（增强）：**
+- 新增 CRM 同步流（sync_agents / sync_customers）
+- 新增打印队列流（labels.html → 入队 → pull-print.js → TCP）
+
+### 后端新增
+
+| 端点 | 功能 |
+|------|------|
+| `GET /api/admin/alerts` | 完整告警 feed（超期订单详情 + 低库存 + 排产待回补 + 规则执行失败），上限50条 |
+| `GET /api/admin/execution-history?limit=N` | 规则执行历史（内存200条） |
+| `GET /api/admin/dashboard` | 扩展：新增 orderMetrics / printQueue / alerts 字段 |
+
+### 改动文件
+- `server.js`：+80 行（`_execLog` 数组、execute-rule 执行记录、dashboard 扩展、2个新端点、告警上限50）
+- `public/control.html`：全面重写（+150 行，4 Tab、告警 feed、订单指标、执行历史、库存管理 Tab、CRM/打印数据流）
+
+### Simplify 清理
+- 提取 `mc()` helper，消除 5 处重复 metric card 渲染
+- 删除 `doneCount` 未使用变量
+- `/api/admin/alerts` 告警数组加 cap 50，防无限增长
+- 删除 WHAT 注释
+
 ## 2026-04-23 库存管理系统前端 + API 完成
 
 库存系统专属管理页面上线，单据式入库/出库操作，5 Tab 布局。
@@ -593,3 +639,43 @@ node pull-print.js
 - [ ] slip 类型自动打开浏览器
 - 入库/出库写入 stock_detail + stock_movement 双表成功
 - 热力图 + 明细表数据正确
+
+## 2026-04-23 架构审查 + 控制中心 + 工作流修复
+
+### 全景架构审查
+- 新建 `ARCHITECTURE-OVERVIEW.md`：三系统全景分析（19张表、数据流、14条规则、现状评估、Phase 1-3 下一步方向）
+- `ARCHITECTURE.md` 全面更新（4/15→4/23）：新增度数级库存、规则引擎、打印队列拉模式、控制中心、寄售库存、工作流8步
+
+### Admin 控制中心升级（3→4 Tab）
+- **Dashboard Tab**：新增订单概览6指标卡、告警feed（红/黄）、打印队列4指标
+- **规则管理 Tab**：新增执行历史面板（最近30条）
+- **库存管理 Tab（新增）**：代理商库存概览+明细表
+- **数据流 Tab**：新增CRM同步流+打印队列流图
+- 后端：`/api/admin/alerts`、`/api/admin/execution-history`、`/api/admin/dashboard` 扩展
+
+### 工作流可视化修复
+- 问题：所有订单流程步骤全灰，无当前步骤指示
+- 根因：`/api/submit` 创建订单时未写 `流程步骤` 字段
+- 修复：下单时写入 `initWf`（submitted 步骤）；workflow API 增加兜底逻辑（从 `订单状态` 推断步骤）
+- `STATUS_STEP_KEY` 映射表替代硬编码索引，数据驱动
+
+### labels.html 导航
+- 右上角新增"仪表盘"链接，跳转 `/control`
+
+### ZPL 标签尺寸调整
+- 80×50mm → 75×40mm（`buildZpl`、`buildTestZpl`、`buildLabelHtml`、`buildLabelHtmlFromFields` 全部同步）
+
+### Simplify 清理
+- `initWf` 从循环内提到循环外（避免重复 JSON.stringify）
+- fallback if 链 → `STATUS_STEP_KEY` + `STEP_ORDER.indexOf()` 数据驱动
+- 删除 `hover:opacity:1` 无效 inline CSS
+- `mc()` helper 提取，消除 5 处 metric card 重复
+- 删除未使用 `doneCount`、冗余注释
+- alerts 循环增加 `>=50` 提前 break
+
+### 改动文件
+- `server.js`：+30 行（工作流init+兜底+STATUS_STEP_KEY+alerts cap）
+- `public/labels.html`：仪表盘链接+ZPL尺寸描述
+- `public/control.html`：mc()提取+注释清理
+- `ARCHITECTURE.md`：全面重写
+- `ARCHITECTURE-OVERVIEW.md`：新建

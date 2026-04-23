@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>专用打印电脑配置清单</title>
+<style>
+  @page { size: A4; margin: 18mm 20mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; font-size: 11pt; color: #1a1a2e; line-height: 1.7; padding: 40px; }
+  h1 { font-size: 18pt; color: #c0392b; border-bottom: 3px solid #c0392b; padding-bottom: 8px; margin-bottom: 6px; }
+  .subtitle { color: #888; font-size: 10pt; margin-bottom: 24px; }
+  h2 { font-size: 13pt; color: #2c3e50; margin: 24px 0 10px; padding-left: 10px; border-left: 4px solid #c0392b; }
+  h3 { font-size: 11pt; color: #555; margin: 14px 0 6px; }
+  p, li { margin-bottom: 4px; }
+  ol { padding-left: 24px; }
+  ol li { margin-bottom: 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 10pt; }
+  th { background: #f0f0f0; text-align: left; padding: 6px 10px; border: 1px solid #ddd; font-weight: 600; }
+  td { padding: 6px 10px; border: 1px solid #ddd; }
+  tr:nth-child(even) td { background: #fafafa; }
+  pre { background: #1e1e2e; color: #cdd6f4; padding: 12px 16px; border-radius: 6px; font-size: 10pt; margin: 8px 0 12px; overflow-x: auto; font-family: "Cascadia Code", Consolas, monospace; }
+  code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; font-size: 10pt; font-family: Consolas, monospace; }
+  .check { list-style: none; padding-left: 0; }
+  .check li { padding: 3px 0; }
+  .check li::before { content: "☐ "; font-size: 13pt; }
+  .warn { background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px 14px; margin: 10px 0; font-size: 10pt; border-radius: 4px; }
+  .info { background: #d1ecf1; border-left: 4px solid #17a2b8; padding: 10px 14px; margin: 10px 0; font-size: 10pt; border-radius: 4px; }
+  .section { page-break-inside: avoid; }
+  @media print {
+    body { padding: 0; }
+    h2 { page-break-after: avoid; }
+    table, pre { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<h1>专用打印电脑配置清单</h1>
+<div class="subtitle">斑马打印机 ZT410 · 队列拉模式守护进程 · 高视星镜片供应链系统</div>
+
+<div class="info">
+  <strong>目标：</strong>在专用 Windows 电脑上运行 <code>pull-print.js</code> 守护进程，轮询华为云打印队列，收到任务后通过 TCP 发送 ZPL 到斑马打印机。
+</div>
+
+<div class="section">
+<h2>一、网络确认</h2>
+<table>
+  <tr><th style="width:30%">项目</th><th>要求</th><th>验证方法</th></tr>
+  <tr><td>访问华为云</td><td>HTTPS <code>lab.gaushclear.com</code> 可达</td><td>浏览器打开 <code>https://lab.gaushclear.com/health</code>，看到 JSON 文字即通</td></tr>
+  <tr><td>连斑马打印机</td><td>同一局域网，打印机 IP 已知</td><td>看打印机面板 → 网络设置 → 记下 IP 地址</td></tr>
+  <tr><td>打印机 TCP 端口</td><td>9100 端口开放</td><td><code>telnet 打印机IP 9100</code> 能连上即通</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>二、安装 Node.js</h2>
+<ol>
+  <li>打开浏览器访问 <code>https://nodejs.org</code></li>
+  <li>下载 <strong>LTS 版本</strong>（v20 或 v22，不要 v18 以下）</li>
+  <li>安装时一路默认，<strong>勾选 "Add to PATH"</strong></li>
+  <li>验证：打开 <strong>PowerShell</strong>（或 CMD），输入：<br>
+    <pre>node -v</pre>
+    应显示 <code>v20.x.x</code> 或 <code>v22.x.x</code>
+  </li>
+</ol>
+</div>
+
+<div class="section">
+<h2>三、复制程序文件</h2>
+<p>从项目目录复制以下 <strong>2 个文件</strong> 到打印电脑（如 <code>C:\PrintDaemon\</code>）：</p>
+<table>
+  <tr><th>文件名</th><th>说明</th></tr>
+  <tr><td><code>pull-print.js</code></td><td>守护进程主程序</td></tr>
+  <tr><td><code>pull-print-config.json</code></td><td>配置文件（服务器地址、打印机 IP 等）</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>四、修改配置</h2>
+<p>用记事本打开 <code>pull-print-config.json</code>：</p>
+<pre>{
+  "serverUrl": "https://lab.gaushclear.com",
+  "adminToken": "GaushOrderMock",
+  "pollMs": 2000,
+  "printerHost": "192.168.0.208",
+  "printerPort": 9100,
+  "timeoutMs": 5000,
+  "maxRetries": 3
+}</pre>
+<table>
+  <tr><th style="width:25%">字段</th><th>改什么</th><th>说明</th></tr>
+  <tr><td><code>printerHost</code></td><td><strong>斑马打印机实际 IP</strong></td><td>从打印机面板网络设置查</td></tr>
+  <tr><td><code>printerPort</code></td><td>一般不用改</td><td>默认 9100 是斑马标准端口</td></tr>
+  <tr><td><code>serverUrl</code></td><td>不用改</td><td>指向华为云服务器</td></tr>
+  <tr><td><code>adminToken</code></td><td>不用改</td><td>管理后台认证密码</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>五、启动守护进程</h2>
+<ol>
+  <li>打开 PowerShell，进入程序目录：
+    <pre>cd C:\PrintDaemon</pre>
+  </li>
+  <li>运行守护进程：
+    <pre>node pull-print.js</pre>
+  </li>
+  <li>看到以下输出即启动成功：
+    <pre>[2026/4/23 xx:xx:xx] ℹ pull-print 守护进程启动
+[2026/4/23 xx:xx:xx] ℹ 服务器: https://lab.gaushclear.com
+[2026/4/23 xx:xx:xx] ℹ 打印机: 192.168.0.208:9100
+[2026/4/23 xx:xx:xx] ℹ 轮询间隔: 2000ms
+[2026/4/23 xx:xx:xx] ℹ 按 Ctrl+C 退出</pre>
+  </li>
+</ol>
+<div class="warn"><strong>注意：</strong>保持这个 PowerShell 窗口不要关闭，守护进程一直在轮询等待打印任务。</div>
+</div>
+
+<div class="section">
+<h2>六、验证连通性</h2>
+<p>在守护进程运行的状态下，用 <strong>另一台电脑</strong> 的浏览器打开管理后台：</p>
+<pre>https://lab.gaushclear.com/labels?admin=GaushOrderMock</pre>
+<ol>
+  <li>选一个"生产中"的订单，点 <strong>🖨</strong> 按钮</li>
+  <li>回到打印电脑的 PowerShell 窗口，应看到：
+    <pre>ℹ 收到 2 个打印任务
+✓ 标签已打印: ORD-xxx 张三 右眼 [9A01...]
+✓ 标签已打印: ORD-xxx 张三 左眼 [C0CD...]</pre>
+  </li>
+  <li>斑马打印机应出两张标签</li>
+</ol>
+</div>
+
+<div class="section">
+<h2>七、常见问题排查</h2>
+<table>
+  <tr><th style="width:40%">现象</th><th>排查方法</th></tr>
+  <tr><td>守护进程报 <code>TCP 失败</code></td><td>检查打印机 IP 是否正确，网线是否插好</td></tr>
+  <tr><td>守护进程报 <code>HTTP 401</code></td><td>检查配置文件中 <code>adminToken</code> 是否正确</td></tr>
+  <tr><td>守护进程报连不上服务器</td><td>检查网络能否访问 <code>lab.gaushclear.com</code></td></tr>
+  <tr><td>等很久没反应</td><td>正常——队列为空时静默等待，从管理后台触发一个打印任务</td></tr>
+  <tr><td>打印机出标签但内容空白</td><td>ZPL 解析问题，联系 Clark 检查</td></tr>
+  <tr><td>node 命令找不到</td><td>Node.js 安装时没勾 "Add to PATH"，重新安装</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>八、下午测试前确认清单</h2>
+<ul class="check">
+  <li>Node.js 已安装，PowerShell 中 <code>node -v</code> 正常显示版本号</li>
+  <li><code>pull-print.js</code> 和 <code>pull-print-config.json</code> 已复制到 <code>C:\PrintDaemon\</code></li>
+  <li><code>printerHost</code> 已改为斑马打印机实际 IP</li>
+  <li>浏览器能打开 <code>https://lab.gaushclear.com/health</code> 看到 JSON</li>
+  <li><code>telnet 打印机IP 9100</code> 能连上</li>
+  <li><code>node pull-print.js</code> 启动成功，看到 "守护进程启动" 日志</li>
+</ul>
+</div>
+
+<div style="margin-top:40px;padding-top:12px;border-top:1px solid #ddd;color:#999;font-size:9pt;text-align:center">
+  高视星 · 镜片供应链系统 · 打印守护进程部署指南 · 2026-04-23
+</div>
+
+</body>
+</html>

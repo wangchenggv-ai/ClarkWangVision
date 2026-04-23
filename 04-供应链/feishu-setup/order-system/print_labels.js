@@ -1,7 +1,7 @@
 /**
  * print_labels.js — 眼镜镜片专业标签生成器
  *
- * 标签规格：80mm × 50mm（行业通行尺寸）
+ * 标签规格：75mm × 40mm
  * 内容：品牌 / 眼别 / 顾客 / 处方参数 / SKU / 代理商 / 交期 / 镜片码 / QR码
  * 输出：
  *   docs/labels-YYYY-MM-DD.html   — A4批量打印版（每页6张标签）
@@ -130,7 +130,7 @@ function demoRecords() {
   return base.map(r => ({ ...r, orderDate: today, address: "", remark: r.remark || "" }));
 }
 
-// ─── 标签 HTML 生成（单张，80mm×50mm）────────────────────────────────────
+// ─── 标签 HTML 生成（单张，75mm×40mm）────────────────────────────────────
 
 async function buildLabelHtml(rec) {
   const isRight = rec.eye.includes("右") || rec.eye.toUpperCase() === "R";
@@ -164,18 +164,18 @@ async function buildLabelHtml(rec) {
 <html lang="zh-CN"><head><meta charset="UTF-8">
 <title>${rec.orderNo} ${rec.customerName} ${rec.eye}</title>
 <style>
-/* 标签实际打印尺寸：80mm × 50mm */
-@page { size: 80mm 50mm; margin: 0; }
+/* 标签实际打印尺寸：75mm × 40mm */
+@page { size: 75mm 40mm; margin: 0; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-  width: 80mm; height: 50mm;
+  width: 75mm; height: 40mm;
   font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-  font-size: 7pt;
+  font-size: 6pt;
   background: white;
   overflow: hidden;
 }
 .label {
-  width: 80mm; height: 50mm;
+  width: 75mm; height: 40mm;
   display: flex;
   flex-direction: column;
   border: 0.3mm solid #ddd;
@@ -188,23 +188,23 @@ body {
   justify-content: space-between;
   background: ${eyeColor};
   color: white;
-  padding: 1mm 2.5mm;
-  height: 8mm;
+  padding: .8mm 2mm;
+  height: 6.5mm;
   flex-shrink: 0;
 }
 .eye-badge {
-  font-size: 11pt;
+  font-size: 9pt;
   font-weight: 900;
   letter-spacing: 1px;
 }
 .brand {
-  font-size: 7.5pt;
+  font-size: 6.5pt;
   font-weight: 700;
   letter-spacing: 1.5px;
   opacity: 0.92;
 }
 .order-no {
-  font-size: 5.5pt;
+  font-size: 5pt;
   opacity: 0.85;
   font-family: monospace;
 }
@@ -213,33 +213,33 @@ body {
 .body {
   display: flex;
   flex: 1;
-  padding: 1.5mm 2mm 1mm;
-  gap: 2mm;
+  padding: 1mm 1.5mm .8mm;
+  gap: 1.5mm;
   background: ${eyeBg};
 }
 
 /* ── 左侧：文字信息 ── */
-.info { flex: 1; display: flex; flex-direction: column; gap: 0.5mm; min-width: 0; }
+.info { flex: 1; display: flex; flex-direction: column; gap: 0.4mm; min-width: 0; }
 
 .customer-row {
   display: flex;
   align-items: baseline;
   gap: 1.5mm;
   border-bottom: 0.2mm solid ${eyeColor}44;
-  padding-bottom: 1mm;
-  margin-bottom: 0.5mm;
+  padding-bottom: .8mm;
+  margin-bottom: .4mm;
 }
 .customer-name {
-  font-size: 10pt;
+  font-size: 8pt;
   font-weight: 800;
   color: #1a1a2e;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 28mm;
+  max-width: 24mm;
 }
 .sku-name {
-  font-size: 6.5pt;
+  font-size: 5.5pt;
   color: ${eyeColor};
   font-weight: 600;
   white-space: nowrap;
@@ -251,18 +251,18 @@ body {
 .rx-grid {
   display: grid;
   grid-template-columns: auto auto auto auto auto;
-  column-gap: 2.5mm;
-  row-gap: 0.3mm;
-  margin: 0.5mm 0;
+  column-gap: 2mm;
+  row-gap: 0.2mm;
+  margin: 0.3mm 0;
 }
 .rx-label {
-  font-size: 5pt;
+  font-size: 4.5pt;
   color: #888;
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 .rx-value {
-  font-size: 9pt;
+  font-size: 7.5pt;
   font-weight: 700;
   color: #1a1a2e;
   font-family: "SF Mono", "Consolas", monospace;
@@ -273,20 +273,20 @@ body {
 /* ── 附加信息行 ── */
 .meta-row {
   display: flex;
-  gap: 2mm;
-  margin-top: 0.5mm;
+  gap: 1.5mm;
+  margin-top: 0.3mm;
   flex-wrap: wrap;
 }
 .meta-item {
   display: flex;
   align-items: center;
-  gap: 0.8mm;
+  gap: 0.6mm;
 }
-.meta-label { font-size: 5pt; color: #aaa; }
-.meta-value { font-size: 6pt; color: #444; font-weight: 600; }
+.meta-label { font-size: 4.5pt; color: #aaa; }
+.meta-value { font-size: 5.5pt; color: #444; font-weight: 600; }
 
 .remark {
-  font-size: 5.5pt;
+  font-size: 4.5pt;
   color: #b7791f;
   background: #fffbeb;
   border-left: 0.8mm solid #f6ad55;
@@ -304,14 +304,14 @@ body {
   flex-shrink: 0;
 }
 .qr-col img {
-  width: 18mm;
-  height: 18mm;
+  width: 15mm;
+  height: 15mm;
   display: block;
   border: 0.3mm solid #ddd;
   border-radius: 1mm;
 }
 .qr-label {
-  font-size: 4pt;
+  font-size: 3.5pt;
   color: #bbb;
   text-align: center;
 }
@@ -323,13 +323,13 @@ body {
   justify-content: space-between;
   background: #f8f9fa;
   border-top: 0.2mm solid #e9ecef;
-  padding: 0.8mm 2.5mm;
-  height: 6.5mm;
+  padding: 0.6mm 2mm;
+  height: 5.5mm;
   flex-shrink: 0;
 }
 .lens-code {
   font-family: "Courier New", monospace;
-  font-size: 6pt;
+  font-size: 5.5pt;
   font-weight: 700;
   color: #495057;
   letter-spacing: 1px;
@@ -340,7 +340,7 @@ body {
   align-items: flex-end;
 }
 .delivery-badge {
-  font-size: 5.5pt;
+  font-size: 4.5pt;
   font-weight: 700;
   color: white;
   background: ${rec.deliveryType.startsWith("有货") ? "#27ae60" : "#e67e22"};
@@ -348,8 +348,8 @@ body {
   padding: 0.3mm 1.5mm;
   margin-bottom: 0.3mm;
 }
-.promise-date { font-size: 5pt; color: #aaa; }
-.agent-tag { font-size: 4.5pt; color: #ccc; margin-top: 0.2mm; }
+.promise-date { font-size: 4pt; color: #aaa; }
+.agent-tag { font-size: 4pt; color: #ccc; margin-top: 0.2mm; }
 </style></head><body>
 <div class="label">
 
@@ -536,8 +536,8 @@ body {
   margin: 0 auto 12px;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(3, 80mm);
-  grid-template-rows: repeat(3, 50mm);
+  grid-template-columns: repeat(2, 75mm);
+  grid-template-rows: repeat(5, 40mm);
   gap: 4mm;
   align-content: start;
   justify-content: center;
@@ -550,9 +550,9 @@ body {
   .a4-page { margin: 0; box-shadow: none; }
 }
 
-/* ── 单张标签（80mm × 50mm）── */
+/* ── 单张标签（75mm × 40mm）── */
 .label {
-  width: 80mm; height: 50mm;
+  width: 75mm; height: 40mm;
   display: flex; flex-direction: column;
   border: 0.3mm solid #ddd;
   border-radius: 1mm;

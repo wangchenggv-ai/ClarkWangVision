@@ -1077,7 +1077,7 @@ function savePrinterConfig(config) {
   _printerConfigTime = Date.now();
 }
 
-// ─── ZPL 标签生成（斑马打印机 ZPL II，80×50mm @ 203dpi）──────────────────
+// ─── ZPL 标签生成（斑马打印机 ZPL II，75×40mm @ 203dpi = 600×320dots）────────
 
 function buildZpl(rec) {
   const f = rec.fields || rec;
@@ -1098,26 +1098,26 @@ function buildZpl(rec) {
   const zpl = [
     "^XA",
     "^CI28",
-    "^PW636",
-    "^LL400",
+    "^PW600",
+    "^LL320",
     "",
-    `^FO40,15^BY2^BCN,80,Y,N,N^FD${orderNo}^FS`,
-    `^FO40,105^A0N,24,24^FD${orderNo}^FS`,
-    `^FO40,135^A0N,28,28^FD${customerName}^FS`,
-    `^FO340,135^A0N,20,20^FD${sku}^FS`,
-    `^FO40,170^A0N,32,32^FD${eyeLabel} ${eye}^FS`,
-    "^FO40,210^A0N,18,18^FDSPH^FS",
-    "^FO150,210^A0N,18,18^FDCYL^FS",
-    "^FO260,210^A0N,18,18^FDAXIS^FS",
-    `^FO40,235^A0N,28,28^FD${fmt(sph)}^FS`,
-    `^FO150,235^A0N,28,28^FD${fmt(cyl)}^FS`,
-    `^FO260,235^A0N,28,28^FD${fmtAxis(axis)}^FS`,
-    `^FO480,15^BQN,2,4^FDQA,${verifyUrl}^FS`,
-    "^FO498,145^A0N,14,14^FDQR验真^FS",
-    `^FO40,290^A0N,22,22^FD${lensCode}^FS`,
-    "^FO40,330^A0N,20,20^FDGAUSH | CLEAR^FS",
-    `^FO300,330^A0N,16,16^FD${agentId} ${agentName}^FS`,
-    "^FO40,280^GB550,1,1^FS",
+    `^FO30,10^BY2^BCN,70,Y,N,N^FD${orderNo}^FS`,
+    `^FO30,90^A0N,20,20^FD${orderNo}^FS`,
+    `^FO30,120^A0N,24,24^FD${customerName}^FS`,
+    `^FO280,120^A0N,18,18^FD${sku}^FS`,
+    `^FO30,155^A0N,30,30^FD${eyeLabel} ${eye}^FS`,
+    "^FO30,192^A0N,16,16^FDSPH^FS",
+    "^FO130,192^A0N,16,16^FDCYL^FS",
+    "^FO230,192^A0N,16,16^FDAXIS^FS",
+    `^FO30,214^A0N,24,24^FD${fmt(sph)}^FS`,
+    `^FO130,214^A0N,24,24^FD${fmt(cyl)}^FS`,
+    `^FO230,214^A0N,24,24^FD${fmtAxis(axis)}^FS`,
+    `^FO450,10^BQN,2,4^FDQA,${verifyUrl}^FS`,
+    "^FO468,135^A0N,12,12^FDQR验真^FS",
+    `^FO30,250^A0N,18,18^FD${lensCode}^FS`,
+    "^FO30,238^GB530,1,1^FS",
+    "^FO30,278^A0N,18,18^FDGAUSH | CLEAR^FS",
+    `^FO250,278^A0N,14,14^FD${agentId} ${agentName}^FS`,
     "^XZ",
   ].join("\n");
 
@@ -1167,13 +1167,13 @@ async function sendZplToPrinter(zplString) {
 
 function buildTestZpl() {
   return [
-    "^XA", "^CI28", "^PW636", "^LL400",
-    "^FO200,30^A0N,40,40^FDGAUSH TEST^FS",
-    "^FO40,90^BY2^BCN,80,Y,N,N^FDTEST-PRINT^FS",
-    "^FO40,185^A0N,24,24^FD测试标签 / Test Label^FS",
-    "^FO40,220^A0N,20,20^FD" + new Date().toLocaleString("zh-CN") + "^FS",
-    "^FO40,260^A0N,18,18^FD打印机: " + loadPrinterConfig().printer_model + "^FS",
-    "^FO40,290^BQN,2,3^FDQA,https://gaushclear.com^FS",
+    "^XA", "^CI28", "^PW600", "^LL320",
+    "^FO170,20^A0N,36,36^FDGAUSH TEST^FS",
+    "^FO30,70^BY2^BCN,70,Y,N,N^FDTEST-PRINT^FS",
+    "^FO30,155^A0N,22,22^FD测试标签 / Test Label^FS",
+    "^FO30,185^A0N,18,18^FD" + new Date().toLocaleString("zh-CN") + "^FS",
+    "^FO30,215^A0N,16,16^FD打印机: " + loadPrinterConfig().printer_model + "^FS",
+    "^FO450,70^BQN,2,3^FDQA,https://gaushclear.com^FS",
     "^XZ",
   ].join("\n");
 }
@@ -1189,6 +1189,7 @@ const STEP_LABELS = {
   qc_done: "质检完成", labeled: "标签已打印", packed: "已打包",
   shipped: "已发货", received: "已签收",
 };
+const STATUS_STEP_KEY = { "待处理": "submitted", "已确认": "producing", "生产中": "producing", "已发货": "shipped", "已签收": "received" };
 
 function parseWorkflow(jsonStr) {
   try { return JSON.parse(jsonStr || "{}"); }
@@ -1697,34 +1698,34 @@ async function buildLabelHtml(record, orderNo) {
 <html lang="zh-CN"><head><meta charset="UTF-8">
 <title>${orderNo} ${customer} ${eye}</title>
 <style>
-@page{size:80mm 50mm;margin:0}
+@page{size:75mm 40mm;margin:0}
 *{margin:0;padding:0;box-sizing:border-box}
-body{width:80mm;height:50mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:7pt;background:#fff;overflow:hidden}
-.label{width:80mm;height:50mm;display:flex;flex-direction:column;border:.3mm solid #ddd}
-.header{display:flex;align-items:center;justify-content:space-between;background:${eyeColor};color:#fff;padding:1mm 2.5mm;height:8mm;flex-shrink:0}
-.eye-badge{font-size:11pt;font-weight:900;letter-spacing:1px}
-.brand{font-size:7.5pt;font-weight:700;letter-spacing:1.5px;opacity:.92}
-.order-no{font-size:5.5pt;opacity:.85;font-family:monospace}
-.body{display:flex;flex:1;padding:1.5mm 2mm 1mm;gap:2mm;background:${eyeBg}}
-.info{flex:1;display:flex;flex-direction:column;gap:.5mm;min-width:0}
-.customer-row{display:flex;align-items:baseline;gap:1.5mm;border-bottom:.2mm solid ${eyeColor}44;padding-bottom:1mm;margin-bottom:.5mm}
-.customer-name{font-size:10pt;font-weight:800;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28mm}
-.sku-name{font-size:6.5pt;color:${eyeColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rx-grid{display:grid;grid-template-columns:auto auto auto;column-gap:2.5mm;row-gap:.3mm;margin:.5mm 0}
-.rx-label{font-size:5pt;color:#888;text-transform:uppercase;letter-spacing:.3px}
-.rx-value{font-size:9pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas",monospace;line-height:1.1}
+body{width:75mm;height:40mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:6pt;background:#fff;overflow:hidden}
+.label{width:75mm;height:40mm;display:flex;flex-direction:column;border:.3mm solid #ddd}
+.header{display:flex;align-items:center;justify-content:space-between;background:${eyeColor};color:#fff;padding:.8mm 2mm;height:6.5mm;flex-shrink:0}
+.eye-badge{font-size:9pt;font-weight:900;letter-spacing:1px}
+.brand{font-size:6.5pt;font-weight:700;letter-spacing:1.5px;opacity:.92}
+.order-no{font-size:5pt;opacity:.85;font-family:monospace}
+.body{display:flex;flex:1;padding:1mm 1.5mm .8mm;gap:1.5mm;background:${eyeBg}}
+.info{flex:1;display:flex;flex-direction:column;gap:.4mm;min-width:0}
+.customer-row{display:flex;align-items:baseline;gap:1.5mm;border-bottom:.2mm solid ${eyeColor}44;padding-bottom:.8mm;margin-bottom:.4mm}
+.customer-name{font-size:8pt;font-weight:800;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:24mm}
+.sku-name{font-size:5.5pt;color:${eyeColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rx-grid{display:grid;grid-template-columns:auto auto auto;column-gap:2mm;row-gap:.2mm;margin:.3mm 0}
+.rx-label{font-size:4.5pt;color:#888;text-transform:uppercase;letter-spacing:.3px}
+.rx-value{font-size:7.5pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas",monospace;line-height:1.1}
 .rx-value.hl{color:${eyeColor}}
-.meta-row{display:flex;gap:2mm;margin-top:.5mm;flex-wrap:wrap}
-.meta-item{display:flex;align-items:center;gap:.8mm}
-.meta-label{font-size:5pt;color:#aaa}
-.meta-value{font-size:6pt;color:#444;font-weight:600}
-.qr-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1mm;flex-shrink:0}
-.qr-col img{width:18mm;height:18mm;display:block;border:.3mm solid #ddd;border-radius:1mm}
-.qr-label{font-size:4pt;color:#bbb;text-align:center}
-.footer{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-top:.2mm solid #e9ecef;padding:.8mm 2.5mm;height:6.5mm;flex-shrink:0}
-.lens-code{font-family:"Courier New",monospace;font-size:6pt;font-weight:700;color:#495057;letter-spacing:1px}
+.meta-row{display:flex;gap:1.5mm;margin-top:.3mm;flex-wrap:wrap}
+.meta-item{display:flex;align-items:center;gap:.6mm}
+.meta-label{font-size:4.5pt;color:#aaa}
+.meta-value{font-size:5.5pt;color:#444;font-weight:600}
+.qr-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.8mm;flex-shrink:0}
+.qr-col img{width:15mm;height:15mm;display:block;border:.3mm solid #ddd;border-radius:1mm}
+.qr-label{font-size:3.5pt;color:#bbb;text-align:center}
+.footer{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-top:.2mm solid #e9ecef;padding:.6mm 2mm;height:5.5mm;flex-shrink:0}
+.lens-code{font-family:"Courier New",monospace;font-size:5.5pt;font-weight:700;color:#495057;letter-spacing:1px}
 .footer-meta{display:flex;flex-direction:column;align-items:flex-end}
-.agent-tag{font-size:4.5pt;color:#ccc;margin-top:.2mm}
+.agent-tag{font-size:4pt;color:#ccc;margin-top:.2mm}
 @media print{body{padding:0}}
 </style></head><body>
 <div class="label">
@@ -1770,34 +1771,34 @@ async function buildLabelHtmlFromFields(f, orderNo) {
 <html lang="zh-CN"><head><meta charset="UTF-8">
 <title>${orderNo} ${customer} ${eye}</title>
 <style>
-@page{size:80mm 50mm;margin:0}
+@page{size:75mm 40mm;margin:0}
 *{margin:0;padding:0;box-sizing:border-box}
-body{width:80mm;height:50mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:7pt;background:#fff;overflow:hidden}
-.label{width:80mm;height:50mm;display:flex;flex-direction:column;border:.3mm solid #ddd}
-.header{display:flex;align-items:center;justify-content:space-between;background:${eyeColor};color:#fff;padding:1mm 2.5mm;height:8mm;flex-shrink:0}
-.eye-badge{font-size:11pt;font-weight:900;letter-spacing:1px}
-.brand{font-size:7.5pt;font-weight:700;letter-spacing:1.5px;opacity:.92}
-.order-no{font-size:5.5pt;opacity:.85;font-family:monospace}
-.body{display:flex;flex:1;padding:1.5mm 2mm 1mm;gap:2mm;background:${eyeBg}}
-.info{flex:1;display:flex;flex-direction:column;gap:.5mm;min-width:0}
-.customer-row{display:flex;align-items:baseline;gap:1.5mm;border-bottom:.2mm solid ${eyeColor}44;padding-bottom:1mm;margin-bottom:.5mm}
-.customer-name{font-size:10pt;font-weight:800;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28mm}
-.sku-name{font-size:6.5pt;color:${eyeColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rx-grid{display:grid;grid-template-columns:auto auto auto;column-gap:2.5mm;row-gap:.3mm;margin:.5mm 0}
-.rx-label{font-size:5pt;color:#888;text-transform:uppercase;letter-spacing:.3px}
-.rx-value{font-size:9pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas",monospace;line-height:1.1}
+body{width:75mm;height:40mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:6pt;background:#fff;overflow:hidden}
+.label{width:75mm;height:40mm;display:flex;flex-direction:column;border:.3mm solid #ddd}
+.header{display:flex;align-items:center;justify-content:space-between;background:${eyeColor};color:#fff;padding:.8mm 2mm;height:6.5mm;flex-shrink:0}
+.eye-badge{font-size:9pt;font-weight:900;letter-spacing:1px}
+.brand{font-size:6.5pt;font-weight:700;letter-spacing:1.5px;opacity:.92}
+.order-no{font-size:5pt;opacity:.85;font-family:monospace}
+.body{display:flex;flex:1;padding:1mm 1.5mm .8mm;gap:1.5mm;background:${eyeBg}}
+.info{flex:1;display:flex;flex-direction:column;gap:.4mm;min-width:0}
+.customer-row{display:flex;align-items:baseline;gap:1.5mm;border-bottom:.2mm solid ${eyeColor}44;padding-bottom:.8mm;margin-bottom:.4mm}
+.customer-name{font-size:8pt;font-weight:800;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:24mm}
+.sku-name{font-size:5.5pt;color:${eyeColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rx-grid{display:grid;grid-template-columns:auto auto auto;column-gap:2mm;row-gap:.2mm;margin:.3mm 0}
+.rx-label{font-size:4.5pt;color:#888;text-transform:uppercase;letter-spacing:.3px}
+.rx-value{font-size:7.5pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas",monospace;line-height:1.1}
 .rx-value.hl{color:${eyeColor}}
-.meta-row{display:flex;gap:2mm;margin-top:.5mm;flex-wrap:wrap}
-.meta-item{display:flex;align-items:center;gap:.8mm}
-.meta-label{font-size:5pt;color:#aaa}
-.meta-value{font-size:6pt;color:#444;font-weight:600}
-.qr-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1mm;flex-shrink:0}
-.qr-col img{width:18mm;height:18mm;display:block;border:.3mm solid #ddd;border-radius:1mm}
-.qr-label{font-size:4pt;color:#bbb;text-align:center}
-.footer{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-top:.2mm solid #e9ecef;padding:.8mm 2.5mm;height:6.5mm;flex-shrink:0}
-.lens-code{font-family:"Courier New",monospace;font-size:6pt;font-weight:700;color:#495057;letter-spacing:1px}
+.meta-row{display:flex;gap:1.5mm;margin-top:.3mm;flex-wrap:wrap}
+.meta-item{display:flex;align-items:center;gap:.6mm}
+.meta-label{font-size:4.5pt;color:#aaa}
+.meta-value{font-size:5.5pt;color:#444;font-weight:600}
+.qr-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.8mm;flex-shrink:0}
+.qr-col img{width:15mm;height:15mm;display:block;border:.3mm solid #ddd;border-radius:1mm}
+.qr-label{font-size:3.5pt;color:#bbb;text-align:center}
+.footer{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-top:.2mm solid #e9ecef;padding:.6mm 2mm;height:5.5mm;flex-shrink:0}
+.lens-code{font-family:"Courier New",monospace;font-size:5.5pt;font-weight:700;color:#495057;letter-spacing:1px}
 .footer-meta{display:flex;flex-direction:column;align-items:flex-end}
-.agent-tag{font-size:4.5pt;color:#ccc;margin-top:.2mm}
+.agent-tag{font-size:4pt;color:#ccc;margin-top:.2mm}
 @media print{body{padding:0}}
 </style></head><body>
 <div class="label">
@@ -1858,7 +1859,7 @@ ${"=".repeat(34)}
 标签使用方法：
   1. 在浏览器中打开 labels/ 下的 HTML 文件
   2. Ctrl+P（Mac: Cmd+P）打印
-  3. 推荐标签纸：6cm × 3cm
+  3. 推荐标签纸：7.5cm × 4cm
 
 注意事项：
   - 每个镜片码全球唯一，请勿复制或重复使用
@@ -2240,6 +2241,7 @@ const server = createServer(async (req, res) => {
       const customerId = await getOrCreateCustomer(agent.name);
       const orderNo = genOrderNo();
       const now = Date.now();
+      const initWf = JSON.stringify({ current: 0, steps: { submitted: { ts: now } } });
       const orderRecords = [];    // 订单主表记录
       const lensRecords = [];     // 镜片明细表记录
       const deductionPlan = [];   // 库存扣减计划（预检+实际扣减共用）
@@ -2275,6 +2277,7 @@ const server = createServer(async (req, res) => {
             "订单来源": "代理商门户",
             "客户ID": customerId,
             "是否装配": assembly !== false ? "是" : "否",
+            "流程步骤": initWf,
             ...(terminalCustomer?.name ? { "终端客户": terminalCustomer.name } : {}),
             ...(terminalCustomer?.contact ? { "联系人": terminalCustomer.contact } : {}),
             ...(terminalCustomer?.phone ? { "联系电话": terminalCustomer.phone } : {}),
@@ -3841,7 +3844,15 @@ a{color:inherit;text-decoration:none}</style></head><body>
         const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=10&filter=CurrentValue.[订单编号]=${encoded}`);
         const rec = (d?.items || [])[0];
         if (!rec) { jsonRes(res, 404, { error: "未找到订单" }); return logReq(req, 404, start); }
-        const wf = parseWorkflow(rec.fields["流程步骤"]);
+        let wf = parseWorkflow(rec.fields["流程步骤"]);
+        if (!wf.steps || Object.keys(wf.steps).length === 0) {
+          const lastStep = STATUS_STEP_KEY[rec.fields["订单状态"]] || "submitted";
+          const statusIdx = STEP_ORDER.indexOf(lastStep);
+          wf = { current: statusIdx, steps: {} };
+          for (let i = 0; i <= statusIdx; i++) {
+            wf.steps[STEP_ORDER[i]] = { ts: i === 0 ? (rec.fields["下单日期"] || Date.now()) : null };
+          }
+        }
         // 补充标签显示
         const stepsWithLabels = {};
         for (const [k, v] of Object.entries(wf.steps || {})) {
@@ -4694,6 +4705,7 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
         listRecords(TABLES.production).catch(e => { console.error("[alerts] production scan failed:", e.message); return []; }),
       ]);
       for (const r of orderRows) {
+        if (alerts.length >= 50) break;
         if (r.fields["订单状态"] === "待处理" && r.fields["下单日期"] && (now - r.fields["下单日期"] > OVERDUE_MS)) {
           const age = Math.round((now - r.fields["下单日期"]) / 3600000);
           alerts.push({ level: "error", icon: "📋", msg: `${r.fields["订单编号"]} ${r.fields["顾客姓名"]} 超期${age}h (${r.fields["代理商名称"]})`, ts: now });

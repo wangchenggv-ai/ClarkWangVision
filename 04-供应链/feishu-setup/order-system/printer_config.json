@@ -2,7 +2,7 @@
   "default_connection": "tcp",
   "tcp": {
     "enabled": true,
-    "host": "192.168.1.100",
+    "host": "192.168.0.208",
     "port": 9100,
     "timeout_ms": 5000
   },
@@ -10,10 +10,10 @@
     "enabled": false,
     "bridge_url": "http://localhost:9101"
   },
-  "printer_model": "ZT230",
+  "printer_model": "ZT410",
   "dpi": 203,
-  "label_width_mm": 80,
-  "label_height_mm": 50,
+  "label_width_mm": 75,
+  "label_height_mm": 40,
   "auto_print_on_ship": false,
   "copies": 1
 }

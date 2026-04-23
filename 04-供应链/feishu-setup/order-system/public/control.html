@@ -323,6 +323,7 @@ function toast(m, t) {
 
 function h(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function tsFmt(t) { if(!t) return "-"; var d=new Date(t); return d.getMonth()+1+"/"+d.getDate()+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+function mc(arr) { return arr.map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join(""); }
 
 // ── Dashboard ──
 async function loadDash() {
@@ -331,7 +332,6 @@ async function loadDash() {
   var d;
   try { d = await api("/dashboard"); } catch(e) { g.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#dc2626;font-size:13px">加载失败</div>'; return; }
 
-  // 告警 feed
   var af = document.getElementById("af");
   if (d.alerts && d.alerts.length) {
     af.innerHTML = '<div class="sec">告警 <span class="badge badge-red">'+d.alerts.length+'</span></div>' +
@@ -342,32 +342,29 @@ async function loadDash() {
     af.innerHTML = '<div class="sec">告警 <span class="badge badge-green">0</span></div><div style="color:#718096;font-size:12px;padding:8px 0">暂无告警</div>';
   }
 
-  // 订单指标
   var om = d.orderMetrics || {};
   var omg = document.getElementById("omg");
   var pendCount = om.byStatus ? (om.byStatus["待处理"]||0) : 0;
   var prodCount = om.byStatus ? (om.byStatus["生产中"]||0) : 0;
   var shipCount = om.byStatus ? (om.byStatus["已发货"]||0) : 0;
-  var doneCount = om.byStatus ? (om.byStatus["已签收"]||0) : 0;
-  omg.innerHTML = [
+  omg.innerHTML = mc([
     {v:om.total||0,l:"总订单数",c:""},
     {v:pendCount,l:"待处理",c:pendCount>0?"warn":""},
     {v:(om.overdue||0),l:"超24h未处理",c:(om.overdue||0)>0?"danger":"ok"},
     {v:om.todayCount||0,l:"今日订单",c:""},
     {v:prodCount,l:"生产中",c:""},
     {v:shipCount,l:"已发货",c:""},
-  ].map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join("");
+  ]);
 
-  // 库存指标
   var pct = d.totalStockRows > 0 ? Math.round((d.totalStockRows - d.belowSafety) / d.totalStockRows * 100) : 0;
-  g.innerHTML = [
+  g.innerHTML = mc([
     {v:d.totalStock,l:"总库存片数",c:"ok"},
     {v:d.belowSafety,l:"低于安全库存",c:d.belowSafety>0?"danger":"ok"},
     {v:d.totalStockRows,l:"库存行数",c:""},
     {v:(d.prodStatus["生产中"]||0),l:"排产中",c:""},
     {v:d.pendingReplenish,l:"待回补",c:d.pendingReplenish>0?"warn":"ok"},
     {v:d.agentCount,l:"代理商",c:""},
-  ].map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join("");
+  ]);
 
   var rs = document.getElementById("rs");
   var rc = pct < 40 ? "#dc2626" : pct < 70 ? "#ca8a04" : "#16a34a";
@@ -398,15 +395,14 @@ async function loadDash() {
     ss.innerHTML = ds;
   } else { ss.innerHTML = ""; }
 
-  // 打印队列
   var pq = d.printQueue || {};
   var pmg = document.getElementById("pmg");
-  pmg.innerHTML = [
+  pmg.innerHTML = mc([
     {v:pq.pending||0,l:"待打印",c:(pq.pending||0)>0?"warn":"ok"},
     {v:pq.done||0,l:"已完成",c:"ok"},
     {v:pq.error||0,l:"失败",c:(pq.error||0)>0?"danger":"ok"},
     {v:(pq.pending||0)+(pq.done||0)+(pq.error||0),l:"总计",c:""},
-  ].map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join("");
+  ]);
 
   var tbl = document.getElementById("ro");
   if (d.recentOrders && d.recentOrders.length) {
@@ -570,16 +566,15 @@ async function loadAgentStock() {
     if (it.agentId) agentSet.add(it.agentId);
     if (it.sku) skuSet.add(it.sku);
   }
-  mg.innerHTML = [
+  mg.innerHTML = mc([
     {v:items.length,l:"库存行数",c:""},
     {v:agentSet.size,l:"代理商数",c:""},
     {v:skuSet.size,l:"SKU数",c:""},
     {v:totalOwned,l:"自有库存",c:"ok"},
     {v:totalConsigned,l:"寄售库存",c:totalConsigned>0?"warn":"ok"},
     {v:totalOwned+totalConsigned,l:"总库存",c:""},
-  ].map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join("");
+  ]);
 
-  // Table
   var tbl = document.getElementById("astbl");
   if (!items.length) { tbl.innerHTML = '<p style="color:#718096;font-size:12px">暂无代理商库存数据</p>'; return; }
   var html = '<table class="sk"><thead><tr><th>代理商ID</th><th>SKU</th><th style="text-align:right">SPH</th><th style="text-align:right">CYL</th><th style="text-align:right">自有</th><th style="text-align:right">寄售</th><th style="text-align:right">合计</th></tr></thead><tbody>';

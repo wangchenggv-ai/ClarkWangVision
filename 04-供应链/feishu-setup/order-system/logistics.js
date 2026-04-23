@@ -491,7 +491,7 @@ async function shipBatch() {
   console.log(`  ✅ 合单发货完成：${agentCount} 个包裹，${totalOrders} 单，${records.length} 片\n`);
 }
 
-// ─── 合单随货通行单（一代理商多订单）────────────────────────────────────────
+// ─── 合单随货同行单（一代理商多订单）────────────────────────────────────────
 
 function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, orders }) {
   const allRows = [];
@@ -522,7 +522,7 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>合单随货通行单 — ${agentName}</title>
+<title>合单随货同行单 — ${agentName}</title>
 <style>
   @page { size: A4; margin: 10mm 12mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -598,7 +598,7 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
     <div class="brand-sub">高视星 · 镜片溯源系统</div>
   </div>
   <div class="doc-title">
-    <h1>合单随货通行单</h1>
+    <h1>合单随货同行单</h1>
     <p>CONSOLIDATED PACKING SLIP / DELIVERY NOTE</p>
   </div>
 </div>
@@ -670,7 +670,7 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
 
 async function slipBatch() {
   const dateStr = DATE_ARG || new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  console.log(`\n📄 生成合单随货通行单${AGENT_ARG ? " — " + AGENT_ARG : "（全代理商）"}...\n`);
+  console.log(`\n📄 生成合单随货同行单${AGENT_ARG ? " — " + AGENT_ARG : "（全代理商）"}...\n`);
 
   let filter = `CurrentValue.[快递单号]!=""`;
   if (AGENT_ARG) filter += `&&CurrentValue.[代理商ID]="${AGENT_ARG}"`;
@@ -873,7 +873,7 @@ async function startWebhookServer() {
   });
 }
 
-// ─── 随货通行单 ────────────────────────────────────────────────────────────
+// ─── 随货同行单 ────────────────────────────────────────────────────────────
 
 function slipHTML(order) {
   const { orderNo, customerName, agentName, agentId, shipDate, promiseDate,
@@ -899,7 +899,7 @@ function slipHTML(order) {
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>随货通行单 ${orderNo}</title>
+<title>随货同行单 ${orderNo}</title>
 <style>
   @page { size: A4; margin: 12mm 14mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -993,7 +993,7 @@ function slipHTML(order) {
     <div class="brand-sub">高视星 · 镜片溯源系统</div>
   </div>
   <div class="doc-title">
-    <h1>随货通行单</h1>
+    <h1>随货同行单</h1>
     <p>PACKING SLIP / DELIVERY NOTE</p>
   </div>
 </div>
@@ -1097,7 +1097,7 @@ function slipHTML(order) {
 
 async function generateSlip() {
   if (!ORDER_NO) { console.error("  请指定 --order ORD-xxx"); process.exit(1); }
-  console.log(`\n📄 生成随货通行单: ${ORDER_NO}\n`);
+  console.log(`\n📄 生成随货同行单: ${ORDER_NO}\n`);
 
   const records = await listRecords(`CurrentValue.[订单编号]="${ORDER_NO}"`);
   if (!records.length) { console.log("  未找到订单，请确认订单号。"); return; }
@@ -1138,7 +1138,7 @@ async function generateSlip() {
   const outPath = resolve(__dirname, `docs/slip-${ORDER_NO}.html`);
   writeFileSync(outPath, slipHTML(order), "utf-8");
 
-  console.log(`  ✅ 随货通行单已生成: docs/slip-${ORDER_NO}.html`);
+  console.log(`  ✅ 随货同行单已生成: docs/slip-${ORDER_NO}.html`);
   console.log(`  顾客: ${order.customerName}  代理商: ${order.agentName}`);
   console.log(`  快递: ${order.courierName || "—"}  单号: ${order.trackingNo || "—"}`);
   console.log(`  镜片: ${rows.length} 片\n`);
@@ -1159,7 +1159,7 @@ function help() {
   node logistics.js ship --courier sf|zt|yd    指定快递公司（默认自动）
   node logistics.js deliver --order ORD-xxx    模拟消费者签收
   node logistics.js status                     查看在途物流汇总
-  node logistics.js slip --order ORD-xxx       生成随货通行单（HTML，可打印）
+  node logistics.js slip --order ORD-xxx       生成随货同行单（HTML，可打印）
   node logistics.js webhook                    启动 Webhook 服务（接收快递回调）
 
 快递公司：

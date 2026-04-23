@@ -60,12 +60,13 @@ async function sendTcpZpl(zpl, host, port, timeoutMs) {
   });
 }
 
-// ─── 打开 URL（macOS）──────────────────────────────────────────────────────
+// ─── 打开 URL（跨平台）────────────────────────────────────────────────────
 
 function openUrl(url) {
+  const cmd = process.platform === "win32" ? `start "" "${url}"` : `open "${url}"`;
   return new Promise((resolve, reject) => {
-    exec(`open "${url}"`, (err) => {
-      if (err) reject(new Error(`open 失败: ${err.message}`));
+    exec(cmd, (err) => {
+      if (err) reject(new Error(`打开失败: ${err.message}`));
       else resolve();
     });
   });
