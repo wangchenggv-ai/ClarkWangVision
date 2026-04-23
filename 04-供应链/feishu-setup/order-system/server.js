@@ -1060,10 +1060,10 @@ function loadPrinterConfig() {
   } catch {
     _printerConfig = {
       default_connection: "tcp",
-      tcp: { enabled: true, host: "192.168.1.100", port: 9100, timeout_ms: 5000 },
+      tcp: { enabled: true, host: "192.168.0.208", port: 9100, timeout_ms: 5000 },
       usb: { enabled: false, bridge_url: "http://localhost:9101" },
-      printer_model: "ZT230", dpi: 203,
-      label_width_mm: 80, label_height_mm: 50,
+      printer_model: "ZT410", dpi: 203,
+      label_width_mm: 75, label_height_mm: 40,
       auto_print_on_ship: false, copies: 1,
     };
   }
@@ -1189,7 +1189,7 @@ const STEP_LABELS = {
   qc_done: "质检完成", labeled: "标签已打印", packed: "已打包",
   shipped: "已发货", received: "已签收",
 };
-const STATUS_STEP_KEY = { "待处理": "submitted", "已确认": "producing", "生产中": "producing", "已发货": "shipped", "已签收": "received" };
+const STATUS_STEP_KEY = { "待处理": "submitted", "已确认": "confirmed", "生产中": "producing", "已发货": "shipped", "已签收": "received" };
 
 function parseWorkflow(jsonStr) {
   try { return JSON.parse(jsonStr || "{}"); }

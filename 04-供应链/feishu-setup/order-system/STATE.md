@@ -679,3 +679,39 @@ Clark 要求整体审视三系统架构（CRM + 订单 + 库存），产出两�
 - `public/control.html`：mc()提取+注释清理
 - `ARCHITECTURE.md`：全面重写
 - `ARCHITECTURE-OVERVIEW.md`：新建
+
+## 2026-04-23 标签尺寸 75×40mm 全量修复
+
+同事确认打印正常后，要求改标签纸尺寸为 75×40mm，同时修复 HTML 预览和 ZPL 打印格式。
+
+### 改动
+
+**server.js：**
+- `buildZpl()`：`PW636×LL400` → `PW600×LL320`，全部 ^FO 坐标重算（barcode/文字/处方/QR/镜片码/品牌/代理商）
+- `buildTestZpl()`：同上
+- `buildLabelHtml()` / `buildLabelHtmlFromFields()`：CSS `80mm×50mm` → `75mm×40mm`，字号/间距/QR尺寸全部缩小
+- `loadPrinterConfig()` 回退默认值同步：`75×40` / `ZT410` / `192.168.0.208`
+- 工厂 ZIP 说明文件：推荐标签纸 `6cm×3cm` → `7.5cm×4cm`
+
+**print_labels.js：**
+- 全部 CSS 从 80×50 改为 75×40（@page/body/label/header/rx-grid/QR/footer）
+- A4 批量网格：`3×3(80mm×50mm)` → `2×5(75mm×40mm)`（A4 横向最多排 2 列 75mm）
+
+**printer_config.json：**
+- `label_width_mm: 80→75`, `label_height_mm: 50→40`
+
+**labels.html：**
+- 工作流步骤 5 描述：`80×50mm` → `75×40mm`
+
+### Simplify 修复 2 个 bug
+
+| Bug | 说明 | 修复 |
+|-----|------|------|
+| `STATUS_STEP_KEY` "已确认"→"producing" | 跳过 confirmed 步骤，工作流显示错误 | 改为 `"已确认"→"confirmed"` |
+| `loadPrinterConfig()` 回退默认值过期 | JSON 读取失败时退回 80×50/ZT230/192.168.1.100 | 同步为 75×40/ZT410/192.168.0.208 |
+
+### 改动文件
+- `server.js`（ZPL 坐标重算 + HTML CSS + 回退默认值 + 工厂说明）
+- `print_labels.js`（全量 CSS 更新 + A4 网格）
+- `printer_config.json`（尺寸字段）
+- `public/labels.html`（步骤描述文字）
