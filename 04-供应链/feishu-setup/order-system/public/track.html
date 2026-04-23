@@ -322,7 +322,8 @@ async function showDetail(orderNo) {
         <th>备注</th>
       </tr></thead><tbody>`;
 
-    for (const item of data.items) {
+    const sortedItems = [...data.items].sort((a, b) => (a.eye?.includes("右") ? 0 : 1) - (b.eye?.includes("右") ? 0 : 1));
+    for (const item of sortedItems) {
       const eyeBadge = item.eye?.includes("右")
         ? '<span style="background:#fff1f0;color:#cf1322;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">右</span>'
         : item.eye?.includes("左")

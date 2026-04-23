@@ -2258,12 +2258,21 @@ const server = createServer(async (req, res) => {
       const items = [];
       let totalLenses = 0;
 
+      // 预拉库存缓存（避免每个 eye 重复调 API）
+      await Promise.all([getAgentStockMap(agent.id), getStockMap()]);
+
       for (const p of patients) {
         const { customerName, sku, quantity, eyes, assembly, remark } = p;
 
+        // 眼别排序：右眼在前，左眼在后
+        const sortedEyes = [...eyes].sort((a, b) => {
+          const order = s => s === "右眼" ? 0 : s === "左眼" ? 1 : 2;
+          return order(a.side) - order(b.side);
+        });
+
         // 交期取双眼中最慢的（优先查代理商本地库存）
         let est = { deliveryType: "定制7-10天", days: 10, promiseDate: now + 10 * 86400000 };
-        for (const eye of eyes) {
+        for (const eye of sortedEyes) {
           if (eye.sph != null && eye.cyl != null) {
             const eyeEst = await estimateDeliveryByRx(sku, eye.sph, eye.cyl, quantity, agent.id);
             if (eyeEst.days > est.days) est = eyeEst;
@@ -2295,7 +2304,7 @@ const server = createServer(async (req, res) => {
         });
 
         // 写入镜片明细表（每眼 = 1 行）
-        for (const eye of eyes) {
+        for (const eye of sortedEyes) {
           lensRecords.push({
             fields: {
               "订单编号": orderNo,

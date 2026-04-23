@@ -23,7 +23,7 @@
 "C:\Program Files\RealVNC\VNC Viewer\vncviewer.exe" 100.100.201.16::5900
 ```
 
-- **用户名**: `wangcheng`
+- **用户名**: `wangcheng`（VNC 连接后需要手动输入用户名，不是自动填充）
 - **密码**: Mac 登录密码
 
 ### 可保存地址

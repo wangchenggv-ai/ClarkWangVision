@@ -4,21 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "1293b928461d9aa8",
+        "id": "d8882e8654070127",
         "type": "tabs",
         "children": [
           {
-            "id": "53f7e4448eb89880",
+            "id": "6126e9669fe86ebd",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "00-CEO驾驶舱/停药期自我校准.md",
+                "file": "04-供应链/feishu-setup/order-system/ARCHITECTURE.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "停药期自我校准"
+              "title": "ARCHITECTURE"
             }
           }
         ]
@@ -185,6 +185,17 @@
   },
   "active": "76eecfbf2d207637",
   "lastOpenFiles": [
+    "98-代码仓库/excel-parser/CLAUDE.md",
+    "98-代码仓库/excel-parser/STATE.md",
+    "98-代码仓库/excel-parser",
+    "04-供应链/feishu-setup/ARCHITECTURE-OVERVIEW.md",
+    "04-供应链/feishu-setup/order-system/ARCHITECTURE.md",
+    "session_closing.md",
+    "04-供应链/feishu-setup/order-system/e2e-report-20260423.md",
+    "04-供应链/feishu-setup/order-system/sedcPqgea",
+    "04-供应链/feishu-setup/order-system/sedbuP2gp",
+    "00-CEO驾驶舱/停药期自我校准.md",
+    "Claude/tailscale-vnc-setup.md",
     "02-医学市场/品牌市场/AGI和眼科.md",
     "02-医学市场/品牌市场/市场部组织架构方案_20260421.md",
     "02-医学市场/品牌市场/高视星_市场材料品牌升级执行方案.docx",
@@ -206,21 +217,10 @@
     "02-医学市场/发布会演讲/4月9日产品发布会逐字稿_20260409.md",
     "02-医学市场/发布会演讲/4月9日产品发布会PPT大纲.md",
     "02-医学市场/品牌市场",
-    "02-医学市场/临床报告",
-    "02-医学市场/CDSA项目",
-    "02-医学市场/发布会演讲",
     "01-销售/谈判政策/大客户与RGP开发奖政策_2026.md",
     "01-销售/谈判政策/GQ-2026-03A_谈判策略指南_丁方.md",
     "01-销售/谈判政策/协议谈判指南_GQ-2026-03A.md",
     "01-销售/销售SOP/4月8日-4月9日销售月会日程.md",
-    "01-销售/销售SOP/销售月会日程模版_两日制.md",
-    "01-销售/销售SOP/销售经理1on1面谈_SKILL.md",
-    "01-销售/销售SOP/销售部改善项14周执行计划.md",
-    "01-销售/季度报告/区域销售月度跟进与规划报告.md",
-    "01-销售/季度报告/Q2_2026_销售人员目标分解.md",
-    "01-销售/季度报告/CEO季度销售会议报告_Q1总结与Q2规划_v4.md",
-    "01-销售/代理商会议/合作伙伴Q2规划沟通会议提纲.md",
-    "01-销售/代理商会议/高视星Q2_Update_代理商专场_10min.md",
     "04-供应链/feishu-setup/order-system/public/qrcodes/F96D8DA254BC9D2C.png",
     "04-供应链/feishu-setup/order-system/public/qrcodes/50759C28266244E5.png",
     "04-供应链/feishu-setup/order-system/public/qrcodes/1CA536E529555C5E.png",
