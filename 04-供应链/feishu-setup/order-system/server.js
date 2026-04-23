@@ -4683,6 +4683,48 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
       return logReq(req, 200, start);
     }
 
+    if (pathname === "/api/admin/alerts" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const alerts = [];
+      const now = Date.now();
+      const OVERDUE_MS = 24 * 60 * 60 * 1000;
+      const [orderRows, stockRows, prodRows] = await Promise.all([
+        listRecords(TABLES.order).catch(e => { console.error("[alerts] order scan failed:", e.message); return []; }),
+        listRecords(TABLES.stock_detail).catch(e => { console.error("[alerts] stock scan failed:", e.message); return []; }),
+        listRecords(TABLES.production).catch(e => { console.error("[alerts] production scan failed:", e.message); return []; }),
+      ]);
+      for (const r of orderRows) {
+        if (r.fields["订单状态"] === "待处理" && r.fields["下单日期"] && (now - r.fields["下单日期"] > OVERDUE_MS)) {
+          const age = Math.round((now - r.fields["下单日期"]) / 3600000);
+          alerts.push({ level: "error", icon: "📋", msg: `${r.fields["订单编号"]} ${r.fields["顾客姓名"]} 超期${age}h (${r.fields["代理商名称"]})`, ts: now });
+        }
+      }
+      let belowCount = 0;
+      for (const r of stockRows) {
+        if (Number(r.fields["当前库存"] || 0) < Number(r.fields["安全库存"] || 0)) belowCount++;
+      }
+      if (belowCount > 0) alerts.push({ level: "warn", icon: "📦", msg: `${belowCount} 个度数组合低于安全库存`, ts: now });
+      const pending = prodRows.filter(r => r.fields["回补状态"] === "待回补").length;
+      if (pending > 0) alerts.push({ level: "warn", icon: "🏭", msg: `${pending} 个排产单待回补`, ts: now });
+      const failedExecs = _execLog.filter(e => e.exitCode !== 0).slice(0, 5);
+      for (const e of failedExecs) {
+        alerts.push({ level: "error", icon: "⚙️", msg: `${e.rule} 执行失败 (exit ${e.exitCode})`, ts: e.ts });
+      }
+      alerts.sort((a, b) => {
+        const lv = (a.level === "error" ? 0 : 1) - (b.level === "error" ? 0 : 1);
+        return lv !== 0 ? lv : b.ts - a.ts;
+      });
+      jsonRes(res, 200, { total: alerts.length, alerts });
+      return logReq(req, 200, start);
+    }
+
+    if (pathname === "/api/admin/execution-history" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const limit = Math.min(Number(url.searchParams.get("limit") || 50), 200);
+      jsonRes(res, 200, { total: _execLog.length, items: _execLog.slice(0, limit) });
+      return logReq(req, 200, start);
+    }
+
     // ── 404 ──
     jsonRes(res, 404, { error: "Not found" });
     logReq(req, 404, start);

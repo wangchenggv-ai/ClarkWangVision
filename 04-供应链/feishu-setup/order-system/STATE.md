@@ -565,5 +565,31 @@ node pull-print.js
 
 ### 验证
 - 10/10 API 端点测试通过（本地）
+
+## 2026-04-23 告警 Feed + 执行历史 API + 打印守护进程 Windows 适配
+
+### 新增端点
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| GET | `/api/admin/alerts` | 告警 feed（超期订单/低库存/待回补/规则失败） |
+| GET | `/api/admin/execution-history` | 规则执行历史（_execLog 分页） |
+
+### 打印守护进程
+- `pull-print.js` `openUrl()` 改为跨平台（Windows `start` / Mac `open`）
+- 部署目标：专用 Windows 打印电脑（非远程 Mac）
+- 配置清单 PDF 已生成：`docs/print-daemon-setup.html` → `Downloads/打印电脑配置清单.pdf`
+
+### Simplify 清理
+- alerts 端点 3 个 `catch {}` → `.catch()` 加 `console.error` + 降级返回空数组
+- alerts 端点 3 个顺序 `listRecords` → `Promise.all` 并行
+- 去掉中间变量 `overdueOrders`，直接内联
+- 删除 execution-history 端点多余注释
+- pull-print.js 注释 `macOS` → `跨平台`
+
+### 待验证
+- [ ] 专用 Windows 打印电脑连接华为云 + 拉取任务
+- [ ] ZPL 标签通过 TCP 打印到斑马 ZT410
+- [ ] slip 类型自动打开浏览器
 - 入库/出库写入 stock_detail + stock_movement 双表成功
 - 热力图 + 明细表数据正确

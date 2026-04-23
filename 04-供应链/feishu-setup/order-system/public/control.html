@@ -13,10 +13,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .tabs{display:flex;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 24px}
 .tab{padding:10px 18px;cursor:pointer;font-size:13px;color:#718096;border-bottom:2px solid transparent;transition:.15s}
 .tab:hover{color:#1a202c}.tab.active{color:#4f46e5;border-bottom-color:#4f46e5;font-weight:500}
-.wrap{max-width:1100px;margin:0 auto;padding:16px 20px}
+.wrap{max-width:1200px;margin:0 auto;padding:16px 20px}
 .pnl{display:none}.pnl.active{display:block}
 /* Dashboard */
-.mets{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.mets{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px}
 .mc{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:14px;text-align:center}
 .mc .v{font-size:26px;font-weight:700}.mc .l{font-size:11px;color:#718096;margin-top:2px}
 .mc.warn .v{color:#ca8a04}.mc.danger .v{color:#dc2626}.mc.ok .v{color:#16a34a}
@@ -29,8 +29,18 @@ table.sk tr:hover{background:#f7fafc}
 table.ft{width:100%;border-collapse:collapse;font-size:12px}
 table.ft th{padding:5px 8px;text-align:left;border-bottom:2px solid #e2e8f0;font-weight:500;color:#718096;font-size:11px}
 table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
+/* Alert feed */
+.alert-feed{margin-bottom:16px}
+.alert-item{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:6px;margin-bottom:4px;font-size:12px}
+.alert-item.error{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.alert-item.warn{background:#fefce8;border:1px solid #fde68a;color:#854d0e}
+.alert-item .ai{font-size:14px}.alert-item .at{margin-left:auto;color:#94a3b8;font-size:10px}
+/* Section */
+.sec{font-size:13px;font-weight:600;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+.sec .badge{font-size:10px;font-weight:600;padding:1px 6px;border-radius:8px;margin-left:6px}
+.badge-red{background:#dc2626;color:#fff}.badge-green{background:#16a34a;color:#fff}.badge-yellow{background:#ca8a04;color:#fff}
 /* ── Tab 2 layout ── */
-.t2{display:grid;grid-template-columns:1fr 280px;gap:14px}
+.t2{display:grid;grid-template-columns:1fr 300px;gap:14px}
 @media(max-width:780px){.t2{grid-template-columns:1fr}}
 /* Sidebar */
 .side{align-self:start;position:sticky;top:0}
@@ -46,6 +56,13 @@ table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
 .ebar label{font-size:10px;color:#718096;display:flex;align-items:center;gap:2px;white-space:nowrap}
 .term{background:#1e293b;color:#e2e8f0;border-radius:6px;padding:8px 10px;font-family:'Consolas',monospace;font-size:10px;max-height:140px;overflow-y:auto;white-space:pre-wrap;line-height:1.4}
 .term .s{color:#4ade80}.term .e{color:#f87171}.term .m{color:#94a3b8}
+/* Execution history */
+.ehist{max-height:200px;overflow-y:auto}
+.eh-item{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:10px;border-bottom:1px solid #f1f5f9}
+.eh-item .eh-rule{font-weight:600;min-width:42px}
+.eh-item .eh-ok{color:#16a34a}.eh-item .eh-fail{color:#dc2626}
+.eh-item .eh-time{color:#94a3b8;margin-left:auto;white-space:nowrap}
+.eh-item .eh-ms{color:#718096;min-width:36px;text-align:right}
 /* AI */
 .chips{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px}
 .chips .ch{padding:2px 7px;border:1px solid #e2e8f0;border-radius:12px;font-size:10px;cursor:pointer;background:#fff;color:#718096}
@@ -68,7 +85,6 @@ table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
 .grp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:12px}
 .rcard{border-radius:8px;padding:10px 12px;position:relative;overflow:hidden}
 .rcard::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
-/* Group colors */
 .rcard.c-order{background:#eff6ff;border:1px solid #bfdbfe}.rcard.c-order::before{background:#3b82f6}
 .rcard.c-order .rid{color:#2563eb}
 .rcard.c-stock{background:#f0fdf4;border:1px solid #bbf7d0}.rcard.c-stock::before{background:#16a34a}
@@ -101,7 +117,8 @@ table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
 .fn.yl{border-color:#ca8a04;background:rgba(202,138,4,.06)}
 .fa{color:#718096;font-size:14px}.fs{font-size:10px;color:#718096}
 .fbr{border:1px dashed #e2e8f0;border-radius:6px;padding:8px;margin:4px 0}
-.sec{font-size:13px;font-weight:600;margin:14px 0 6px;padding-bottom:4px;border-bottom:1px solid #e2e8f0}
+/* Agent stock table */
+.ast{max-height:400px;overflow-y:auto}
 .toast{position:fixed;bottom:16px;right:16px;padding:8px 14px;border-radius:6px;font-size:12px;z-index:999;opacity:0;transition:.2s;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .toast.show{opacity:1}.toast.success{background:#16a34a;color:#fff}.toast.error{background:#dc2626;color:#fff}.toast.info{background:#2563eb;color:#fff}
 .sp{display:inline-block;width:14px;height:14px;border:2px solid #e2e8f0;border-top-color:#4f46e5;border-radius:50%;animation:sp .5s linear infinite}
@@ -116,14 +133,26 @@ table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
 <div class="tabs">
   <div class="tab active" data-tab="dashboard" onclick="sw('dashboard')">仪表盘</div>
   <div class="tab" data-tab="rules" onclick="sw('rules')">规则管理</div>
+  <div class="tab" data-tab="stock" onclick="sw('stock')">库存管理</div>
   <div class="tab" data-tab="flow" onclick="sw('flow')">数据流</div>
 </div>
 <div class="wrap">
   <!-- 仪表盘 -->
   <div class="pnl active" id="p-dashboard">
+    <!-- 告警 feed -->
+    <div class="alert-feed" id="af"></div>
+    <!-- 业务指标 -->
+    <div class="sec">订单概览</div>
+    <div class="mets" id="omg"></div>
+    <!-- 库存指标 -->
+    <div class="sec">库存概览</div>
     <div class="mets" id="mg"></div>
     <div id="rs"></div>
     <div id="ss"></div>
+    <!-- 打印队列 -->
+    <div class="sec">打印队列</div>
+    <div class="mets" id="pmg"></div>
+    <!-- 排产 -->
     <div class="sec">最近排产单</div>
     <div id="ro"></div>
   </div>
@@ -131,12 +160,17 @@ table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
   <!-- 规则管理 -->
   <div class="pnl" id="p-rules">
     <div class="t2">
-      <!-- Left: 3 groups -->
       <div>
         <div id="rc"></div>
       </div>
-      <!-- Right sidebar -->
       <div class="side">
+        <!-- 执行历史 -->
+        <div class="sc">
+          <div class="sc-h">执行历史</div>
+          <div class="sc-b">
+            <div class="ehist" id="eh"><span style="color:#94a3b8;font-size:10px">加载中...</span></div>
+          </div>
+        </div>
         <!-- Execute -->
         <div class="sc">
           <div class="sc-h">执行规则</div>
@@ -178,6 +212,14 @@ table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
     </div>
   </div>
 
+  <!-- 库存管理 -->
+  <div class="pnl" id="p-stock">
+    <div class="sec">代理商库存概览</div>
+    <div class="mets" id="asmg"></div>
+    <div class="sec">代理商库存明细</div>
+    <div class="ast" id="astbl"></div>
+  </div>
+
   <!-- 数据流 -->
   <div class="pnl" id="p-flow">
     <div class="flow">
@@ -215,6 +257,41 @@ table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
         <div class="fn hl">循环↑<div class="fs">飞轮闭环</div></div>
       </div>
     </div>
+    <div style="margin-top:20px">
+      <div class="sec">CRM 同步流</div>
+      <div class="flow">
+        <div class="frow">
+          <div class="fn hl">CRM Bitable<div class="fs">RlfTb6g... (7表)</div></div>
+          <div class="fa">&rarr;</div>
+          <div class="fn">sync_agents.js<div class="fs">01表→代理商表</div></div>
+          <div class="fa">&rarr;</div>
+          <div class="fn gr">代理商认证<div class="fs">AG-XXX + Token</div></div>
+        </div>
+        <div class="frow" style="margin-top:8px">
+          <div class="fn hl">CRM Bitable<div class="fs">RlfTb6g... (7表)</div></div>
+          <div class="fa">&rarr;</div>
+          <div class="fn">sync_customers.js<div class="fs">02表→终端客户表</div></div>
+          <div class="fa">&rarr;</div>
+          <div class="fn gr">客户主数据<div class="fs">CUS-XXXX</div></div>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:20px">
+      <div class="sec">打印队列流</div>
+      <div class="flow">
+        <div class="frow">
+          <div class="fn hl">labels.html<div class="fs">扫码/手动</div></div>
+          <div class="fa">&rarr;</div>
+          <div class="fn">POST /print-queue<div class="fs">入队</div></div>
+          <div class="fa">&rarr;</div>
+          <div class="fn yl">内存队列<div class="fs">FIFO</div></div>
+          <div class="fa">&rarr;</div>
+          <div class="fn">pull-print.js<div class="fs">每2s轮询拉取</div></div>
+          <div class="fa">&rarr;</div>
+          <div class="fn gr">TCP:9100<div class="fs">斑马 ZT410</div></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -234,7 +311,8 @@ function sw(n) {
   document.querySelectorAll(".tab").forEach(function(t){t.classList.toggle("active",t.dataset.tab===n)});
   document.querySelectorAll(".pnl").forEach(function(p){p.classList.toggle("active",p.id==="p-"+n)});
   if (n==="dashboard") loadDash();
-  if (n==="rules") { loadRules(); loadEO(); }
+  if (n==="rules") { loadRules(); loadEO(); loadExecHistory(); }
+  if (n==="stock") loadAgentStock();
 }
 
 function toast(m, t) {
@@ -244,6 +322,7 @@ function toast(m, t) {
 }
 
 function h(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function tsFmt(t) { if(!t) return "-"; var d=new Date(t); return d.getMonth()+1+"/"+d.getDate()+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
 
 // ── Dashboard ──
 async function loadDash() {
@@ -251,6 +330,35 @@ async function loadDash() {
   g.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:24px"><div class="sp" style="width:20px;height:20px"></div><span style="margin-left:8px;font-size:12px;color:#718096">加载中...</span></div>';
   var d;
   try { d = await api("/dashboard"); } catch(e) { g.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#dc2626;font-size:13px">加载失败</div>'; return; }
+
+  // 告警 feed
+  var af = document.getElementById("af");
+  if (d.alerts && d.alerts.length) {
+    af.innerHTML = '<div class="sec">告警 <span class="badge badge-red">'+d.alerts.length+'</span></div>' +
+      d.alerts.map(function(a){
+        return '<div class="alert-item '+a.level+'"><span class="ai">'+a.icon+'</span><span>'+h(a.msg)+'</span><span class="at">'+tsFmt(a.ts)+'</span></div>';
+      }).join("");
+  } else {
+    af.innerHTML = '<div class="sec">告警 <span class="badge badge-green">0</span></div><div style="color:#718096;font-size:12px;padding:8px 0">暂无告警</div>';
+  }
+
+  // 订单指标
+  var om = d.orderMetrics || {};
+  var omg = document.getElementById("omg");
+  var pendCount = om.byStatus ? (om.byStatus["待处理"]||0) : 0;
+  var prodCount = om.byStatus ? (om.byStatus["生产中"]||0) : 0;
+  var shipCount = om.byStatus ? (om.byStatus["已发货"]||0) : 0;
+  var doneCount = om.byStatus ? (om.byStatus["已签收"]||0) : 0;
+  omg.innerHTML = [
+    {v:om.total||0,l:"总订单数",c:""},
+    {v:pendCount,l:"待处理",c:pendCount>0?"warn":""},
+    {v:(om.overdue||0),l:"超24h未处理",c:(om.overdue||0)>0?"danger":"ok"},
+    {v:om.todayCount||0,l:"今日订单",c:""},
+    {v:prodCount,l:"生产中",c:""},
+    {v:shipCount,l:"已发货",c:""},
+  ].map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join("");
+
+  // 库存指标
   var pct = d.totalStockRows > 0 ? Math.round((d.totalStockRows - d.belowSafety) / d.totalStockRows * 100) : 0;
   g.innerHTML = [
     {v:d.totalStock,l:"总库存片数",c:"ok"},
@@ -260,6 +368,7 @@ async function loadDash() {
     {v:d.pendingReplenish,l:"待回补",c:d.pendingReplenish>0?"warn":"ok"},
     {v:d.agentCount,l:"代理商",c:""},
   ].map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join("");
+
   var rs = document.getElementById("rs");
   var rc = pct < 40 ? "#dc2626" : pct < 70 ? "#ca8a04" : "#16a34a";
   var h2 = '<div class="sec">库存健康度 <span style="font-weight:400;color:'+rc+'">'+pct+'% 达标</span></div>';
@@ -275,6 +384,7 @@ async function loadDash() {
     h2 += '</tbody></table>';
   }
   rs.innerHTML = h2;
+
   var ss = document.getElementById("ss");
   if (d.topDeficits && d.topDeficits.length) {
     var ds = '<div class="sec" style="color:#dc2626">最大缺口 TOP 10</div>';
@@ -287,6 +397,17 @@ async function loadDash() {
     ds += '</tbody></table>';
     ss.innerHTML = ds;
   } else { ss.innerHTML = ""; }
+
+  // 打印队列
+  var pq = d.printQueue || {};
+  var pmg = document.getElementById("pmg");
+  pmg.innerHTML = [
+    {v:pq.pending||0,l:"待打印",c:(pq.pending||0)>0?"warn":"ok"},
+    {v:pq.done||0,l:"已完成",c:"ok"},
+    {v:pq.error||0,l:"失败",c:(pq.error||0)>0?"danger":"ok"},
+    {v:(pq.pending||0)+(pq.done||0)+(pq.error||0),l:"总计",c:""},
+  ].map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join("");
+
   var tbl = document.getElementById("ro");
   if (d.recentOrders && d.recentOrders.length) {
     tbl.innerHTML = '<table class="ft"><thead><tr><th>工单号</th><th>SKU</th><th style="text-align:right">SPH</th><th style="text-align:right">CYL</th><th style="text-align:right">产量</th><th>状态</th></tr></thead><tbody>'+d.recentOrders.map(function(o){return '<tr><td>'+o.工单号+'</td><td>'+o.产品型号+'</td><td style="text-align:right">'+o.SPH+'</td><td style="text-align:right">'+o.CYL+'</td><td style="text-align:right">'+o.建议产量+'</td><td>'+o.状态+'</td></tr>'}).join("")+'</tbody></table>';
@@ -300,7 +421,6 @@ var GROUPS = [
   { name: "库存管理", rules: ["rule4","rule5","rule10","rule11","rule12","rule13","rule14"], desc: "预测→备库→预警→排产→回补→寄售", icon: "📦", cls: "c-stock", color: "#16a34a" },
   { name: "生产运营", rules: ["rule7","rule8","rule9"], desc: "采购→车房分配→模芯管理", icon: "🏭", cls: "c-prod", color: "#ea580c" },
 ];
-var _col = {};
 
 async function loadRules() {
   var c = document.getElementById("rc");
@@ -308,7 +428,7 @@ async function loadRules() {
   var d;
   try { d = await api("/rules"); } catch(e) { c.innerHTML = '<p style="color:#dc2626;text-align:center;padding:16px;font-size:12px">加载失败</p>'; return; }
   _cfg = d.config || {}; _man = d.manifest || {};
-  renderRules(); loadEO();
+  renderRules(); loadEO(); loadExecHistory();
 }
 
 function renderRules() {
@@ -316,7 +436,8 @@ function renderRules() {
   var html = "";
   GROUPS.forEach(function(grp) {
     var vis = grp.rules.filter(function(r){ return !!_man[r]; });
-    html += '<div class="grp-label '+grp.cls+'"><div class="dot" style="background:'+grp.color+'"></div>'+grp.icon+' '+grp.name+' <span style="font-weight:400;color:#475569;font-size:13px;margin-left:6px">'+grp.desc+'</span><span class="gcount">'+vis.length+'条规则</span></div>';    html += '<div class="grp-grid">';
+    html += '<div class="grp-label '+grp.cls+'"><div class="dot" style="background:'+grp.color+'"></div>'+grp.icon+' '+grp.name+' <span style="font-weight:400;color:#475569;font-size:13px;margin-left:6px">'+grp.desc+'</span><span class="gcount">'+vis.length+'条规则</span></div>';
+    html += '<div class="grp-grid">';
     vis.forEach(function(rid) {
       var m = _man[rid], cfg = _cfg[rid]||{};
       var params = Object.entries(m.params).map(function(pe) {
@@ -355,8 +476,6 @@ function renderRules() {
   }
   c.innerHTML = html;
 }
-
-function tg(n) { _col[n] = !_col[n]; renderRules(); }
 
 function upd(el) {
   var r=el.dataset.rule, p=el.dataset.param;
@@ -420,6 +539,56 @@ async function exec() {
   if (!data.stdout && !data.stderr) o += '<span class="m">(无输出)</span>';
   out.innerHTML = o;
   toast(data.exitCode===0?rule+" 成功":rule+" 失败",data.exitCode===0?"success":"error");
+  loadExecHistory(); // 刷新执行历史
+}
+
+// ── Execution History ──
+async function loadExecHistory() {
+  var el = document.getElementById("eh");
+  var d;
+  try { d = await api("/execution-history?limit=30"); } catch(e) { return; }
+  if (!d.items || !d.items.length) { el.innerHTML = '<span style="color:#94a3b8;font-size:10px">暂无执行记录</span>'; return; }
+  el.innerHTML = d.items.map(function(item){
+    var ok = item.exitCode === 0;
+    var cls = ok ? "eh-ok" : "eh-fail";
+    var icon = ok ? "✓" : "✗";
+    return '<div class="eh-item"><span class="'+cls+'">'+icon+'</span><span class="eh-rule">'+item.rule+'</span><span style="color:#718096">'+(item.dryRun?"预览":"")+'</span><span class="eh-ms">'+item.ms+'ms</span><span class="eh-time">'+tsFmt(item.ts)+'</span></div>';
+  }).join("");
+}
+
+// ── Agent Stock ──
+async function loadAgentStock() {
+  var mg = document.getElementById("asmg");
+  mg.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:16px"><div class="sp"></div></div>';
+  var d;
+  try { d = await api("/agent-stock-admin"); } catch(e) { mg.innerHTML = '<div style="color:#dc2626;font-size:12px">加载失败</div>'; return; }
+  var items = d.items || [];
+  var totalOwned = 0, totalConsigned = 0, agentSet = new Set(), skuSet = new Set();
+  for (var it of items) {
+    totalOwned += it.ownedStock || 0;
+    totalConsigned += it.consignedStock || 0;
+    if (it.agentId) agentSet.add(it.agentId);
+    if (it.sku) skuSet.add(it.sku);
+  }
+  mg.innerHTML = [
+    {v:items.length,l:"库存行数",c:""},
+    {v:agentSet.size,l:"代理商数",c:""},
+    {v:skuSet.size,l:"SKU数",c:""},
+    {v:totalOwned,l:"自有库存",c:"ok"},
+    {v:totalConsigned,l:"寄售库存",c:totalConsigned>0?"warn":"ok"},
+    {v:totalOwned+totalConsigned,l:"总库存",c:""},
+  ].map(function(m){return '<div class="mc '+m.c+'"><div class="v">'+m.v+'</div><div class="l">'+m.l+'</div></div>'}).join("");
+
+  // Table
+  var tbl = document.getElementById("astbl");
+  if (!items.length) { tbl.innerHTML = '<p style="color:#718096;font-size:12px">暂无代理商库存数据</p>'; return; }
+  var html = '<table class="sk"><thead><tr><th>代理商ID</th><th>SKU</th><th style="text-align:right">SPH</th><th style="text-align:right">CYL</th><th style="text-align:right">自有</th><th style="text-align:right">寄售</th><th style="text-align:right">合计</th></tr></thead><tbody>';
+  for (var it of items.slice(0, 200)) {
+    html += '<tr><td>'+h(it.agentId)+'</td><td>'+h(it.sku)+'</td><td style="text-align:right">'+it.sph+'</td><td style="text-align:right">'+it.cyl+'</td><td style="text-align:right;color:#16a34a">'+(it.ownedStock||0)+'</td><td style="text-align:right;color:#ca8a04">'+(it.consignedStock||0)+'</td><td style="text-align:right;font-weight:500">'+((it.ownedStock||0)+(it.consignedStock||0))+'</td></tr>';
+  }
+  html += '</tbody></table>';
+  if (items.length > 200) html += '<p style="color:#718096;font-size:10px;padding:4px 0">显示前 200 / '+items.length+' 行</p>';
+  tbl.innerHTML = html;
 }
 
 // ── AI ──
