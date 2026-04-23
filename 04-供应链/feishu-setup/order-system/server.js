@@ -218,6 +218,9 @@ async function handleExcelUpload(file) {
     const name = customerName || lastCustomerName;
     if (customerName) lastCustomerName = customerName;
 
+    // 跳过备注行、合计行等非患者数据行
+    if (customerName && /^(备注|合计|客户名称|下单日期|收货地址|联系人|电话)/.test(customerName)) continue;
+
     // 无顾客名的行：有备注则附加到上一个 patient，否则跳过
     if (!name) {
       if (remark && lastCustomerName) {
@@ -234,8 +237,16 @@ async function handleExcelUpload(file) {
     if (!orderPhone && phone) orderPhone = phone;
     if (!orderAddress && address) orderAddress = address;
 
-    // 查找已有患者或新建
-    let patient = patients.find(p => p.customerName === name);
+    // 查找已有患者或新建（同名不同产品型号 = 不同患者）
+    let patient = productModel
+      ? patients.find(p => p.customerName === name && p.sku === productModel)
+      : null;
+    if (!patient && !productModel) {
+      // 空产品型号（左眼延续行）→ 匹配同名最新患者
+      for (let i = patients.length - 1; i >= 0; i--) {
+        if (patients[i].customerName === name) { patient = patients[i]; break; }
+      }
+    }
     if (!patient) {
       patient = { customerName: name, sku: productModel, quantity: Number(qty) || 1, eyes: [], assembly: false, remark: "" };
       patients.push(patient);
