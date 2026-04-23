@@ -279,6 +279,11 @@ async function handleExcelUpload(file) {
     }
   }
 
+  // 统一眼别排序：右眼在前，左眼在后
+  for (const p of patients) {
+    p.eyes.sort((a, b) => (a.side === "右眼" ? 0 : 1) - (b.side === "右眼" ? 0 : 1));
+  }
+
   // 4. SKU 校验
   const allSkus = await getSkusWithInventory();
   const modelSkus = getModelSkus(allSkus);
@@ -1361,8 +1366,8 @@ function slipHTML(order) {
     <tr>
       <td class="eye ${r.eye === "左眼" ? "eye-l" : "eye-r"}">${r.eye === "左眼" ? "L<br><span>左眼</span>" : "R<br><span>右眼</span>"}</td>
       <td class="sku">${r.sku || "—"}</td>
-      <td class="rx">${r.sph || "—"}</td>
-      <td class="rx">${r.cyl || "—"}</td>
+      <td class="rx">${fmt(r.sph)}</td>
+      <td class="rx">${fmt(r.cyl)}</td>
       <td class="rx">${r.axis || "—"}</td>
       <td class="lc"><span class="lc-code">${lc}</span></td>
       <td class="qr-cell"><img src="${qr}" alt="QR" width="52" height="52"></td>
@@ -1547,8 +1552,8 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
       <td class="order-no">${showName ? `${r.orderNo}<br><span class="cname">${r.customerName}</span>` : ""}</td>
       <td class="eye ${isR ? "eye-r" : "eye-l"}">${isR ? "R" : "L"}<br><span>${isR ? "右眼" : "左眼"}</span></td>
       <td class="sku">${r.sku || "—"}</td>
-      <td class="rx">${r.sph || "—"}</td>
-      <td class="rx">${r.cyl || "—"}</td>
+      <td class="rx">${fmt(r.sph)}</td>
+      <td class="rx">${fmt(r.cyl)}</td>
       <td class="rx">${r.axis || "—"}</td>
       <td class="lc"><span class="lc-code">${lc}</span></td>
       <td class="qr-cell"><img src="${qr}" alt="QR" width="48" height="48"></td>
@@ -2936,6 +2941,7 @@ const server = createServer(async (req, res) => {
           axis: r.fields["轴位AXIS"] ?? "",
           lensCode: r.fields["镜片码"] || "",
         }));
+        eyes.sort((a, b) => a.side.includes("右") ? -1 : 1);
 
         // 获取订单创建时间
         const orderEnc = encodeURIComponent(`"${srcOrderNo}"`);
@@ -2962,9 +2968,9 @@ const server = createServer(async (req, res) => {
         const cls = e.side.includes("左") ? "eye-L" : "eye-R";
         return `<tr>
         <td><span class="eye-tag ${cls}">${escapeHtml(e.side)}</span></td>
-        <td class="rx-num">${escapeHtml(String(e.sph ?? "—"))}</td>
-        <td class="rx-num">${escapeHtml(String(e.cyl ?? "—"))}</td>
-        <td class="rx-num">${escapeHtml(String(e.axis ?? "—"))}</td>
+        <td class="rx-num">${escapeHtml(fmt(e.sph))}</td>
+        <td class="rx-num">${escapeHtml(fmt(e.cyl))}</td>
+        <td class="rx-num">${escapeHtml(fmtAxis(e.axis))}</td>
       </tr>`;
       }).join("\n");
       html = html.replace("{{EYE_ROWS}}", eyeRows);

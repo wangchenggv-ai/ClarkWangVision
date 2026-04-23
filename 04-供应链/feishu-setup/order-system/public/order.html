@@ -345,6 +345,7 @@ function restoreDraft() {
       if (qtyEl) qtyEl.value = p.quantity || 1;
 
       if (p.eyes) {
+        p.eyes.sort((a, b) => (a.side === "右眼" ? 0 : 1) - (b.side === "右眼" ? 0 : 1));
         for (const eye of p.eyes) {
           const side = eye.side === "右眼" ? "right" : "left";
           const sphEl = document.getElementById(`sph-${id}-${side}`);
@@ -946,6 +947,7 @@ function importToForm(mode) {
       if (ckEl && ckEl.checked) { ckEl.checked = false; toggleEye(id, s); }
     }
     if (p.eyes) {
+      p.eyes.sort((a, b) => (a.side === "右眼" ? 0 : 1) - (b.side === "右眼" ? 0 : 1));
       for (const eye of p.eyes) {
         const side = eye.side === "右眼" ? "right" : "left";
         const sphEl = document.getElementById(`sph-${id}-${side}`);
