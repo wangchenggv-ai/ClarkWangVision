@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// pull-print.js — Mac 本地守护进程，轮询云端打印队列 → 发送 ZPL 到斑马打印机 / 打开通行单
+// pull-print.js — Mac 本地守护进程，轮询云端打印队列 → 发送 ZPL 到斑马打印机 / 打开同行单
 // 用法: nohup node pull-print.js &
 
 import { Socket } from "node:net";
@@ -80,7 +80,7 @@ async function processJob(job) {
     log("ok", `标签已打印: ${job.orderNo} ${job.customerName} ${job.eye} [${job.lensCode}]`);
   } else if (job.type === "slip") {
     await openUrl(job.slipUrl);
-    log("ok", `通行单已打开: ${job.title}`);
+    log("ok", `同行单已打开: ${job.title}`);
   }
 }
 

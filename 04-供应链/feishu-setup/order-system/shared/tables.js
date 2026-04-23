@@ -13,6 +13,9 @@ export const TABLES = {
   customer: "tbltXNNhF65EBl17",
   agent: "tblHsgGbJWkB31qu",
 
+  // ── 产品 ──
+  product_model: "tblU25NQ3RuaJJfc",
+
   // ── 库存系统 ──
   sku: "tblwQsvGAahoeoJV",
   finished_inventory: "tblUF49B6i53MV2O",

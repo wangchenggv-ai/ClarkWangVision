@@ -146,6 +146,10 @@ async function updateRecord(recordId, fields) {
   return feishuReq("PUT", `/bitable/v1/apps/${APP_TOKEN}/tables/${ORDER_TBL}/records/${recordId}`, { fields });
 }
 
+async function updateLensRecord(recordId, fields) {
+  return feishuReq("PUT", `/bitable/v1/apps/${APP_TOKEN}/tables/${LENS_TBL}/records/${recordId}`, { fields });
+}
+
 async function getLensDetailsByOrder(orderNo) {
   const encoded = encodeURIComponent(`"${orderNo}"`);
   const d = await feishuReq("GET",
@@ -763,6 +767,12 @@ async function simulateDelivery() {
     });
   }
 
+  // 同步镜片明细表状态
+  const lensDetails = await getLensDetailsByOrder(ORDER_NO);
+  for (const rec of lensDetails) {
+    await updateLensRecord(rec.record_id, { "订单状态": "已签收" });
+  }
+
   const signedAt = new Date(now).toLocaleString("zh-CN");
   console.log(`  ✅ 状态已更新 → 已签收`);
   console.log(`  签收时间: ${signedAt}`);
@@ -841,6 +851,12 @@ async function startWebhookServer() {
             "订单状态": "已签收",
             "签收时间": now,
           });
+        }
+
+        // 同步镜片明细表状态
+        const lensDetails = await getLensDetailsByOrder(orderNo);
+        for (const rec of lensDetails) {
+          await updateLensRecord(rec.record_id, { "订单状态": "已签收" });
         }
 
         const signedAt = new Date(now).toLocaleString("zh-CN");

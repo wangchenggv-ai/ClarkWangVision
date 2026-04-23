@@ -1,5 +1,5 @@
 /**
- * test_slip_e2e.mjs — 随货通行单 E2E 测试
+ * test_slip_e2e.mjs — 随货同行单 E2E 测试
  *
  * 用现有"生产中"订单测试：
  * 1. 单订单通行单（发货1人 → 生成通行单 → PDF）
@@ -87,7 +87,7 @@ async function htmlToPdf(html, outPath) {
   const reportData = { single: {}, batch: {}, errors: [] };
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Part 1: 单订单随货通行单
+  // Part 1: 单订单随货同行单
   // ═══════════════════════════════════════════════════════════════════════
 
   step(1, `单订单测试 — 发货 ${SINGLE_CUSTOMER}`);
@@ -107,7 +107,7 @@ async function htmlToPdf(html, outPath) {
   ok(`预览: ${pv.customerName} | ${pv.rows.length} 片 | ${pv.agentName}`);
   for (const r of pv.rows) info(`  ${r.eye} ${r.sku} SPH=${r.sph} CYL=${r.cyl} AXIS=${r.axis} 码=${r.lensCode}`);
 
-  step(3, "单订单测试 — 生成随货通行单 HTML");
+  step(3, "单订单测试 — 生成随货同行单 HTML");
   const singleHtml = await api(`/api/admin/slip/${ORDER_NO}?${ADMIN_TOKEN_PARAM}&customer=${encodeURIComponent(SINGLE_CUSTOMER)}`);
   if (typeof singleHtml !== "string" || singleHtml.length < 100) { err("通行单 HTML 异常"); process.exit(1); }
   writeFileSync(resolve(__dirname, "docs/test-slip-single.html"), singleHtml, "utf-8");
@@ -133,7 +133,7 @@ async function htmlToPdf(html, outPath) {
   } catch (e) { err(`PDF 失败: ${e.message}`); reportData.errors.push({ step: "single-pdf", error: e.message }); }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Part 2: 合单随货通行单（3人同代理商，同一次发货 = 同一快递单号）
+  // Part 2: 合单随货同行单（3人同代理商，同一次发货 = 同一快递单号）
   // ═══════════════════════════════════════════════════════════════════════
 
   step(5, `合单测试 — 批量发货 3 人（同一次调用，共享快递单号）`);
@@ -150,14 +150,14 @@ async function htmlToPdf(html, outPath) {
     reportData.errors.push({ step: "batch-ship", error: JSON.stringify(batchShip) });
   }
 
-  step(6, "合单测试 — 生成合单随货通行单（按日期查全部）");
+  step(6, "合单测试 — 生成合单随货同行单（按日期查全部）");
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const batchHtml = await api(`/api/admin/slip-batch?${ADMIN_TOKEN_PARAM}&date=${today}&agent=${AGENT_ID}`);
   if (typeof batchHtml !== "string" || batchHtml.length < 100) { err("合单通行单异常"); process.exit(1); }
 
   // 检查是汇总页还是实际通行单
-  const isSummaryPage = batchHtml.includes("随货通行单汇总");
-  const isActualSlip = batchHtml.includes("合单随货通行单");
+  const isSummaryPage = batchHtml.includes("随货同行单汇总");
+  const isActualSlip = batchHtml.includes("合单随货同行单");
 
   if (isSummaryPage) {
     ok(`返回汇总页 (${(batchHtml.length / 1024).toFixed(1)} KB) — 包含多个快递单号分组`);
@@ -173,7 +173,7 @@ async function htmlToPdf(html, outPath) {
       // 确保链接包含 admin token
       const linkWithToken = link.includes("admin=") ? link : link + (link.includes("?") ? "&" : "?") + ADMIN_TOKEN_PARAM;
       const slipHtml = await api(linkWithToken);
-      if (typeof slipHtml === "string" && slipHtml.includes("合单随货通行单")) {
+      if (typeof slipHtml === "string" && slipHtml.includes("合单随货同行单")) {
         allSlipHtmls.push(slipHtml);
         ok(`获取分组通行单 (${(slipHtml.length / 1024).toFixed(1)} KB)`);
       }
@@ -225,7 +225,7 @@ async function htmlToPdf(html, outPath) {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   const allPass = reportData.errors.length === 0;
 
-  const report = `# 随货通行单 E2E 测试报告
+  const report = `# 随货同行单 E2E 测试报告
 
 **日期：** ${new Date().toLocaleString("zh-CN")}
 **耗时：** ${elapsed}s
@@ -234,7 +234,7 @@ async function htmlToPdf(html, outPath) {
 
 ---
 
-## 测试 1：单订单随货通行单
+## 测试 1：单订单随货同行单
 
 **订单信息：**
 
@@ -266,7 +266,7 @@ ${(reportData.single.rows || []).map(r => `| ${r.eye} | ${r.sku} | ${r.sph} | ${
 
 ---
 
-## 测试 2：合单随货通行单（3 单同代理商）
+## 测试 2：合单随货同行单（3 单同代理商）
 
 **订单信息：**
 
@@ -316,7 +316,7 @@ ${reportData.errors.length > 0 ? `## 失败项\n\n${reportData.errors.map(e => `
   writeFileSync(resolve(__dirname, "docs/slip_e2e_report.md"), report, "utf-8");
 
   console.log(`\n${"═".repeat(56)}`);
-  console.log(`  随货通行单 E2E ${allPass ? "全部通过 ✅" : "有失败 ❌"}  |  耗时 ${elapsed}s`);
+  console.log(`  随货同行单 E2E ${allPass ? "全部通过 ✅" : "有失败 ❌"}  |  耗时 ${elapsed}s`);
   console.log(`  单订单: test-slip-single.pdf ${reportData.single.pdfSize ? "(" + reportData.single.pdfSize + " KB)" : ""}`);
   console.log(`  合  单: test-slip-batch.pdf ${reportData.batch.pdfSize ? "(" + reportData.batch.pdfSize + " KB)" : ""}`);
   console.log(`  报告: docs/slip_e2e_report.md`);

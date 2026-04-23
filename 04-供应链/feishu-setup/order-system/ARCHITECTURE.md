@@ -90,7 +90,7 @@
   确认发货 ──→ POST /api/admin/ship → 状态→已发货 → 发货卡片
   标记签收 ──→ POST /api/admin/deliver → 状态→已签收 → 签收卡片
   导出ZIP  ──→ GET /api/admin/batch-zip → 多订单合并ZIP
-  随货通行单──→ GET /api/admin/slip/:orderNo → A4 HTML
+  随货同行单──→ GET /api/admin/slip/:orderNo → A4 HTML
                GET /api/admin/slip-batch → 合单通行单
 
 Admin 控制中心 (control.html)      服务端 API
@@ -175,6 +175,7 @@ import { TABLES } from "../shared/tables.js";
 |----|-----------|----------|------|
 | 代理商表 | `agent` | `tblHsgGbJWkB31qu` | 代理商认证（ID/Token），CRM 同步来 |
 | 终端客户表 | `customer` | `tbltXNNhF65EBl17` | CRM 同步 + 门户自动创建 |
+| 产品型号 | `product_model` | `tblU25NQ3RuaJJfc` | 下单下拉选项，按排序号排列 |
 | SKU 主数据 | `sku` | `tblwQsvGAahoeoJV` | 产品目录 |
 | 规则配置 | `rule_config` | `tbl78V8wgziRs0pt` | 运行时规则参数覆盖 |
 
@@ -321,7 +322,7 @@ import { TABLES } from "../shared/tables.js";
 | `POST /api/admin/ship` | 批量发货，自动生成快递单号，状态→已发货 |
 | `POST /api/admin/deliver` | 批量签收，状态→已签收 |
 | `GET /api/admin/ship-preview` | 发货前预览（处方+收货信息） |
-| `GET /api/admin/slip/:orderNo` | 单订单随货通行单 HTML |
+| `GET /api/admin/slip/:orderNo` | 单订单随货同行单 HTML |
 | `GET /api/admin/slip-batch` | 按日期+代理商批量通行单 |
 
 **CLI 工具（备用）：** `node logistics.js ship / ship-batch / deliver / slip / slip-batch / status / webhook`
@@ -350,7 +351,7 @@ pull-print.js（本地守护进程）
 
 **打印内容：**
 - ZPL 标签（Code128条形码 + QR验真码 + 处方数据）
-- 随货通行单（自动打开浏览器打印）
+- 随货同行单（自动打开浏览器打印）
 
 **配置：** `pull-print-config.json`（服务器地址、admin token、打印机 IP、轮询间隔）
 
@@ -497,7 +498,7 @@ pull-print.js（本地守护进程）
 | 扫码打印 | 扫码栏扫条形码 | 自动入队打印标签 |
 | 批量打印 | 勾选 → 点「斑马打印」 | 入队批量打印 |
 | 确认发货 | 勾选 → 点「确认发货」 | 预览→确认→发货→通行单 |
-| 随货通行单 | 已发货行点 📄 / 底部批量 | 单张或合单通行单 |
+| 随货同行单 | 已发货行点 📄 / 底部批量 | 单张或合单通行单 |
 | 标记签收 | 勾选 → 点「标记签收」 | 状态→已签收 |
 
 ### control.html — Admin 控制中心
@@ -633,7 +634,7 @@ node pull-print.js        # 打印守护进程（需在本地打印电脑运行�
 | 手动触发规则 | `/control` 的执行 Tab，选规则点执行（支持预览） |
 | 打印相关改动 | 标签/通行单走**队列拉模式**：server 入队 → pull-print.js 轮询 → TCP |
 | 调整交期档位 | `server.js:estimateDeliveryByRx` |
-| 新增 SKU | 改 `migrate_stock_v2.js` 的 SKUS → import → 改 server.js 的 SKU_CATALOG |
+| 新增/停售 SKU | 直接在 Bitable `产品型号` 表增删记录，不用改代码 |
 
 ---
 

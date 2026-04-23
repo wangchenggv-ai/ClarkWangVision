@@ -71,7 +71,7 @@ PORT=8080 node server.js
 | GET | `/api/terminal-customers?t=xxx` | 终端客户列表 |
 | POST | `/api/order/:orderNo/confirm` | 代理商确认订单 |
 | GET | `/api/order/:orderNo/factory-zip` | 工厂包下载 |
-| GET | `/api/order/:orderNo/slip` | 随货通行单 |
+| GET | `/api/order/:orderNo/slip` | 随货同行单 |
 
 ### 管理端（labels.html）
 

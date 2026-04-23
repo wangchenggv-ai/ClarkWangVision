@@ -179,8 +179,8 @@ function runCmd(args) {
 
   runCmd(["ship-batch"]);
 
-  // ── 步骤 4：生成合单随货通行单 ────────────────────────────────────────
-  step(4, "生成合单随货通行单（slip-batch）");
+  // ── 步骤 4：生成合单随货同行单 ────────────────────────────────────────
+  step(4, "生成合单随货同行单（slip-batch）");
 
   runCmd(["slip-batch"]);
 
@@ -200,7 +200,7 @@ function runCmd(args) {
   console.log(`\n${"═".repeat(56)}`);
   console.log(`  全流程 E2E 完成  |  耗时 ${elapsed}s`);
   console.log(`  ${orderNos.length} 个订单  |  ${orderNos.length * 2} 片镜片  |  5 个包裹`);
-  console.log(`  随货通行单: docs/slip-batch-*.html`);
+  console.log(`  随货同行单: docs/slip-batch-*.html`);
   console.log(`  飞书私信: 发货通知 × 5 + 签收通知 × ${orderNos.length}`);
   console.log(`${"═".repeat(56)}\n`);
 
