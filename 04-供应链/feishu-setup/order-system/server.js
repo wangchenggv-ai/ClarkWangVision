@@ -311,7 +311,7 @@ let _agentsCache = null;
 let _agentsCacheTime = 0;
 
 async function loadAgents() {
-  if (Date.now() - _agentsCacheTime < 30000 && _agentsCache) return _agentsCache;
+  if (Date.now() - _agentsCacheTime < 300000 && _agentsCache) return _agentsCache;
   try {
     const records = await listRecords(TABLES.agent);
     _agentsCache = records
@@ -2644,9 +2644,14 @@ const server = createServer(async (req, res) => {
       }
 
       const encoded = encodeURIComponent(`"${orderNo}"`);
-      const data = await feishuApi("GET",
-        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`
-      );
+
+      // 并行请求订单表 + 镜片明细表
+      const [data, lensDetails] = await Promise.all([
+        feishuApi("GET",
+          `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`
+        ),
+        getLensDetailsByOrder(orderNo),
+      ]);
 
       if (!data?.items?.length) {
         jsonRes(res, 404, { error: "未找到该订单" });
@@ -2670,9 +2675,6 @@ const server = createServer(async (req, res) => {
           remark: f["备注"] || "",
         };
       });
-
-      // 从镜片明细表获取处方数据，合并到 items
-      const lensDetails = await getLensDetailsByOrder(orderNo);
       const lenses = lensDetails.map(r => {
         const f = r.fields;
         return {

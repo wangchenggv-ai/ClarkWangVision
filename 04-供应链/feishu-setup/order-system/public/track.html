@@ -119,8 +119,13 @@ async function init() {
 
   document.getElementById("navOrder").href = `/order?t=${token}`;
 
+  // 并行：代理商验证 + SKU列表 + 订单列表
+  const agentPromise = fetch(`/api/agent?t=${token}`);
+  const skusPromise = fetch(`/api/skus?t=${token}`);
+
+  // 代理商验证（必须成功才继续）
   try {
-    const res = await fetch(`/api/agent?t=${token}`);
+    const res = await agentPromise;
     if (!res.ok) throw new Error();
     const info = await res.json();
     document.getElementById("agentName").textContent = info.name;
@@ -129,22 +134,22 @@ async function init() {
     return;
   }
 
-  // 加载 SKU 列表到筛选器
-  try {
-    const res = await fetch(`/api/skus?t=${token}`);
-    if (res.ok) {
-      const skus = await res.json();
-      const sel = document.getElementById("filterSku");
-      for (const s of skus) {
-        const opt = document.createElement("option");
-        opt.value = s.sku;
-        opt.textContent = `${s.sku} ${s.name}`;
-        sel.appendChild(opt);
-      }
-    }
-  } catch {}
-
+  // 订单加载不等 SKU，立即开始
   loadOrders();
+
+  // SKU 筛选器后台加载
+  skusPromise.then(res => {
+    if (res.ok) return res.json();
+  }).then(skus => {
+    if (!skus) return;
+    const sel = document.getElementById("filterSku");
+    for (const s of skus) {
+      const opt = document.createElement("option");
+      opt.value = s.sku;
+      opt.textContent = `${s.sku} ${s.name}`;
+      sel.appendChild(opt);
+    }
+  }).catch(() => {});
 }
 
 // ─── 加载订单 ──────────────────────────────────────────────────────────────

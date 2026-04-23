@@ -389,8 +389,13 @@ async function init() {
   document.getElementById("navTrack").href = `/track?t=${token}`;
   document.getElementById("viewOrderBtn").href = `/track?t=${token}`;
 
+  // 并行加载代理商验证 + 产品目录
+  const [agentRes, skuRes] = await Promise.all([
+    fetch(`/api/agent?t=${token}`),
+    fetch(`/api/skus?models&t=${token}`),
+  ]);
+
   try {
-    const agentRes = await fetch(`/api/agent?t=${token}`);
     if (!agentRes.ok) throw new Error();
     agentInfo = await agentRes.json();
     document.getElementById("agentName").textContent = agentInfo.name;
@@ -400,9 +405,8 @@ async function init() {
     return;
   }
 
-  // 加载产品目录（必须，阻塞）
+  // 加载产品目录
   try {
-    const skuRes = await fetch(`/api/skus?models&t=${token}`);
     if (skuRes.ok) {
       SKU_OPTIONS = (await skuRes.json()).map(s => ({
         value: s.sku,
