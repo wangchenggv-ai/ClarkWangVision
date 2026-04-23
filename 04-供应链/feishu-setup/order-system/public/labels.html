@@ -1744,6 +1744,14 @@ async function toggleRowExpand(idx, orderNo, customerName) {
     if (customerName && data?.lenses) {
       data.lenses = data.lenses.filter(l => l.customerName === customerName);
     }
+    // 按顾客名+眼别排序（右眼在上左眼在下）
+    if (data?.lenses) {
+      data.lenses.sort((a, b) => {
+        const nc = (a.customerName || '').localeCompare(b.customerName || '', 'zh-CN');
+        if (nc !== 0) return nc;
+        return (a.eye?.includes('右') ? 0 : 1) - (b.eye?.includes('右') ? 0 : 1);
+      });
+    }
     detailCache[cacheKey] = data;
     renderDetail(panel, data);
   } catch (e) {
@@ -1762,8 +1770,8 @@ function renderDetail(panel, data) {
       <tbody>${data.lenses.map(l => `
         <tr>
           <td>${l.eye}</td>
-          <td>${l.sph}</td>
-          <td>${l.cyl}</td>
+          <td>${l.sph !== '' && l.sph != null ? Number(l.sph).toFixed(2) : ''}</td>
+          <td>${l.cyl !== '' && l.cyl != null ? Number(l.cyl).toFixed(2) : ''}</td>
           <td>${l.axis || '-'}</td>
           <td class="lens-code">${l.lensCode || '-'}</td>
         </tr>
@@ -1982,8 +1990,9 @@ async function shipOrders() {
   let previewHtml = "";
   if (preview.orders?.length) {
     previewHtml = preview.orders.map(o => {
+      o.rows.sort((a, b) => (a.eye?.includes('右') ? 0 : 1) - (b.eye?.includes('右') ? 0 : 1));
       const rowsHtml = o.rows.map(r =>
-        `<tr><td class="eye-${r.eye.includes('右') ? 'r' : 'l'}">${r.eye.includes('右') ? 'R' : 'L'}</td><td>${r.sku}</td><td>${r.sph}</td><td>${r.cyl}</td><td>${r.axis}</td><td style="font-family:monospace;font-size:8pt">${r.lensCode}</td></tr>`
+        `<tr><td class="eye-${r.eye.includes('右') ? 'r' : 'l'}">${r.eye.includes('右') ? 'R' : 'L'}</td><td>${r.sku}</td><td>${r.sph != null ? Number(r.sph).toFixed(2) : ''}</td><td>${r.cyl != null ? Number(r.cyl).toFixed(2) : ''}</td><td>${r.axis}</td><td style="font-family:monospace;font-size:8pt">${r.lensCode}</td></tr>`
       ).join("");
       return `<div style="margin-bottom:12px;padding:10px;background:#fafafa;border-radius:6px;border:1px solid #eee">
         <div style="font-weight:700;margin-bottom:4px">${o.customerName} <span style="color:#888;font-size:9pt">${o.orderNo}</span></div>

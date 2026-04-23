@@ -1267,10 +1267,13 @@ async function getLensDetailsByOrder(orderNo) {
   );
   const items = data?.items || [];
   items.sort((a, b) => {
+    const ca = a.fields["顾客姓名"] || "", cb = b.fields["顾客姓名"] || "";
+    const nc = ca.localeCompare(cb, "zh-CN");
+    if (nc !== 0) return nc;
     const ea = a.fields["眼别"] || "", eb = b.fields["眼别"] || "";
-    if (ea === eb) return 0;
-    if (ea.includes("右")) return -1;
-    return 1;
+    if (ea.includes("右") && !eb.includes("右")) return -1;
+    if (!ea.includes("右") && eb.includes("右")) return 1;
+    return 0;
   });
   return items;
 }
