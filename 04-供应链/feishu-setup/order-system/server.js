@@ -1155,6 +1155,24 @@ async function sendZplToPrinter(zplString) {
   throw new Error(`打印机未配置或未启用 (connection=${conn})`);
 }
 
+// ─── 打印队列（Mac 拉模式）───────────────────────────────────────────────────
+
+function buildTestZpl() {
+  return [
+    "^XA", "^CI28", "^PW636", "^LL400",
+    "^FO200,30^A0N,40,40^FDGAUSH TEST^FS",
+    "^FO40,90^BY2^BCN,80,Y,N,N^FDTEST-PRINT^FS",
+    "^FO40,185^A0N,24,24^FD测试标签 / Test Label^FS",
+    "^FO40,220^A0N,20,20^FD" + new Date().toLocaleString("zh-CN") + "^FS",
+    "^FO40,260^A0N,18,18^FD打印机: " + loadPrinterConfig().printer_model + "^FS",
+    "^FO40,290^BQN,2,3^FDQA,https://gaushclear.com^FS",
+    "^XZ",
+  ].join("\n");
+}
+
+const printQueue = new Map();
+let _pqSeq = 0;
+
 // ─── 工作流步骤 ──────────────────────────────────────────────────────────
 
 const STEP_ORDER = ["submitted", "confirmed", "producing", "qc_done", "labeled", "packed", "shipped", "received"];
@@ -1308,7 +1326,7 @@ function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
   return Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
 }
 
-// ─── 随货通行单 HTML 模板 ──────────────────────────────────────────────────────
+// ─── 随货同行单 HTML 模板 ──────────────────────────────────────────────────────
 
 function slipHTML(order) {
   const { orderNo, customerName, agentName, agentId, shipDate, promiseDate,
@@ -1334,7 +1352,7 @@ function slipHTML(order) {
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>随货通行单 ${orderNo}</title>
+<title>随货同行单 ${orderNo}</title>
 <style>
   @page { size: A4; margin: 12mm 14mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1406,7 +1424,7 @@ function slipHTML(order) {
     <div class="brand-sub">高视星 · 镜片溯源系统</div>
   </div>
   <div class="doc-title">
-    <h1>随货通行单</h1>
+    <h1>随货同行单</h1>
     <p>PACKING SLIP / DELIVERY NOTE</p>
   </div>
 </div>
@@ -1520,7 +1538,7 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>合单随货通行单 — ${agentName}</title>
+<title>合单随货同行单 — ${agentName}</title>
 <style>
   @page { size: A4; margin: 10mm 12mm; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1587,7 +1605,7 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
     <div class="brand-sub">高视星 · 镜片溯源系统</div>
   </div>
   <div class="doc-title">
-    <h1>合单随货通行单</h1>
+    <h1>合单随货同行单</h1>
     <p>CONSOLIDATED PACKING SLIP / DELIVERY NOTE</p>
   </div>
 </div>
@@ -2019,6 +2037,10 @@ const server = createServer(async (req, res) => {
     }
     if (pathname === "/control" || pathname === "/control.html") {
       serveStatic(res, resolve(__dirname, "public/control.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/inventory" || pathname === "/inventory.html") {
+      serveStatic(res, resolve(__dirname, "public/inventory.html"));
       return logReq(req, 200, start);
     }
 
@@ -3243,7 +3265,7 @@ const server = createServer(async (req, res) => {
       } catch (e) { jsonRes(res, 500, { error: e.message }); return logReq(req, 500, start); }
     }
 
-    // GET /api/admin/slip/:orderNo — 单订单随货通行单 HTML
+    // GET /api/admin/slip/:orderNo — 单订单随货同行单 HTML
     const slipMatch = pathname.match(/^\/api\/admin\/slip\/([^/]+)$/);
     if (slipMatch && req.method === "GET") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
@@ -3293,7 +3315,7 @@ const server = createServer(async (req, res) => {
       } catch (e) { jsonRes(res, 500, { error: e.message }); return logReq(req, 500, start); }
     }
 
-    // GET /api/admin/slip-batch — 批量合单随货通行单（按日期+代理商）
+    // GET /api/admin/slip-batch — 批量合单随货同行单（按日期+代理商）
     if (pathname === "/api/admin/slip-batch" && req.method === "GET") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const dateStr = url.searchParams.get("date") || new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -3354,7 +3376,7 @@ const server = createServer(async (req, res) => {
           return logReq(req, 200, start);
         }
         // 多分组：返回汇总页，每组一个可点击卡片
-        let listHtml = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>随货通行单汇总 ${dateStr}</title>
+        let listHtml = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>随货同行单汇总 ${dateStr}</title>
 <style>body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;padding:40px;background:#f5f5f5}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;max-width:1200px;margin:0 auto}
 .card{background:#fff;border-radius:8px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer;transition:box-shadow .2s}
@@ -3364,7 +3386,7 @@ const server = createServer(async (req, res) => {
 h1{max-width:1200px;margin:0 auto 24px;color:#1a1a2e;font-size:18pt}
 .btn{display:inline-block;margin-top:12px;padding:6px 16px;background:#c0392b;color:#fff;border:none;border-radius:4px;font-size:10pt;text-decoration:none}
 a{color:inherit;text-decoration:none}</style></head><body>
-<h1>随货通行单汇总 — ${dateStr}</h1><div class="cards">`;
+<h1>随货同行单汇总 — ${dateStr}</h1><div class="cards">`;
         for (const g of groups) {
           const totalRows = g.records.length;
           listHtml += `<a class="card" href="/api/admin/slip-batch?date=${dateStr}&agent=${g.agentId}"><h3>${g.agentName}</h3>
@@ -3626,17 +3648,7 @@ a{color:inherit;text-decoration:none}</style></head><body>
     if (pathname === "/api/admin/printer/test" && req.method === "POST") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       try {
-        const testZpl = [
-          "^XA", "^CI28", "^PW636", "^LL400",
-          "^FO200,30^A0N,40,40^FDGAUSH TEST^FS",
-          "^FO40,90^BY2^BCN,80,Y,N,N^FDTEST-PRINT^FS",
-          "^FO40,185^A0N,24,24^FD测试标签 / Test Label^FS",
-          "^FO40,220^A0N,20,20^FD" + new Date().toLocaleString("zh-CN") + "^FS",
-          "^FO40,260^A0N,18,18^FD打印机: " + loadPrinterConfig().printer_model + "^FS",
-          "^FO40,290^BQN,2,3^FDQA,https://gaushclear.com^FS",
-          "^XZ",
-        ].join("\n");
-        const result = await sendZplToPrinter(testZpl);
+        const result = await sendZplToPrinter(buildTestZpl());
         jsonRes(res, 200, { ok: true, ...result });
         return logReq(req, 200, start);
       } catch (e) {
@@ -3688,6 +3700,124 @@ a{color:inherit;text-decoration:none}</style></head><body>
         }
       }
       jsonRes(res, 200, status);
+      return logReq(req, 200, start);
+    }
+
+    // ── 打印队列 API（Mac 拉模式）────────────────────────────────────────────
+
+    // POST /api/admin/print-queue — 入队打印任务
+    if (pathname === "/api/admin/print-queue" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req);
+      const type = payload.type || "zpl";
+
+      if (type === "test") {
+        const id = `pq-${Date.now()}-${++_pqSeq}`;
+        printQueue.set(id, { id, type: "zpl", zpl: buildTestZpl(), orderNo: "TEST-PRINT", customerName: "", eye: "", lensCode: "", status: "pending", ts: Date.now() });
+        jsonRes(res, 200, { ok: true, jobId: id, type: "test" });
+        return logReq(req, 200, start);
+      }
+
+      if (type === "slip") {
+        const slipUrl = payload.slipUrl || "";
+        if (!slipUrl) { jsonRes(res, 400, { error: "缺少 slipUrl" }); return logReq(req, 400, start); }
+        const id = `pq-${Date.now()}-${++_pqSeq}`;
+        printQueue.set(id, { id, type: "slip", slipUrl, title: payload.title || "通行单", status: "pending", ts: Date.now() });
+        jsonRes(res, 200, { ok: true, jobId: id, type: "slip" });
+        return logReq(req, 200, start);
+      }
+
+      const orderNo = (payload.orderNo || "").trim();
+      const customerName = payload.customerName || "";
+      const eye = payload.eye || "";
+      if (!orderNo) { jsonRes(res, 400, { error: "请提供 orderNo" }); return logReq(req, 400, start); }
+
+      try {
+        let details = await getLensDetailsByOrder(orderNo);
+        if (!details.length) { jsonRes(res, 404, { error: "未找到镜片明细" }); return logReq(req, 404, start); }
+        if (customerName) details = details.filter(r => (r.fields["顾客姓名"] || "") === customerName);
+        if (eye) details = details.filter(r => (r.fields["眼别"] || "") === eye);
+        if (!details.length) { jsonRes(res, 404, { error: "过滤后无匹配镜片" }); return logReq(req, 404, start); }
+
+        const config = loadPrinterConfig();
+        const copies = config.copies || 1;
+        const jobIds = [];
+
+        for (const rec of details) {
+          if (!rec.fields["镜片码"]) continue;
+          const zpl = buildZpl(rec);
+          for (let i = 0; i < copies; i++) {
+            const id = `pq-${Date.now()}-${++_pqSeq}`;
+            printQueue.set(id, {
+              id, type: "zpl", zpl, orderNo, customerName: rec.fields["顾客姓名"] || "",
+              eye: rec.fields["眼别"] || "", lensCode: rec.fields["镜片码"] || "",
+              status: "pending", ts: Date.now(),
+            });
+            jobIds.push(id);
+          }
+        }
+        jsonRes(res, 200, { ok: true, orderNo, lensCount: jobIds.length, jobIds });
+        return logReq(req, 200, start);
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+        return logReq(req, 500, start);
+      }
+    }
+
+    // GET /api/admin/print-queue/poll — Mac 守护进程拉取待打印任务
+    if (pathname === "/api/admin/print-queue/poll" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const jobs = [...printQueue.values()].filter(j => j.status === "pending").slice(0, 20);
+      jsonRes(res, 200, { jobs });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/print-queue/:id/done — Mac 打完后回写完成
+    const pqDoneMatch = pathname.match(/^\/api\/admin\/print-queue\/([^/]+)\/done$/);
+    if (pqDoneMatch && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const id = pqDoneMatch[1];
+      const job = printQueue.get(id);
+      if (!job) { jsonRes(res, 404, { error: "任务不存在" }); return logReq(req, 404, start); }
+      const body = await readBody(req);
+      job.status = body?.error ? "error" : "done";
+      job.doneAt = Date.now();
+      if (body?.error) job.error = body.error;
+
+      // 推进工作流 → labeled（仅 ZPL 类型，同订单无 pending 即可推进）
+      if (job.type === "zpl" && job.orderNo) {
+        const hasPending = [...printQueue.values()]
+          .some(j => j !== job && j.type === "zpl" && j.orderNo === job.orderNo && j.status === "pending");
+        if (!hasPending) {
+          try {
+            const orderEnc = encodeURIComponent(`"${job.orderNo}"`);
+            const od = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=10&filter=CurrentValue.[订单编号]=${orderEnc}`);
+            for (const rec of (od?.items || [])) {
+              const wf = parseWorkflow(rec.fields["流程步骤"]);
+              const adv = advanceWorkflow(wf, "labeled");
+              if (adv.ok && !adv.skipped) {
+                await updateRecord(TABLES.order, rec.record_id, { "流程步骤": JSON.stringify(adv.wf) });
+              }
+            }
+          } catch (e) { console.error("⚠️ 工作流更新失败(labeled):", e.message); }
+        }
+      }
+
+      setTimeout(() => printQueue.delete(id), 60_000);
+      jsonRes(res, 200, { ok: true });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/print-queue — 队列状态（UI 用）
+    if (pathname === "/api/admin/print-queue" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      let pending = 0, done = 0, error = 0;
+      for (const j of printQueue.values()) {
+        if (j.status === "pending") pending++;
+        else if (j.status === "done") done++;
+        else error++;
+      }
+      jsonRes(res, 200, { total: pending + done + error, pending, done, error });
       return logReq(req, 200, start);
     }
 

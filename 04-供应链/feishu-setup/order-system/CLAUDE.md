@@ -224,7 +224,9 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 - [ai_analysis.js](ai_analysis.js) — AI 周分析（MiMo）
 - [dashboard.js](dashboard.js) / [dashboard.html](dashboard.html) — KPI 看板
 - [delivery_analysis.js](delivery_analysis.js) — 交期分析
-- [print_labels.js](print_labels.js) — 标签生成
+- [print_labels.js](print_labels.js) — 标签生成（HTML 路径，工厂用）
+- [pull-print.js](pull-print.js) — Mac 本地守护进程，轮询云端队列→TCP 发打印机
+- [pull-print-config.json](pull-print-config.json) — 守护进程配置（服务器/打印机/轮询）
 
 ### 一次性脚本（谨慎动）
 - `migrate_*.js`、`seed_*.js`、`import_*.js`、`setup_tables.js` — 初始化/迁移
@@ -252,6 +254,7 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 | 调整业务规则参数 | 打开 `/control?admin=TOKEN`，在规则 Tab 直接改 |
 | 手动触发规则 | `/control` 的执行 Tab，选规则点执行（支持预览） |
 | 规则参数存储 | `rules_config.json`（本地文件，API 可读写） |
+| 打印相关改动 | 标签/通行单走**队列拉模式**：server 入队 → Mac 守护进程轮询 → TCP 发打印机。不走服务端直连 |
 
 ---
 

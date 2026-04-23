@@ -1,0 +1,9 @@
+{
+  "serverUrl": "https://lab.gaushclear.com",
+  "adminToken": "GaushOrderMock",
+  "pollMs": 2000,
+  "printerHost": "192.168.0.208",
+  "printerPort": 9100,
+  "timeoutMs": 5000,
+  "maxRetries": 3
+}

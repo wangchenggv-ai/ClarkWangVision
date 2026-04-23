@@ -1249,7 +1249,7 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
   <div class="scan-bar">
     <span class="scan-icon">&#128451;</span>
     <div class="scan-input-wrap">
-      <input type="text" id="scanInput" placeholder="扫枪扫描条形码自动打印..." autocomplete="off" spellcheck="false">
+      <input type="text" id="scanInput" placeholder="扫枪扫描条形码自动入队打印..." autocomplete="off" spellcheck="false">
     </div>
     <span class="scan-status" id="scanStatus">等待扫描</span>
     <span class="scan-hint">支持 Code128 条形码</span>
@@ -1259,7 +1259,7 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
   <div class="printer-panel">
     <div class="printer-panel-header" onclick="togglePrinterPanel()">
       <span class="arrow" id="printerArrow">&#9654;</span>
-      <span>&#128424; 打印机设置</span>
+      <span>&#128424; 打印队列</span>
       <span class="printer-status-dot unknown" id="printerDot"></span>
       <span id="printerStatusText" style="font-weight:400;font-size:12px;color:#999">未检测</span>
       <span style="margin-left:auto;font-size:11px;color:#bbb">点击展开</span>
@@ -1350,7 +1350,7 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
       <button class="btn btn-outline" style="color:#0958d9;border-color:#91caff" onclick="downloadZip()">导出ZIP给工厂</button>
       <button class="btn btn-outline" style="color:#531dab;border-color:#d3adf7" onclick="previewSelected()">预览标签</button>
       <button class="btn btn-outline" style="color:#722ed1;border-color:#d3adf7" onclick="printLabels()">打印标签</button>
-      <button class="btn btn-outline" style="color:#eb2f96;border-color:#ffadd2" onclick="printZplLabels()">&#128424; 斑马打印</button>
+      <button class="btn btn-outline" style="color:#eb2f96;border-color:#ffadd2" onclick="printZplLabels()">&#128424; 入队打印</button>
       <button class="btn btn-outline ctx-btn act-ship-btn" style="color:#52c41a;border-color:#52c41a" onclick="shipOrders()">确认发货</button>
       <button class="btn btn-outline ctx-btn act-slip-btn" style="color:#c0392b;border-color:#f0d0d0" onclick="batchSlip()">通行单</button>
       <button class="btn btn-outline ctx-btn act-deliver-btn" style="color:#237804;border-color:#b7eb8f" onclick="deliverOrders()">标记签收</button>
@@ -1706,7 +1706,7 @@ function renderOrders() {
 function getQuickAction(o) {
   const cn = jsAttr(o.customerName);
   if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}')">确认</button>`;
-  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}')" title="导出ZIP给工厂">导出</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="斑马打印机直出" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}')">发货</button>`;
+  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}')" title="导出ZIP给工厂">导出</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="入队等待本地打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}')">发货</button>`;
   if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货通行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}')">签收</button>`;
   if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}')" title="重新打印标签" style="color:#ccc;font-size:11px">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}')" title="随货通行单" style="color:#c0392b">&#128196;</button>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
@@ -1910,11 +1910,11 @@ function quickSlip(orderNo, customerName) {
 
 async function quickZplPrint(orderNo, customerName) {
   try {
-    const data = await adminApi("/api/admin/print-label", { orderNo, customerName });
-    if (data.ok) showToast(`${orderNo} 已打印 ${data.lensCount} 张ZPL标签`, "success");
-    else showToast(`打印失败: ${data.error}`, "error");
+    const data = await adminApi("/api/admin/print-queue", { orderNo, customerName });
+    if (data.ok) showToast(`${orderNo} 已入队 ${data.lensCount} 张标签`, "success");
+    else showToast(`入队失败: ${data.error}`, "error");
   } catch (e) {
-    showToast(`打印失败: ${e.message}`, "error");
+    showToast(`入队失败: ${e.message}`, "error");
   }
 }
 
@@ -2329,23 +2329,23 @@ document.getElementById("scanInput").addEventListener("keydown", (e) => {
 
 async function handleScan(orderNo) {
   const status = document.getElementById("scanStatus");
-  status.textContent = `打印 ${orderNo} ...`;
+  status.textContent = `入队 ${orderNo} ...`;
   status.className = "scan-status";
   try {
-    const data = await adminApi("/api/admin/print-label", { orderNo });
+    const data = await adminApi("/api/admin/print-queue", { orderNo });
     if (data.ok) {
-      status.textContent = `✓ 已打印 ${data.lensCount} 张`;
+      status.textContent = `✓ 已入队 ${data.lensCount} 张`;
       status.className = "scan-status ok";
-      showToast(`${orderNo} 已打印 ${data.lensCount} 张ZPL标签`, "success");
+      showToast(`${orderNo} 已入队 ${data.lensCount} 张标签，等待本地打印`, "success");
     } else {
       status.textContent = `✗ ${data.error}`;
       status.className = "scan-status err";
-      showToast(`打印失败: ${data.error}`, "error");
+      showToast(`入队失败: ${data.error}`, "error");
     }
   } catch (e) {
     status.textContent = `✗ ${e.message}`;
     status.className = "scan-status err";
-    showToast(`打印错误: ${e.message}`, "error");
+    showToast(`入队错误: ${e.message}`, "error");
   }
   setTimeout(() => {
     status.textContent = "等待扫描";
@@ -2354,24 +2354,24 @@ async function handleScan(orderNo) {
   }, 3000);
 }
 
-// ─── ZPL 斑马打印 ─────────────────────────────────────────────────────
+// ─── 入队打印（Mac 拉模式）───────────────────────────────────────────────
 
 async function printZplLabels() {
   const keys = [...selectedOrders];
   if (keys.length === 0) { showToast("请先选择订单", "info"); return; }
 
-  let totalPrinted = 0;
+  let totalQueued = 0;
   let totalFailed = 0;
   for (const key of keys) {
     const [orderNo, ...rest] = key.split('|');
     const customerName = rest.join('|');
     try {
-      const data = await adminApi("/api/admin/print-label", { orderNo, customerName });
-      if (data.ok) totalPrinted += data.lensCount;
+      const data = await adminApi("/api/admin/print-queue", { orderNo, customerName });
+      if (data.ok) totalQueued += data.lensCount;
       else totalFailed++;
     } catch { totalFailed++; }
   }
-  if (totalPrinted > 0) showToast(`斑马打印完成: ${totalPrinted} 张标签`, "success");
+  if (totalQueued > 0) showToast(`已入队 ${totalQueued} 张标签，等待本地打印`, "success");
   if (totalFailed > 0) showToast(`${totalFailed} 个订单打印失败`, "error");
   loadOrders();
 }
@@ -2506,13 +2506,13 @@ async function savePrinterConfig() {
 }
 
 async function testPrinter() {
-  showToast("正在发送测试标签...", "info");
+  showToast("测试标签已入队...", "info");
   try {
-    const data = await adminApi("/api/admin/printer/test", {});
-    if (data.ok) showToast("测试标签已发送到打印机", "success");
-    else showToast("测试失败: " + (data.error || "未知错误"), "error");
+    const data = await adminApi("/api/admin/print-queue", { type: "test" });
+    if (data.ok) showToast("测试标签已入队，等待本地打印", "success");
+    else showToast("入队失败: " + (data.error || "未知错误"), "error");
   } catch (e) {
-    showToast("测试失败: " + e.message, "error");
+    showToast("入队失败: " + e.message, "error");
   }
 }
 
@@ -2522,18 +2522,12 @@ async function checkPrinterStatus() {
   dot.className = "printer-status-dot unknown";
   text.textContent = "检测中...";
   try {
-    const data = await api("/api/admin/printer/status");
-    const tcpOk = data.tcp?.ok;
-    if (tcpOk) {
-      dot.className = "printer-status-dot ok";
-      text.textContent = `${data.model} 已连接 (${data.tcp.host}:${data.tcp.port})`;
-    } else {
-      dot.className = "printer-status-dot err";
-      text.textContent = `${data.model} 未连接: ${data.tcp?.error || "未知错误"}`;
-    }
+    const q = await api("/api/admin/print-queue");
+    dot.className = q.pending > 0 ? "printer-status-dot unknown" : "printer-status-dot ok";
+    text.textContent = `队列模式 · 待打印 ${q.pending} · 已完成 ${q.done}` + (q.error ? ` · 失败 ${q.error}` : "");
   } catch (e) {
     dot.className = "printer-status-dot err";
-    text.textContent = "检测失败: " + e.message;
+    text.textContent = "队列检测失败: " + e.message;
   }
 }
 

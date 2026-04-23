@@ -441,3 +441,46 @@ Token 缓存 bug 暴露两个问题：系统缺自愈能力，缺低门槛运维
 - deductErrors 消息增加 `reason` 说明（not_found / write_failed）
 - `buildZpl` 删除 4 行 WHAT 注释
 - 测试移除 `oneOkOne409` 死分支 + 更新报告关键改动段落
+
+## 2026-04-23 打印架构重构：直连 → 队列拉模式
+
+**问题：** 服务器在华为云 ECS，打印机在本地 Mac 局域网。服务端 TCP 直连 `192.168.0.208:9100` 不通。
+
+**方案：** 打印队列拉模式（pull pattern）。云端入队 → Mac 守护进程轮询 → 本地 TCP 发打印机。
+
+### 新增文件
+- `pull-print.js` — Mac 本地守护进程（nohup 常驻），轮询云端队列，ZPL→TCP 斑马打印机，slip→open 浏览器
+- `pull-print-config.json` — 守护进程配置（服务器地址、admin token、打印机 IP、轮询间隔）
+
+### 改动文件
+- `server.js`（+100 行）：
+  - `printQueue` Map + 序列号
+  - `POST /api/admin/print-queue` — 入队（支持 zpl/slip/test 三种 type）
+  - `GET /api/admin/print-queue/poll` — Mac 拉取待打印任务（FIFO，最多 20 个/次）
+  - `POST /api/admin/print-queue/:id/done` — Mac 回写完成/失败，ZPL 类型全部完成后自动推进工作流→labeled
+  - `GET /api/admin/print-queue` — 队列状态（UI 用）
+- `public/labels.html`（6 处改动）：
+  - `handleScan` / `quickZplPrint` / `printZplLabels` / `testPrinter` → 全部改为调 `/api/admin/print-queue`
+  - `checkPrinterStatus` → 显示队列状态（待打印/已完成/失败）
+  - UI 文案：斑马打印→入队打印，扫码栏 placeholder 更新
+
+### 架构图
+```
+labels.html → POST /api/admin/print-queue → 内存队列
+                                              ↑
+pull-print.js ← GET /api/admin/print-queue/poll (每2s)
+     ↓
+  TCP:9100 → 斑马 ZT410
+```
+
+### Mac 部署
+```bash
+nohup node pull-print.js > pull-print.log 2>&1 &
+```
+
+### 待验证
+- [ ] Mac 守护进程连接华为云 + 拉取任务
+- [ ] ZPL 标签通过 TCP 打印到斑马 ZT410
+- [ ] slip 类型自动 open 浏览器
+- [ ] 队列状态 UI 显示正确
+- [ ] E2E 全流程回归
