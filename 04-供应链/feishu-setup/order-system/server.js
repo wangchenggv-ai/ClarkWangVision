@@ -823,10 +823,8 @@ async function getTerminalCustomers(agentId) {
   for (const r of allCustomers) {
     const name = r.fields["客户名称"];
     if (!name) continue;
-    // 匹配条件：名称在订单历史中出现过，或者是有联系信息的CRM同步客户
-    const isCrmSync = r.fields["来源系统"] === "CRM同步";
-    const hasContactInfo = r.fields["联系人"] || r.fields["联系电话"] || r.fields["收货地址"];
-    if (orderNames.has(name) || isCrmSync || hasContactInfo) {
+    // 仅显示此代理商历史下单过的客户
+    if (orderNames.has(name)) {
       result.push({
         id: r.fields["客户ID"] || "",
         name,
