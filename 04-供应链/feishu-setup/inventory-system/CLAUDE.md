@@ -1,6 +1,6 @@
 # CLAUDE.md — 库存系统项目宪法
 
-> 本文件是 Claude Code 在本目录工作时的第一手上下文。**当前进度看 [STATE.md](STATE.md)**，本文件只写长期稳定的约束与事实。
+> 本文件是 Claude Code 在本目录工作时的第一手上下文。**当前进度看 [STATE.md](04-供应链/feishu-setup/inventory-system/STATE.md)**，本文件只写长期稳定的约束与事实。
 
 ---
 

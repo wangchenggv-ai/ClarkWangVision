@@ -178,7 +178,7 @@ CRM 数据（代理商、客户）从独立飞书 Bitable `RlfTb6gykaEb3gsR1lwcG
 | `sync_orders.js` | 旧订单表 → 订单表 | 增量同步 + 90天滚动清理 |
 | `sync_all.js` | 入口 | 按序执行上述三个脚本 |
 
-CRM 系统详情见 [CRM-CLAUDE.md](CRM-CLAUDE.md)。
+CRM 系统详情见 [CRM-CLAUDE.md](04-供应链/feishu-setup/order-system/CRM-CLAUDE.md)。
 
 ---
 
@@ -210,7 +210,7 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 ## 八、目录导航
 
 ### 常改的
-- [server.js](server.js) — 主后端（所有 API 端点）
+- [server.js](04-供应链/feishu-setup/order-system/server.js) — 主后端（所有 API 端点）
 - [public/order.html](public/order.html) — 代理商下单页
 - [public/labels.html](public/labels.html) — 助理管理页（确认/发货/签收/标签）
 - [public/control.html](public/control.html) — Admin 控制中心（仪表盘/规则/AI，3 Tab）
@@ -219,7 +219,7 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 - [logistics.js](logistics.js) — 物流 CLI + 通行单生成
 
 ### 偶尔碰的
-- [automations.js](automations.js) — 14条业务规则引擎（含 rule12 度数级库存预警、rule13 自动排产、rule14 自动回补）
+- [automations.js](04-供应链/feishu-setup/order-system/automations.js) — 14条业务规则引擎（含 rule12 度数级库存预警、rule13 自动排产、rule14 自动回补）
 - [sync_*.js](.) — CRM/旧订单同步脚本
 - [ai_analysis.js](ai_analysis.js) — AI 周分析（MiMo）
 - [dashboard.js](dashboard.js) / [dashboard.html](dashboard.html) — KPI 看板
@@ -232,8 +232,8 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 
 ### 文档
 - [ARCHITECTURE.md](ARCHITECTURE.md) — 完整架构
-- [CHANGELOG.md](CHANGELOG.md) — 迭代记录
-- [CRM-CLAUDE.md](CRM-CLAUDE.md) — CRM 系统结构
+- [CHANGELOG.md](04-供应链/feishu-setup/order-system/CHANGELOG.md) — 迭代记录
+- [CRM-CLAUDE.md](04-供应链/feishu-setup/order-system/CRM-CLAUDE.md) — CRM 系统结构
 - [docs/](docs/) — 设计稿 / 历史方案
 
 ---
