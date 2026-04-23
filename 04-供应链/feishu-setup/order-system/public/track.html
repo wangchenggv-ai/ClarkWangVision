@@ -333,8 +333,8 @@ async function showDetail(orderNo) {
         <td>${item.customerName || '-'}</td>
         <td>${item.sku}</td>
         <td>${eyeBadge}</td>
-        <td>${item.sph ?? '-'}</td>
-        <td>${item.cyl ?? '-'}</td>
+        <td>${item.sph != null ? Number(item.sph).toFixed(2) : '-'}</td>
+        <td>${item.cyl != null ? Number(item.cyl).toFixed(2) : '-'}</td>
         <td>${item.axis ?? '-'}</td>
         <td>${item.remark || '-'}</td>
       </tr>`;

@@ -351,8 +351,8 @@ function restoreDraft() {
           const cylEl = document.getElementById(`cyl-${id}-${side}`);
           const axisEl = document.getElementById(`axis-${id}-${side}`);
           const checkEl = document.getElementById(`eye-check-${id}-${side}`);
-          if (sphEl) sphEl.value = eye.sph || "0";
-          if (cylEl) cylEl.value = eye.cyl || "0";
+          if (sphEl) sphEl.value = Number(eye.sph || 0).toFixed(2);
+          if (cylEl) cylEl.value = Number(eye.cyl || 0).toFixed(2);
           if (axisEl) axisEl.value = eye.axis || "0";
           if (checkEl && !checkEl.checked) { checkEl.checked = true; toggleEye(id, side); }
         }
@@ -725,8 +725,8 @@ function showConfirm() {
       const isRight = eye.side === "右眼";
       html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:3px;font-size:13px">
         <span style="background:${isRight ? '#fff1f0' : '#e6f7ff'};color:${isRight ? '#cf1322' : '#096dd9'};padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${eye.side}</span>
-        <span>SPH <strong>${eye.sph}</strong></span>
-        <span>CYL <strong>${eye.cyl}</strong></span>
+        <span>SPH <strong>${Number(eye.sph || 0).toFixed(2)}</strong></span>
+        <span>CYL <strong>${Number(eye.cyl || 0).toFixed(2)}</strong></span>
         <span>AXIS <strong>${eye.axis}</strong></span>
       </div>`;
     }
@@ -891,16 +891,16 @@ function renderExcelPreview(patients, warnings) {
     if (rEye) {
       html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;font-size:13px">
         <span style="background:#fff1f0;color:#cf1322;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">右眼</span>
-        <span>SPH <strong>${rEye.sph || "0"}</strong></span>
-        <span>CYL <strong>${rEye.cyl || "0"}</strong></span>
+        <span>SPH <strong>${Number(rEye.sph || 0).toFixed(2)}</strong></span>
+        <span>CYL <strong>${Number(rEye.cyl || 0).toFixed(2)}</strong></span>
         <span>AXIS <strong>${rEye.axis || "0"}</strong></span>
       </div>`;
     }
     if (lEye) {
       html += `<div style="display:flex;gap:8px;align-items:center;font-size:13px">
         <span style="background:#e6f7ff;color:#096dd9;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">左眼</span>
-        <span>SPH <strong>${lEye.sph || "0"}</strong></span>
-        <span>CYL <strong>${lEye.cyl || "0"}</strong></span>
+        <span>SPH <strong>${Number(lEye.sph || 0).toFixed(2)}</strong></span>
+        <span>CYL <strong>${Number(lEye.cyl || 0).toFixed(2)}</strong></span>
         <span>AXIS <strong>${lEye.axis || "0"}</strong></span>
       </div>`;
     }
@@ -952,8 +952,8 @@ function importToForm(mode) {
         const cylEl = document.getElementById(`cyl-${id}-${side}`);
         const axisEl = document.getElementById(`axis-${id}-${side}`);
         const checkEl = document.getElementById(`eye-check-${id}-${side}`);
-        if (sphEl) sphEl.value = eye.sph ?? "0";
-        if (cylEl) cylEl.value = eye.cyl ?? "0";
+        if (sphEl) sphEl.value = Number(eye.sph ?? 0).toFixed(2);
+        if (cylEl) cylEl.value = Number(eye.cyl ?? 0).toFixed(2);
         if (axisEl) axisEl.value = eye.axis ?? "0";
         if (checkEl && !checkEl.checked) { checkEl.checked = true; toggleEye(id, side); }
       }
