@@ -521,6 +521,8 @@ function setIdempotent(id, resp) {
 }
 
 let _dashCache = null;
+const _execLog = []; // 规则执行历史（内存，最多200条）
+const MAX_EXEC_LOG = 200;
 
 // ─── 度数级库存扣减（锁内 fresh read + write） ─────────────────────────────
 async function deductStockDetail(sku, sph, cyl, qty) {
@@ -950,6 +952,12 @@ function jsonRes(res, status, data) {
     "Content-Type": "application/json; charset=utf-8",
   });
   res.end(JSON.stringify(data));
+}
+
+function parsePagination(url, defaultPageSize = 50, maxPageSize = 200) {
+  const page = Math.max(1, parseInt(url.searchParams.get("page")) || 1);
+  const pageSize = Math.min(maxPageSize, Math.max(1, parseInt(url.searchParams.get("pageSize")) || defaultPageSize));
+  return { page, pageSize };
 }
 
 // 默认请求体上限 1MB，Excel 上传端点单独校验 5MB
@@ -4305,7 +4313,10 @@ a{color:inherit;text-decoration:none}</style></head><body>
       child.stdout.on("data", d => stdout += d);
       child.stderr.on("data", d => stderr += d);
       child.on("close", code => {
-        jsonRes(res, 200, { rule, stdout: stdout.trim(), stderr: stderr.trim(), exitCode: code, ms: Date.now() - t0 });
+        const ms = Date.now() - t0;
+        _execLog.unshift({ rule, ts: Date.now(), ms, exitCode: code, dryRun: !!body.dryRun, stdout: stdout.trim().slice(0, 500), stderr: stderr.trim().slice(0, 500) });
+        if (_execLog.length > MAX_EXEC_LOG) _execLog.length = MAX_EXEC_LOG;
+        jsonRes(res, 200, { rule, stdout: stdout.trim(), stderr: stderr.trim(), exitCode: code, ms });
         logReq(req, 200, start);
       });
       child.on("error", err => {
@@ -4320,10 +4331,11 @@ a{color:inherit;text-decoration:none}</style></head><body>
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const now = Date.now();
       if (!_dashCache || (now - _dashCache.ts > 2 * 60 * 1000)) {
-        const [stockRows, prodRows, agentRows] = await Promise.all([
+        const [stockRows, prodRows, agentRows, orderRows] = await Promise.all([
           listRecords(TABLES.stock_detail),
           listRecords(TABLES.production).catch(() => []),
           listRecords(TABLES.agent).catch(() => []),
+          listRecords(TABLES.order).catch(() => []),
         ]);
         let totalStock = 0, belowSafety = 0;
         const skuStats = {};
@@ -4362,10 +4374,44 @@ a{color:inherit;text-decoration:none}</style></head><body>
             状态: r.fields["状态"],
             预计完成日: r.fields["预计完成日"],
           }));
+
+        // 订单指标
+        const orderMetrics = { total: orderRows.length, byStatus: {}, todayCount: 0, overdue: 0 };
+        const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+        const todayTs = todayStart.getTime();
+        const OVERDUE_MS = 24 * 60 * 60 * 1000;
+        for (const r of orderRows) {
+          const st = r.fields["订单状态"] || "未知";
+          orderMetrics.byStatus[st] = (orderMetrics.byStatus[st] || 0) + 1;
+          const date = r.fields["下单日期"];
+          if (date && date >= todayTs) orderMetrics.todayCount++;
+          if (st === "待处理" && date && (now - date > OVERDUE_MS)) orderMetrics.overdue++;
+        }
+
+        // 打印队列状态
+        let printPending = 0, printDone = 0, printError = 0;
+        for (const j of printQueue.values()) {
+          if (j.status === "pending") printPending++;
+          else if (j.status === "done") printDone++;
+          else printError++;
+        }
+
+        // 告警汇总（从各数据源聚合）
+        const alerts = [];
+        if (orderMetrics.overdue > 0) alerts.push({ level: "error", icon: "📋", msg: `${orderMetrics.overdue} 个订单超24h未处理`, ts: now });
+        const p = orderMetrics.byStatus["待处理"] || 0;
+        if (p > 20) alerts.push({ level: "warn", icon: "📋", msg: `待处理订单积压 ${p} 单`, ts: now });
+        if (belowSafety > 0) alerts.push({ level: "warn", icon: "📦", msg: `${belowSafety} 个度数低于安全库存`, ts: now });
+        if (pendingReplenish > 0) alerts.push({ level: "warn", icon: "🏭", msg: `${pendingReplenish} 个排产单待回补`, ts: now });
+        if (printError > 0) alerts.push({ level: "error", icon: "🖨", msg: `${printError} 个打印任务失败`, ts: now });
+        alerts.sort((a, b) => (a.level === "error" ? 0 : 1) - (b.level === "error" ? 0 : 1));
+
         _dashCache = { ts: now, data: {
           totalStock, belowSafety, totalStockRows: stockRows.length,
           prodStatus, pendingReplenish, agentCount: agentRows.length,
           recentOrders, skuStats, topDeficits: topDeficits.slice(0, 15),
+          orderMetrics, printQueue: { pending: printPending, done: printDone, error: printError },
+          alerts,
         }};
       }
       jsonRes(res, 200, { ..._dashCache.data, cached: now - _dashCache.ts < 1000 ? false : true, cacheAge: Math.round((now - _dashCache.ts) / 1000) });
@@ -4413,6 +4459,227 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
 回答简明扼要，中文。`;
       const reply = await callMiMo(systemPrompt, body.message);
       jsonRes(res, 200, { reply });
+      return logReq(req, 200, start);
+    }
+
+    // ── 库存管理系统 API ──
+
+    // POST /api/admin/stock-movement — 提交出入库单据
+    if (pathname === "/api/admin/stock-movement" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      if (!body.type || !body.source || !Array.isArray(body.lines) || !body.lines.length) {
+        jsonRes(res, 400, { error: "需要 type/source/lines 字段" }); return logReq(req, 400, start);
+      }
+      if (!["入库", "出库"].includes(body.type)) {
+        jsonRes(res, 400, { error: "type 必须是 入库 或 出库" }); return logReq(req, 400, start);
+      }
+      const validSources = body.type === "入库"
+        ? ["采购到货", "生产回补", "退货退回", "盘点补录"]
+        : ["订单发货", "报废损耗", "调拨出库", "盘点差异"];
+      if (!validSources.includes(body.source)) {
+        jsonRes(res, 400, { error: `来源去向无效: ${body.source}` }); return logReq(req, 400, start);
+      }
+      const docNo = `MOV-${new Date().toISOString().slice(0,10).replace(/-/g,"")}-${randomBytes(2).toString("hex").toUpperCase()}`;
+      const stockMap = await getStockMap();
+      const results = [];
+      const movementRecords = [];
+      for (const line of body.lines) {
+        if (!line.sku || line.sph == null || line.cyl == null || !line.qty || line.qty <= 0) {
+          jsonRes(res, 400, { error: "行数据不完整: 需要 sku/sph/cyl/qty(>0)" }); return logReq(req, 400, start);
+        }
+        const key = `${line.sku}|${Number(line.sph).toFixed(2)}|${Number(line.cyl).toFixed(2)}`;
+        await withLock(key, async () => {
+          const info = stockMap.get(key);
+          if (!info) {
+            results.push({ sku: line.sku, sph: line.sph, cyl: line.cyl, error: "库存记录不存在" });
+            return;
+          }
+          // 锁内 fresh read — 只 GET 单条记录（同 deductStockDetail 模式）
+          const freshData = await feishuApi("GET",
+            `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`
+          );
+          const oldStock = Number(freshData?.record?.fields?.["当前库存"]) || 0;
+          const newStock = body.type === "入库" ? oldStock + line.qty : Math.max(0, oldStock - line.qty);
+          await updateRecord(TABLES.stock_detail, info.recordId, { "当前库存": newStock });
+          results.push({ sku: line.sku, sph: line.sph, cyl: line.cyl, oldStock, newStock, qty: line.qty });
+          movementRecords.push({ fields: {
+            "单据号": docNo, "类型": body.type, "来源去向": body.source,
+            "SKU编号": line.sku, "SPH": Number(line.sph), "CYL": Number(line.cyl),
+            "数量": line.qty, "变动前库存": oldStock, "变动后库存": newStock,
+            "关联单号": body.refNo || "", "备注": body.note || "", "操作人": "admin",
+          }});
+        });
+      }
+      clearStockCache();
+      let batchOk = true;
+      if (movementRecords.length) {
+        batchOk = await batchCreateRecords(TABLES.stock_movement, movementRecords);
+        if (!batchOk) console.error(`  ⚠️ 流水写入失败: ${docNo} (${movementRecords.length} 行)`);
+      }
+      console.log(`  库存单据 ${docNo}: ${body.type}/${body.source}, ${movementRecords.length} 行`);
+      jsonRes(res, batchOk ? 200 : 500, { ok: batchOk, docNo, results });
+      return logReq(req, batchOk ? 200 : 500, start);
+    }
+
+    // GET /api/admin/stock-movements — 流水列表（按单据号聚合）
+    if (pathname === "/api/admin/stock-movements" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const type = url.searchParams.get("type");
+      const { page, pageSize } = parsePagination(url);
+      let records = await listRecords(TABLES.stock_movement);
+      if (type) records = records.filter(r => r.fields["类型"] === type);
+      records.sort((a, b) => (b.fields["创建时间"] || 0) - (a.fields["创建时间"] || 0));
+      const docMap = {};
+      for (const r of records) {
+        const d = r.fields["单据号"] || "未知";
+        if (!docMap[d]) docMap[d] = { docNo: d, type: r.fields["类型"], source: r.fields["来源去向"],
+          note: r.fields["备注"], time: r.fields["创建时间"], lines: 0, totalQty: 0 };
+        docMap[d].lines++;
+        docMap[d].totalQty += Number(r.fields["数量"] || 0);
+      }
+      const docs = Object.values(docMap).sort((a, b) => (b.time || 0) - (a.time || 0));
+      const total = docs.length;
+      const items = docs.slice((page - 1) * pageSize, page * pageSize);
+      jsonRes(res, 200, { total, page, pageSize, items });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/stock-movement/:docNo — 单据详情
+    if (pathname.startsWith("/api/admin/stock-movement/") && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const docNo = decodeURIComponent(pathname.slice("/api/admin/stock-movement/".length));
+      const records = await listRecords(TABLES.stock_movement);
+      const lines = records.filter(r => r.fields["单据号"] === docNo).map(r => ({
+        sku: r.fields["SKU编号"], sph: r.fields["SPH"], cyl: r.fields["CYL"],
+        qty: r.fields["数量"], oldStock: r.fields["变动前库存"], newStock: r.fields["变动后库存"],
+      }));
+      jsonRes(res, 200, { docNo, lines });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/stock-detail — 库存列表（筛选+分页）
+    if (pathname === "/api/admin/stock-detail" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const sku = url.searchParams.get("sku");
+      const search = url.searchParams.get("search");
+      const { page, pageSize } = parsePagination(url);
+      let rows = await listRecords(TABLES.stock_detail);
+      let items = rows.map(r => {
+        const f = r.fields || {};
+        return { recordId: r.record_id, sku: f["SKU编号"] || "", sph: f["SPH"], cyl: f["CYL"],
+          currentStock: Number(f["当前库存"] || 0), safetyStock: Number(f["安全库存"] || 0),
+          lastOutbound: f["最近出库"] };
+      });
+      if (sku) items = items.filter(i => i.sku === sku);
+      if (search) {
+        const s = search.toLowerCase();
+        items = items.filter(i => i.sku.toLowerCase().includes(s) ||
+          String(i.sph).includes(s) || String(i.cyl).includes(s));
+      }
+      const total = items.length;
+      const totalStock = items.reduce((s, i) => s + i.currentStock, 0);
+      const belowSafety = items.filter(i => i.currentStock < i.safetyStock).length;
+      const skuBreakdown = {};
+      for (const i of items) {
+        if (!skuBreakdown[i.sku]) skuBreakdown[i.sku] = { stock: 0, total: 0 };
+        skuBreakdown[i.sku].stock += i.currentStock;
+        skuBreakdown[i.sku].total++;
+      }
+      items.sort((a, b) => a.sku.localeCompare(b.sku) || (a.sph || 0) - (b.sph || 0) || (a.cyl || 0) - (b.cyl || 0));
+      const paged = items.slice((page - 1) * pageSize, page * pageSize);
+      jsonRes(res, 200, { total, page, pageSize, items: paged, summary: { totalStock, belowSafety, skuBreakdown } });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/production-orders — 排产工单列表
+    if (pathname === "/api/admin/production-orders" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const status = url.searchParams.get("status");
+      const sku = url.searchParams.get("sku");
+      const { page, pageSize } = parsePagination(url);
+      let rows = await listRecords(TABLES.production);
+      let items = rows.map(r => {
+        const f = r.fields || {};
+        return { recordId: r.record_id, workOrderNo: f["工单号"] || "", sku: f["产品型号"] || "",
+          sph: f["SPH"], cyl: f["CYL"], suggestedOutput: f["建议产量"],
+          status: f["状态"] || "", estimatedCompletion: f["预计完成日"],
+          replenishmentStatus: f["回补状态"] || "" };
+      });
+      if (status && status !== "all") items = items.filter(i => i.status === status);
+      if (sku) items = items.filter(i => i.sku === sku);
+      items.sort((a, b) => (b.estimatedCompletion || 0) - (a.estimatedCompletion || 0));
+      const total = items.length;
+      const paged = items.slice((page - 1) * pageSize, page * pageSize);
+      jsonRes(res, 200, { total, page, pageSize, items: paged });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/production-orders/update — 更新工单状态
+    if (pathname === "/api/admin/production-orders/update" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      if (!body.recordId || !body.status) {
+        jsonRes(res, 400, { error: "需要 recordId/status 字段" }); return logReq(req, 400, start);
+      }
+      const validStatuses = ["待确认", "生产中", "完成"];
+      if (!validStatuses.includes(body.status)) {
+        jsonRes(res, 400, { error: `状态必须是: ${validStatuses.join("/")}` }); return logReq(req, 400, start);
+      }
+      const fields = { "状态": body.status };
+      if (body.status === "完成") fields["实际完成日"] = Date.now();
+      await updateRecord(TABLES.production, body.recordId, fields);
+      jsonRes(res, 200, { ok: true, recordId: body.recordId, newStatus: body.status });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/blank-inventory — 毛坯库存列表
+    if (pathname === "/api/admin/blank-inventory" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const sku = url.searchParams.get("sku");
+      let rows = await listRecords(TABLES.blank_inventory);
+      let items = rows.map(r => {
+        const f = r.fields || {};
+        return { recordId: r.record_id, batchNo: f["批次号"] || "", sku: f["SKU编号"] || "",
+          cyl: f["CYL档位"], quantity: f["数量"], consumed: f["已消耗"],
+          arrivalDate: f["到货日期"], status: f["状态"] || "" };
+      });
+      if (sku) items = items.filter(i => i.sku === sku);
+      jsonRes(res, 200, { total: items.length, items });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/mold — 模具台账列表
+    if (pathname === "/api/admin/mold" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const sku = url.searchParams.get("sku");
+      let rows = await listRecords(TABLES.mold);
+      let items = rows.map(r => {
+        const f = r.fields || {};
+        return { recordId: r.record_id, moldId: f["模具编号"] || "", sku: f["SKU编号"] || "",
+          totalLife: f["总寿命"], used: f["已使用"], remaining: f["剩余寿命"],
+          status: f["状态"] || "" };
+      });
+      if (sku) items = items.filter(i => i.sku === sku);
+      jsonRes(res, 200, { total: items.length, items });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/agent-stock-admin — 全代理商库存列表
+    if (pathname === "/api/admin/agent-stock-admin" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const agentId = url.searchParams.get("agentId");
+      const sku = url.searchParams.get("sku");
+      let rows = await listRecords(TABLES.agent_stock);
+      let items = rows.map(r => {
+        const f = r.fields || {};
+        return { recordId: r.record_id, agentId: f["agent_id"] || "", sku: f["SKU编号"] || "",
+          sph: f["SPH"], cyl: f["CYL"], ownedStock: Number(f["自有库存"] || 0),
+          consignedStock: Number(f["寄售库存"] || 0), consignDate: f["寄售日期"] };
+      });
+      if (agentId) items = items.filter(i => i.agentId === agentId);
+      if (sku) items = items.filter(i => i.sku === sku);
+      jsonRes(res, 200, { total: items.length, items });
       return logReq(req, 200, start);
     }
 

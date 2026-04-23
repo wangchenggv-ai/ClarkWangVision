@@ -473,14 +473,97 @@ pull-print.js ← GET /api/admin/print-queue/poll (每2s)
   TCP:9100 → 斑马 ZT410
 ```
 
-### Mac 部署
+### 部署
+斑马打印机连接在专用 Windows 打印电脑上，`pull-print.js` + `pull-print-config.json` 直接复制过去运行。
+`openUrl()` 已改为跨平台（Windows `start` / Mac `open`）。
+
 ```bash
-nohup node pull-print.js > pull-print.log 2>&1 &
+node pull-print.js
 ```
 
+### Simplify 清理
+- `buildTestZpl()` 提取为函数，消除 `/printer/test` 和 `/print-queue` test handler 的复制粘贴
+- `printQueue` 内存泄漏修复：`/done` 后 60s 自动 `delete` 已完成任务
+- `pull-print.js` `setInterval` → 自调度 `async pollLoop()`，防并发重叠轮询
+- GET 状态端点 3 次全量遍历 → 单次遍历计数
+- `/done` 工作流检查 `.filter().every()` → `.some()` 提前退出
+- 删除 `pull-print.js` 死导入 `writeFileSync`
+- 配置解析空 catch → 加 `console.warn`
+
+### API 测试（本地，8/8 通过）
+| # | 测试 | 结果 |
+|---|------|------|
+| T1 | 空队列状态 | ✅ total:0 |
+| T2 | 测试入队 | ✅ 返回 jobId |
+| T3 | 不存在的订单 | ✅ 404 |
+| T4 | 轮询拉取 | ✅ 返回 1 个 pending |
+| T5 | 回写完成 | ✅ ok |
+| T6 | 完成后状态 | ✅ pending:0, done:1 |
+| T7 | 假 ID 回写 | ✅ 404 |
+| T8 | 再次拉取 | ✅ jobs=0 |
+
 ### 待验证
-- [ ] Mac 守护进程连接华为云 + 拉取任务
+- [ ] 专用 Windows 打印电脑连接华为云 + 拉取任务
 - [ ] ZPL 标签通过 TCP 打印到斑马 ZT410
-- [ ] slip 类型自动 open 浏览器
-- [ ] 队列状态 UI 显示正确
-- [ ] E2E 全流程回归
+- [ ] slip 类型自动打开浏览器
+- [ ] E2E 全流程回归（下单→入库→打印→工作流→labeled）
+
+## 2026-04-23 库存管理系统前端 + API 完成
+
+库存系统专属管理页面上线，单据式入库/出库操作，5 Tab 布局。
+
+### 新建文件
+- `public/inventory.html` — 库存管理页（仪表盘/出入库操作/库存总览/排产管理/寄售管理）
+- `inventory-system/migrate_stock_movement.js` — 库存流水建表脚本
+
+### 改动文件
+- `server.js`（+225 行）：9 个 API 端点 + /inventory 静态路由
+- `shared/tables.js` + `order-system/shared/tables.js`：各 +1 行 `stock_movement` 表 ID
+
+### 新建表：库存流水（stock_movement）
+- Table ID: `tblCoNeAbrz6tM9C`
+- 12 个字段：单据号 / 类型（入库/出库）/ 来源去向（8 种）/ SKU编号 / SPH / CYL / 数量 / 变动前库存 / 变动后库存 / 关联单号 / 备注 / 操作人
+- 格式：`MOV-YYYYMMDD-XXXX`，同一批次共享单据号
+
+### 新增 API 端点
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| POST | `/api/admin/stock-movement` | 提交出入库单据（核心） |
+| GET | `/api/admin/stock-movements` | 流水列表（按单据号聚合+分页） |
+| GET | `/api/admin/stock-movement/:docNo` | 单据详情 |
+| GET | `/api/admin/stock-detail` | 库存列表（筛选+分页+汇总） |
+| GET | `/api/admin/production-orders` | 排产工单列表 |
+| POST | `/api/admin/production-orders/update` | 更新工单状态 |
+| GET | `/api/admin/blank-inventory` | 毛坯库存列表 |
+| GET | `/api/admin/mold` | 模具台账列表 |
+| GET | `/api/admin/agent-stock-admin` | 全代理商库存列表 |
+
+### 出入库操作流程
+```
+选类型(入库/出库) → 选来源去向 → 关联单号(可选)
+  → 添加行(SKU+SPH+CYL+数量) → 备注 → 提交
+  → 批量更新 stock_detail + 写 stock_movement 流水
+```
+
+入库类型：采购到货/生产回补/退货退回/盘点补录
+出库类型：订单发货/报废损耗/调拨出库/盘点差异
+库存不足时照常扣至 0（与下单逻辑一致）。
+
+### 踩坑 + 修复
+- **两份 tables.js 未同步**：`shared/tables.js` 加了 `stock_movement` 但 `order-system/shared/tables.js` 没加 → `TABLES.stock_movement = undefined` → batch_create 请求路径含 `tables/undefined` → WrongRequestBody。根因：server.js 导入 `./shared/tables.js`（本目录副本），不是 `../shared/tables.js`
+- **batchCreateRecords 静默失败**：返回 false 但 handler 未检查，库存已更新但流水未写入 → 加返回值检查 + HTTP 500
+- **getStockMap(true) 锁内全表重读**：每行锁内调 `getStockMap(true)` 拉全表（~1575 行），10 行 = 10 次全表 → 改为锁内 single-record GET（同 `deductStockDetail` 模式）
+- **clearStockCache() 每行都调**：移到循环外一次性清理
+
+### Simplify 清理
+- `clearStockCache()` 从锁内移到循环外
+- batchCreateRecords 失败返回 `{ ok: false }` + HTTP 500
+- 6 个 GET 端点删除冗余 `new URL(req.url, ...)`（复用外层 `url`）
+- 提取 `parsePagination()` helper（3 处调用）
+- 变量命名统一：`blankSku`/`moldSku`/`prodSku` → `sku`，`agentIdParam` → `agentId`
+
+### 验证
+- 10/10 API 端点测试通过（本地）
+- 入库/出库写入 stock_detail + stock_movement 双表成功
+- 热力图 + 明细表数据正确

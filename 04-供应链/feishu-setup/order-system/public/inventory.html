@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>库存管理 — 高视高清</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <style>
+    .tabs { display:flex; gap:0; padding:0 16px; background:#fff; border-bottom:2px solid var(--border); overflow-x:auto; }
+    .tab { padding:12px 18px; cursor:pointer; font-size:13px; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap; transition:.15s; user-select:none; }
+    .tab:hover { color:var(--brand); }
+    .tab.active { color:var(--brand); border-bottom-color:var(--brand); font-weight:600; }
+    .pnl { display:none; padding:16px; max-width:1200px; margin:0 auto; }
+    .pnl.active { display:block; }
+    .wrap { min-height:calc(100vh - 100px); }
+
+    /* Cards */
+    .metric-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+    .metric-card { background:#fff; border-radius:var(--radius-sm); padding:14px; border:1px solid var(--border); }
+    .metric-card .v { font-size:28px; font-weight:700; font-family:var(--font-num); }
+    .metric-card .l { font-size:12px; color:var(--text-muted); margin-top:2px; }
+    .metric-card.ok .v { color:var(--success); }
+    .metric-card.warn .v { color:var(--gold); }
+    .metric-card.danger .v { color:var(--error); }
+
+    /* Tables */
+    .tbl { width:100%; border-collapse:collapse; background:#fff; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--border); }
+    .tbl th { background:#f8fafc; font-size:12px; font-weight:600; text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); color:var(--text-muted); }
+    .tbl td { padding:8px 10px; font-size:13px; border-bottom:1px solid #f0f0f0; }
+    .tbl tr:last-child td { border-bottom:none; }
+    .tbl tr:hover td { background:#f8fafc; }
+
+    /* Badge */
+    .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+    .badge-ok { background:var(--success-light); color:var(--success); }
+    .badge-warn { background:var(--gold-light); color:#b8860b; }
+    .badge-danger { background:var(--error-light); color:var(--error); }
+    .badge-info { background:var(--brand-light); color:var(--brand); }
+
+    /* Form */
+    .form-row { display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+    .form-row label { font-size:12px; color:var(--text-muted); min-width:60px; }
+    .form-row select, .form-row input { padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:var(--font); }
+    .form-row select { min-width:120px; }
+    .form-row input[type="number"] { width:90px; }
+    .form-row input[type="text"] { width:160px; }
+    .form-row input[type="month"] { width:150px; }
+
+    /* Buttons */
+    .btn { display:inline-flex; align-items:center; gap:4px; padding:7px 14px; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-family:var(--font); transition:.15s; }
+    .btn-primary { background:var(--brand); color:#fff; }
+    .btn-primary:hover { background:var(--brand-dark); }
+    .btn-outline { background:#fff; color:var(--text); border:1px solid var(--border); }
+    .btn-outline:hover { background:#f8fafc; }
+    .btn-success { background:var(--success); color:#fff; }
+    .btn-danger { background:var(--error); color:#fff; }
+    .btn-sm { padding:4px 10px; font-size:12px; }
+    .btn:disabled { opacity:.5; cursor:not-allowed; }
+
+    /* Heatmap grid */
+    .heat-wrap { overflow-x:auto; margin-bottom:16px; }
+    .heat-table { border-collapse:collapse; font-size:10px; }
+    .heat-table th { padding:3px 6px; font-weight:600; background:#f8fafc; position:sticky; top:0; z-index:1; }
+    .heat-table td { padding:2px 4px; text-align:center; min-width:36px; height:24px; cursor:pointer; border:1px solid #eee; transition:.1s; }
+    .heat-table td:hover { outline:2px solid var(--brand); }
+    .heat-table td.sel { outline:2px solid var(--brand); outline-offset:-1px; }
+    .cell-ok { background:#e8f8f5; color:#00b894; }
+    .cell-warn { background:#fff8e1; color:#b8860b; }
+    .cell-danger { background:#fdecec; color:#e74c3c; }
+    .cell-empty { background:#f5f5f5; color:#ccc; }
+
+    /* Section */
+    .section { margin-bottom:20px; }
+    .section-title { font-size:14px; font-weight:600; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+    .section-title::before { content:''; width:3px; height:16px; background:var(--brand); border-radius:2px; }
+
+    /* Movement form */
+    .line-row { display:flex; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid #f0f0f0; }
+    .line-row:last-child { border-bottom:none; }
+    .line-row select, .line-row input { padding:5px 8px; border:1px solid var(--border); border-radius:5px; font-size:13px; }
+    .line-row .sku-sel { min-width:120px; }
+    .line-row .num { width:80px; }
+    .line-row .remove { color:var(--error); cursor:pointer; font-size:18px; padding:0 4px; }
+    .line-row .remove:hover { font-weight:bold; }
+
+    /* Movement history */
+    .doc-row { cursor:pointer; }
+    .doc-row:hover { background:#f0f7ff !important; }
+    .doc-detail { display:none; }
+    .doc-detail.open { display:table-row; }
+
+    /* Health bar */
+    .hbar { height:6px; border-radius:3px; background:#eee; overflow:hidden; }
+    .hbar .fill { height:100%; border-radius:3px; }
+
+    /* Modal */
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:200; display:none; align-items:center; justify-content:center; }
+    .modal-overlay.show { display:flex; }
+    .modal { background:#fff; border-radius:var(--radius); padding:24px; max-width:500px; width:90%; max-height:80vh; overflow-y:auto; }
+    .modal h3 { font-size:16px; margin-bottom:14px; }
+    .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+
+    /* Toast */
+    .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(80px); padding:10px 20px; border-radius:8px; font-size:13px; z-index:300; transition:.3s; opacity:0; pointer-events:none; }
+    .toast.show { transform:translateX(-50%) translateY(0); opacity:1; }
+    .toast.info { background:var(--brand); color:#fff; }
+    .toast.success { background:var(--success); color:#fff; }
+    .toast.error { background:var(--error); color:#fff; }
+
+    /* Sub tabs */
+    .sub-tabs { display:flex; gap:6px; margin-bottom:12px; }
+    .sub-tab { padding:5px 12px; border-radius:6px; font-size:12px; cursor:pointer; background:#f0f0f0; color:var(--text-muted); }
+    .sub-tab.active { background:var(--brand-light); color:var(--brand); font-weight:600; }
+
+    /* Responsive */
+    @media(max-width:768px) {
+      .metric-grid { grid-template-columns:repeat(2,1fr); }
+      .form-row { flex-direction:column; align-items:stretch; }
+      .form-row select, .form-row input { width:100% !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand-logo"><span class="gaush">GAUSH</span><span class="sep">|</span><span class="clear">库存管理</span></div>
+    <div class="agent-name" id="adminBadge">admin</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="dashboard" onclick="sw('dashboard')">仪表盘</div>
+    <div class="tab" data-tab="movement" onclick="sw('movement')">出入库操作</div>
+    <div class="tab" data-tab="stock" onclick="sw('stock')">库存总览</div>
+    <div class="tab" data-tab="production" onclick="sw('production')">排产管理</div>
+    <div class="tab" data-tab="consignment" onclick="sw('consignment')">寄售管理</div>
+  </div>
+
+  <div class="wrap">
+    <!-- Tab 1: Dashboard -->
+    <div class="pnl active" id="p-dashboard">
+      <div class="metric-grid" id="dashMetrics"></div>
+      <div class="section"><div class="section-title">SKU 库存达标率</div><div id="skuStats"></div></div>
+      <div class="section"><div class="section-title">TOP 15 缺口</div><div id="topDeficits"></div></div>
+      <div class="section"><div class="section-title">近期排产工单</div><div id="recentOrders"></div></div>
+    </div>
+
+    <!-- Tab 2: Movement (出入库操作) -->
+    <div class="pnl" id="p-movement">
+      <div class="section">
+        <div class="section-title">新建出入库单据</div>
+        <div class="form-row">
+          <label>类型</label>
+          <select id="movType" onchange="updateSources()">
+            <option value="入库">入库</option>
+            <option value="出库">出库</option>
+          </select>
+          <label>来源</label>
+          <select id="movSource"></select>
+          <label>关联单号</label>
+          <input type="text" id="movRefNo" placeholder="可选，订单号/工单号">
+        </div>
+        <div id="movLines"></div>
+        <div style="margin:8px 0">
+          <button class="btn btn-outline btn-sm" onclick="addLine()">+ 添加行</button>
+        </div>
+        <div class="form-row">
+          <label>备注</label>
+          <input type="text" id="movNote" placeholder="整单备注" style="width:300px">
+        </div>
+        <button class="btn btn-primary" onclick="submitMovement()" id="movSubmit">提交单据</button>
+      </div>
+
+      <div class="section">
+        <div class="section-title">出入库历史</div>
+        <div class="form-row">
+          <label>类型</label>
+          <select id="histFilter" onchange="loadMovements()">
+            <option value="">全部</option>
+            <option value="入库">入库</option>
+            <option value="出库">出库</option>
+          </select>
+        </div>
+        <div id="movHistory"></div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Stock Browser -->
+    <div class="pnl" id="p-stock">
+      <div class="form-row">
+        <label>SKU</label>
+        <select id="stockSku" onchange="loadStock()">
+          <option value="">全部 SKU</option>
+        </select>
+        <label>搜索</label>
+        <input type="text" id="stockSearch" placeholder="SKU/度数" onkeyup="if(event.key==='Enter')loadStock()">
+        <button class="btn btn-outline btn-sm" onclick="loadStock()">查询</button>
+      </div>
+      <div id="stockSummary" class="metric-grid" style="margin-bottom:16px"></div>
+      <div class="section">
+        <div class="section-title">度数矩阵 <span style="font-size:11px;color:var(--text-muted);font-weight:400" id="heatSkuLabel"></span></div>
+        <div class="form-row" style="margin-bottom:8px">
+          <label>选择SKU</label>
+          <select id="heatSku" onchange="renderHeatmap()"></select>
+        </div>
+        <div class="heat-wrap" id="heatWrap"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">库存明细 <span style="font-size:11px;color:var(--text-muted);font-weight:400" id="stockTotalLabel"></span></div>
+        <div id="stockTable"></div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Production -->
+    <div class="pnl" id="p-production">
+      <div class="form-row">
+        <label>状态</label>
+        <select id="prodStatus" onchange="loadProduction()">
+          <option value="all">全部</option>
+          <option value="待确认">待确认</option>
+          <option value="生产中">生产中</option>
+          <option value="完成">完成</option>
+        </select>
+        <label>SKU</label>
+        <select id="prodSku" onchange="loadProduction()">
+          <option value="">全部</option>
+        </select>
+      </div>
+      <div id="prodTable"></div>
+    </div>
+
+    <!-- Tab 5: Consignment -->
+    <div class="pnl" id="p-consignment">
+      <div class="section">
+        <div class="section-title">代理商库存</div>
+        <div class="form-row">
+          <label>代理商</label>
+          <input type="text" id="consAgentId" placeholder="AG-001" style="width:120px">
+          <label>SKU</label>
+          <select id="consSku"><option value="">全部</option></select>
+          <button class="btn btn-outline btn-sm" onclick="loadAgentStock()">查询</button>
+        </div>
+        <div id="agentStockTable"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">寄售账龄报告</div>
+        <button class="btn btn-outline btn-sm" onclick="loadConsignment()" style="margin-bottom:8px">加载</button>
+        <div id="consignmentTable"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">月度对账单</div>
+        <div class="form-row">
+          <label>月份</label>
+          <input type="month" id="stmtMonth" value="">
+          <button class="btn btn-primary btn-sm" onclick="genStatement()">生成对账单</button>
+        </div>
+        <div id="stmtResult"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal">
+      <h3 id="modalTitle"></h3>
+      <div id="modalBody"></div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" onclick="closeModal(false)">取消</button>
+        <button class="btn btn-primary" id="modalOk" onclick="closeModal(true)">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+<script>
+// ── Config ──
+const ADM = new URLSearchParams(location.search).get('admin') || '';
+if (!ADM) { document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#e74c3c">缺少管理权限参数，请使用 ?admin=xxx 访问</div>'; throw ''; }
+
+const SKUS = ['Ultra双效','D8','时空之眼A','时空之眼B','时空之眼PRO','时空之眼MAX','小旋风'];
+const IN_SOURCES = ['采购到货','生产回补','退货退回','盘点补录'];
+const OUT_SOURCES = ['订单发货','报废损耗','调拨出库','盘点差异'];
+const SPH_RANGE = []; for (let s = 0; s >= -6; s -= 0.25) SPH_RANGE.push(parseFloat(s.toFixed(2)));
+const CYL_RANGE = []; for (let c = 0; c >= -2; c -= 0.25) CYL_RANGE.push(parseFloat(c.toFixed(2)));
+
+const _loaded = {};
+
+// ── API ──
+function api(path) {
+  const sep = path.includes('?') ? '&' : '?';
+  return fetch(`/api/admin${path}${sep}admin=${ADM}`).then(r => {
+    if (!r.ok) return r.json().then(d => { throw new Error(d.error || 'HTTP '+r.status); });
+    return r.json();
+  }).catch(e => { toast(e.message,'error'); throw e; });
+}
+function adminApi(path, body) {
+  return fetch(`/api/admin${path}?admin=${ADM}`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+    .then(r => { if (!r.ok) return r.json().then(d => { throw new Error(d.error||'HTTP '+r.status); }); return r.json(); })
+    .catch(e => { toast(e.message,'error'); throw e; });
+}
+
+// ── Toast ──
+function toast(msg, type='info') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast '+type+' show';
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ── Modal ──
+let _modalResolve;
+function showModal(title, body, okText='确定') {
+  return new Promise(r => {
+    document.getElementById('modalTitle').textContent = title;
+    document.getElementById('modalBody').innerHTML = body;
+    document.getElementById('modalOk').textContent = okText;
+    document.getElementById('modal').classList.add('show');
+    _modalResolve = r;
+  });
+}
+function closeModal(val) { document.getElementById('modal').classList.remove('show'); if (_modalResolve) _modalResolve(val); }
+
+// ── Tab Switch ──
+function sw(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.pnl').forEach(p => p.classList.toggle('active', p.id === 'p-'+name));
+  if (!_loaded[name]) { _loaded[name] = true; loadTab(name); }
+}
+function loadTab(name) {
+  if (name === 'dashboard') loadDash();
+  else if (name === 'movement') { initSources(); addLine(); loadMovements(); }
+  else if (name === 'stock') { initStockSelects(); loadStock(); }
+  else if (name === 'production') { initProdSelects(); loadProduction(); }
+  else if (name === 'consignment') { initConsSelects(); }
+}
+
+// ── Util ──
+function h(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtDate(ts) { if (!ts) return '--'; return new Date(ts).toLocaleDateString('zh-CN'); }
+function statusBadge(s) {
+  const m = { '有货1-2天':'ok','排产5-7天':'warn','定制7-10天':'danger','待确认':'warn','生产中':'info','完成':'ok','已回补':'ok','待回补':'warn',
+    '正常':'ok','即将到期':'warn','到期转收入':'danger','在库':'ok','已用完':'info','已过期':'danger','质检中':'warn','预警':'warn','需更换':'danger','已报废':'danger' };
+  return `<span class="badge badge-${m[s]||'info'}">${h(s)}</span>`;
+}
+
+// ══════════════════════════════════════════════════
+// Tab 1: Dashboard
+// ══════════════════════════════════════════════════
+async function loadDash() {
+  const d = await api('/dashboard');
+  document.getElementById('dashMetrics').innerHTML = [
+    { v: d.totalStock?.toLocaleString(), l: '总库存(片)', c: 'ok' },
+    { v: d.belowSafety, l: '低于安全线', c: d.belowSafety > 0 ? 'danger' : 'ok' },
+    { v: d.totalStockRows, l: '库存行数', c: 'info' },
+    { v: (d.prodStatus?.['生产中']||0), l: '排产中', c: 'warn' },
+    { v: d.pendingReplenish, l: '待回补', c: d.pendingReplenish > 0 ? 'warn' : 'ok' },
+    { v: d.agentCount, l: '代理商数', c: 'info' },
+  ].map(m => `<div class="metric-card ${m.c}"><div class="v">${m.v??'--'}</div><div class="l">${m.l}</div></div>`).join('');
+
+  // SKU stats
+  const skuRows = Object.entries(d.skuStats||{}).map(([sku, s]) => {
+    const pct = s.total ? Math.round((s.total - s.below) / s.total * 100) : 100;
+    return `<tr><td>${h(sku)}</td><td>${s.stock?.toLocaleString()}</td><td>${s.below}</td><td>${s.total}</td>
+      <td><div class="hbar" style="width:100px"><div class="fill" style="width:${pct}%;background:${pct>80?'var(--success)':pct>50?'var(--gold)':'var(--error)'}"></div></div> ${pct}%</td></tr>`;
+  }).join('');
+  document.getElementById('skuStats').innerHTML = `<table class="tbl"><thead><tr><th>SKU</th><th>库存</th><th>低于安全线</th><th>总行数</th><th>达标率</th></tr></thead><tbody>${skuRows}</tbody></table>`;
+
+  // Top deficits
+  const defRows = (d.topDeficits||[]).map(t => `<tr><td>${h(t.sku)}</td><td>${t.sph}</td><td>${t.cyl}</td><td>${t.stock}</td><td>${t.safety}</td><td style="color:var(--error);font-weight:600">${t.gap}</td></tr>`).join('');
+  document.getElementById('topDeficits').innerHTML = `<table class="tbl"><thead><tr><th>SKU</th><th>SPH</th><th>CYL</th><th>库存</th><th>安全线</th><th>缺口</th></tr></thead><tbody>${defRows}</tbody></table>`;
+
+  // Recent orders
+  const ordRows = (d.recentOrders||[]).map(o => `<tr><td>${h(o.工单号)}</td><td>${h(o.产品型号)}</td><td>${o.SPH}</td><td>${o.CYL}</td><td>${o.建议产量}</td><td>${statusBadge(o.状态)}</td><td>${fmtDate(o.预计完成日)}</td></tr>`).join('');
+  document.getElementById('recentOrders').innerHTML = `<table class="tbl"><thead><tr><th>工单号</th><th>SKU</th><th>SPH</th><th>CYL</th><th>产量</th><th>状态</th><th>预计完成</th></tr></thead><tbody>${ordRows}</tbody></table>`;
+}
+
+// ══════════════════════════════════════════════════
+// Tab 2: Movement (出入库操作)
+// ══════════════════════════════════════════════════
+let _lineIdx = 0;
+function initSources() { updateSources(); }
+function updateSources() {
+  const type = document.getElementById('movType').value;
+  const sources = type === '入库' ? IN_SOURCES : OUT_SOURCES;
+  document.getElementById('movSource').innerHTML = sources.map(s => `<option>${s}</option>`).join('');
+}
+function addLine() {
+  const idx = _lineIdx++;
+  const div = document.createElement('div');
+  div.className = 'line-row';
+  div.id = 'line-'+idx;
+  div.innerHTML = `<select class="sku-sel">${SKUS.map(s=>`<option>${s}</option>`).join('')}</select>
+    <input class="num" type="number" step="0.25" placeholder="SPH" value="-2.00">
+    <input class="num" type="number" step="0.25" placeholder="CYL" value="-0.50">
+    <input class="num" type="number" placeholder="数量" min="1" value="10">
+    <span class="remove" onclick="this.parentElement.remove()">×</span>`;
+  document.getElementById('movLines').appendChild(div);
+}
+async function submitMovement() {
+  const lines = [];
+  document.querySelectorAll('#movLines .line-row').forEach(row => {
+    const inputs = row.querySelectorAll('select, input');
+    lines.push({ sku: inputs[0].value, sph: parseFloat(inputs[1].value), cyl: parseFloat(inputs[2].value), qty: parseInt(inputs[3].value) || 0 });
+  });
+  if (!lines.length) { toast('请添加至少一行','error'); return; }
+  const body = {
+    type: document.getElementById('movType').value,
+    source: document.getElementById('movSource').value,
+    refNo: document.getElementById('movRefNo').value,
+    note: document.getElementById('movNote').value,
+    lines,
+  };
+  const btn = document.getElementById('movSubmit');
+  btn.disabled = true; btn.textContent = '提交中...';
+  try {
+    const res = await adminApi('/stock-movement', body);
+    toast(`单据 ${res.docNo} 提交成功，${res.results.length} 行`, 'success');
+    document.getElementById('movLines').innerHTML = '';
+    addLine();
+    document.getElementById('movRefNo').value = '';
+    document.getElementById('movNote').value = '';
+    _loaded.movement_hist = false;
+    loadMovements();
+  } catch(e) {}
+  btn.disabled = false; btn.textContent = '提交单据';
+}
+async function loadMovements() {
+  const type = document.getElementById('histFilter').value;
+  const d = await api('/stock-movements?type=' + type + '&pageSize=30');
+  if (!d.items?.length) { document.getElementById('movHistory').innerHTML = '<p style="color:var(--text-muted);padding:16px">暂无记录</p>'; return; }
+  const rows = d.items.map((m, i) => `<tr class="doc-row" onclick="toggleDoc('${h(m.docNo)}',${i})">
+    <td>${h(m.docNo)}</td><td>${statusBadge(m.type)}</td><td>${h(m.source)}</td>
+    <td>${m.lines}</td><td>${m.totalQty}</td><td>${h(m.note||'--')}</td><td>${fmtDate(m.time)}</td></tr>
+    <tr class="doc-detail" id="dd-${i}"><td colspan="7"><div id="ddc-${i}" style="padding:8px 16px;background:#f8fafc">加载中...</div></td></tr>`).join('');
+  document.getElementById('movHistory').innerHTML = `<table class="tbl"><thead><tr><th>单据号</th><th>类型</th><th>来源去向</th><th>行数</th><th>总数量</th><th>备注</th><th>时间</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function toggleDoc(docNo, idx) {
+  const row = document.getElementById('dd-'+idx);
+  if (row.classList.contains('open')) { row.classList.remove('open'); return; }
+  row.classList.add('open');
+  const d = await api('/stock-movement/'+encodeURIComponent(docNo));
+  const lines = (d.lines||[]).map(l => `<tr><td>${h(l.sku)}</td><td>${l.sph}</td><td>${l.cyl}</td><td>${l.qty}</td><td>${l.oldStock}</td><td>${l.newStock}</td></tr>`).join('');
+  document.getElementById('ddc-'+idx).innerHTML = `<table class="tbl"><thead><tr><th>SKU</th><th>SPH</th><th>CYL</th><th>数量</th><th>变动前</th><th>变动后</th></tr></thead><tbody>${lines}</tbody></table>`;
+}
+
+// ══════════════════════════════════════════════════
+// Tab 3: Stock Browser
+// ══════════════════════════════════════════════════
+let _stockData = [];
+function initStockSelects() {
+  const opts = '<option value="">全部 SKU</option>' + SKUS.map(s=>`<option>${s}</option>`).join('');
+  document.getElementById('stockSku').innerHTML = opts;
+  document.getElementById('heatSku').innerHTML = SKUS.map((s,i)=>`<option value="${s}"${i===0?' selected':''}>${s}</option>`).join('');
+}
+async function loadStock() {
+  const sku = document.getElementById('stockSku').value;
+  const search = document.getElementById('stockSearch').value;
+  const d = await api('/stock-detail?sku='+encodeURIComponent(sku)+'&search='+encodeURIComponent(search)+'&pageSize=200');
+  _stockData = d.items || [];
+  // Summary
+  const s = d.summary || {};
+  document.getElementById('stockSummary').innerHTML = [
+    { v: s.totalStock?.toLocaleString(), l: '查询总库存', c: 'ok' },
+    { v: s.belowSafety, l: '低于安全线', c: s.belowSafety > 0 ? 'danger' : 'ok' },
+    { v: d.total, l: '库存行数', c: 'info' },
+  ].map(m => `<div class="metric-card ${m.c}"><div class="v">${m.v??'--'}</div><div class="l">${m.l}</div></div>`).join('');
+  document.getElementById('stockTotalLabel').textContent = `共 ${d.total} 行`;
+  // Table
+  const rows = _stockData.map(r => {
+    const cls = r.currentStock <= 0 ? 'badge-danger' : r.currentStock < r.safetyStock ? 'badge-warn' : 'badge-ok';
+    return `<tr><td>${h(r.sku)}</td><td>${r.sph}</td><td>${r.cyl}</td>
+      <td><span class="badge ${cls}">${r.currentStock}</span></td><td>${r.safetyStock}</td><td>${fmtDate(r.lastOutbound)}</td></tr>`;
+  }).join('');
+  document.getElementById('stockTable').innerHTML = `<table class="tbl"><thead><tr><th>SKU</th><th>SPH</th><th>CYL</th><th>当前库存</th><th>安全库存</th><th>最近出库</th></tr></thead><tbody>${rows}</tbody></table>`;
+  renderHeatmap();
+}
+function renderHeatmap() {
+  const sku = document.getElementById('heatSku').value;
+  document.getElementById('heatSkuLabel').textContent = sku;
+  const map = {};
+  for (const r of _stockData) if (r.sku === sku) map[`${r.sph}|${r.cyl}`] = r;
+  let html = '<table class="heat-table"><thead><tr><th>SPH \\ CYL</th>';
+  for (const c of CYL_RANGE) html += `<th>${c.toFixed(2)}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const s of SPH_RANGE) {
+    html += `<tr><th style="text-align:right;padding-right:6px">${s.toFixed(2)}</th>`;
+    for (const c of CYL_RANGE) {
+      const r = map[`${s.toFixed(2)}|${c.toFixed(2)}`];
+      if (!r) { html += '<td class="cell-empty">-</td>'; continue; }
+      const cls = r.currentStock <= 0 ? 'cell-danger' : r.currentStock < r.safetyStock ? 'cell-warn' : 'cell-ok';
+      html += `<td class="${cls}">${r.currentStock}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('heatWrap').innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════
+// Tab 4: Production
+// ══════════════════════════════════════════════════
+function initProdSelects() {
+  document.getElementById('prodSku').innerHTML = '<option value="">全部</option>' + SKUS.map(s=>`<option>${s}</option>`).join('');
+}
+async function loadProduction() {
+  const status = document.getElementById('prodStatus').value;
+  const sku = document.getElementById('prodSku').value;
+  const d = await api('/production-orders?status='+encodeURIComponent(status)+'&sku='+encodeURIComponent(sku)+'&pageSize=200');
+  if (!d.items?.length) { document.getElementById('prodTable').innerHTML = '<p style="color:var(--text-muted);padding:16px">暂无工单</p>'; return; }
+  const rows = d.items.map(o => `<tr>
+    <td>${h(o.workOrderNo)}</td><td>${h(o.sku)}</td><td>${o.sph}</td><td>${o.cyl}</td>
+    <td>${o.suggestedOutput}</td><td>${statusBadge(o.status)}</td><td>${fmtDate(o.estimatedCompletion)}</td>
+    <td>${statusBadge(o.replenishmentStatus)}</td>
+    <td><button class="btn btn-outline btn-sm" onclick="updateProdStatus('${o.recordId}','${h(o.status)}')">更新</button></td>
+  </tr>`).join('');
+  document.getElementById('prodTable').innerHTML = `<table class="tbl"><thead><tr><th>工单号</th><th>SKU</th><th>SPH</th><th>CYL</th><th>产量</th><th>状态</th><th>预计完成</th><th>回补</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function updateProdStatus(recordId, current) {
+  const next = current === '待确认' ? '生产中' : current === '生产中' ? '完成' : null;
+  if (!next) { toast('已完成的工单不可更改','error'); return; }
+  const ok = await showModal('更新工单状态', `将状态从 <b>${h(current)}</b> 改为 <b>${h(next)}</b>？`);
+  if (!ok) return;
+  await adminApi('/production-orders/update', { recordId, status: next });
+  toast('状态已更新','success');
+  loadProduction();
+}
+
+// ══════════════════════════════════════════════════
+// Tab 5: Consignment
+// ══════════════════════════════════════════════════
+function initConsSelects() {
+  document.getElementById('consSku').innerHTML = '<option value="">全部</option>' + SKUS.map(s=>`<option>${s}</option>`).join('');
+  const now = new Date();
+  document.getElementById('stmtMonth').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+}
+async function loadAgentStock() {
+  const agentId = document.getElementById('consAgentId').value;
+  const sku = document.getElementById('consSku').value;
+  const d = await api('/agent-stock-admin?agentId='+encodeURIComponent(agentId)+'&sku='+encodeURIComponent(sku));
+  if (!d.items?.length) { document.getElementById('agentStockTable').innerHTML = '<p style="color:var(--text-muted);padding:16px">暂无数据</p>'; return; }
+  const rows = d.items.map(r => `<tr><td>${h(r.agentId)}</td><td>${h(r.sku)}</td><td>${r.sph}</td><td>${r.cyl}</td>
+    <td>${r.ownedStock}</td><td>${r.consignedStock}</td><td>${(r.ownedStock||0)+(r.consignedStock||0)}</td><td>${fmtDate(r.consignDate)}</td></tr>`).join('');
+  document.getElementById('agentStockTable').innerHTML = `<table class="tbl"><thead><tr><th>代理商</th><th>SKU</th><th>SPH</th><th>CYL</th><th>自有</th><th>寄售</th><th>合计</th><th>寄售日期</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function loadConsignment() {
+  const d = await api('/consignment-report');
+  if (!d.report?.length) { document.getElementById('consignmentTable').innerHTML = '<p style="color:var(--text-muted);padding:16px">暂无寄售数据</p>'; return; }
+  const rows = d.report.map(r => `<tr><td>${h(r.agentId)}</td><td>${h(r.sku)}</td><td>${r.sph}</td><td>${r.cyl}</td>
+    <td>${r.owned}</td><td>${r.consigned}</td><td>${r.ageDays}天</td><td>${statusBadge(r.status)}</td></tr>`).join('');
+  document.getElementById('consignmentTable').innerHTML = `<table class="tbl"><thead><tr><th>代理商</th><th>SKU</th><th>SPH</th><th>CYL</th><th>自有</th><th>寄售</th><th>账龄</th><th>状态</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function genStatement() {
+  const month = document.getElementById('stmtMonth').value;
+  if (!month) { toast('请选择月份','error'); return; }
+  const d = await api('/monthly-statement?month='+month);
+  document.getElementById('stmtResult').innerHTML = `<div class="metric-card ok" style="margin-top:8px"><div class="v">${d.generated||0}</div><div class="l">${month} 月度对账单已生成（待确认）</div></div>`;
+  toast('对账单已生成','success');
+}
+
+// ── Init ──
+_loaded.dashboard = true;
+loadDash();
+</script>
+</body>
+</html>

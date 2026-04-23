@@ -30,6 +30,7 @@ export const TABLES = {
   agent_stock: "tblIEYUemBGIquVs",
   consignment_ledger: "tblP9VObYpOMh1gD",
   monthly_statement: "tblvEIQ7IBCJw2iY",
+  stock_movement: "tblCoNeAbrz6tM9C",
 
   // ── 分析 ──
   ai_analysis: "tbl8W9F9K2RbaL0k",
