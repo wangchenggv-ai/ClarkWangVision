@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, feat/*]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Write .env
+        run: |
+          mkdir -p ../shared
+          cat > ../shared/.env << 'ENVEOF'
+          FEISHU_APP_ID=${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET=${{ secrets.FEISHU_APP_SECRET }}
+          NOTIFY_APP_ID=${{ secrets.NOTIFY_APP_ID }}
+          NOTIFY_APP_SECRET=${{ secrets.NOTIFY_APP_SECRET }}
+          NOTIFY_CHAT_ID=${{ secrets.NOTIFY_CHAT_ID }}
+          ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN }}
+          ENVEOF
+
+      - name: Schema check
+        run: node check_schema.js
+
+      - name: Notify Feishu on failure
+        if: failure()
+        run: |
+          TOKEN=$(curl -s https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal \
+            -H 'Content-Type: application/json' \
+            -d '{"app_id":"${{ secrets.NOTIFY_APP_ID }}","app_secret":"${{ secrets.NOTIFY_APP_SECRET }}"}' \
+            | jq -r '.tenant_access_token')
+          curl -s https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id \
+            -H "Authorization: Bearer $TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "receive_id": "${{ secrets.NOTIFY_CHAT_ID }}",
+              "msg_type": "interactive",
+              "content": "{\"header\":{\"title\":{\"tag\":\"plain_text\",\"content\":\"❌ CI 失败\"},\"template\":\"red\"},\"elements\":[{\"tag\":\"markdown\",\"content\":\"**分支：** ${{ github.ref_name }}\\n**提交：** ${{ github.sha }}\\n**触发：** ${{ github.event_name }}\\n\\n[查看详情](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\"}]}"
+            }'
