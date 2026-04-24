@@ -7,8 +7,11 @@ on:
     branches: [main, master]
 
 jobs:
-  check:
+  schema-check:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 04-供应链/feishu-setup/order-system
     steps:
       - uses: actions/checkout@v4
 
