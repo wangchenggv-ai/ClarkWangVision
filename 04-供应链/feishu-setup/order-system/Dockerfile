@@ -7,6 +7,7 @@ RUN echo '{"type":"module","dependencies":{"qrcode":"^1.5","xlsx":"^0.18"}}' > p
 
 # Copy application files
 COPY shared/ ./shared/
+COPY lib/ ./lib/
 COPY server.js .
 COPY automations.js .
 COPY logistics.js .
