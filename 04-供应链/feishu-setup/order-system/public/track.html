@@ -431,7 +431,7 @@ function exportCsv() {
   showToast("正在导出...", "info");
 
   fetch(`/api/orders/export?${params}`)
-    .then(res => res.blob())
+    .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.blob(); })
     .then(blob => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

@@ -246,9 +246,6 @@ if (found) {
   document.getElementById('statusText').textContent = '正品验证通过';
   document.getElementById('statusSub').textContent = '该镜片已通过高视高清溯源系统认证';
   document.getElementById('foundContent').style.display = '';
-  var tag = document.getElementById('eyeTag');
-  if (tag.textContent.indexOf('左') >= 0) { tag.className = 'eye-tag eye-L'; }
-  else if (tag.textContent.indexOf('右') >= 0) { tag.className = 'eye-tag eye-R'; }
 } else {
   hero.classList.add('hero-fail');
   checkEl.style.display = 'none';

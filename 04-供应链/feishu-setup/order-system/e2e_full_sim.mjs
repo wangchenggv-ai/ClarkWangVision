@@ -27,6 +27,7 @@ function step(n, title) { console.log(`\n━━━ Step ${n}: ${title} ━━━
 
 // ─── Test Data ────────────────────────────────────────────────────
 const testPayload = {
+  clientRequestId: `e2e-${Date.now()}`,
   terminalCustomer: { name: "运城眼科医院（E2E测试）", contact: "测试联系人", phone: "13800000000" },
   address: "山西省运城市盐湖区运城眼科医院（E2E测试地址）",
   patients: [

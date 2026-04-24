@@ -28,6 +28,10 @@ import { spawn } from "child_process";
 import QRCode from "qrcode";
 import XLSX from "xlsx";
 import { TABLES } from "./shared/tables.js";
+import * as feishuMod from "./lib/feishu.js";
+import * as printerMod from "./lib/printer.js";
+import * as notifyMod from "./lib/notify.js";
+import * as stockMod from "./lib/stock.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
@@ -120,6 +124,13 @@ if (!APP_TOKEN) {
   console.error("❌ 缺少 FEISHU_APP_TOKEN，请在 .env 中配置");
   process.exit(1);
 }
+
+// ─── 模块导入 ──────────────────────────────────────────────────────────
+
+const { feishuApi, listRecords, createRecord, batchCreateRecords, updateRecord, getFeishuToken } = feishuMod;
+const { loadPrinterConfig, savePrinterConfig, buildZpl, buildTestZpl, sendTcpZpl, sendZplToPrinter } = printerMod;
+const { sendNotify, sendFeishuCard, shipCard, deliveredCard } = notifyMod;
+const { getStockMap, clearStockCache, deductStockDetail, getAgentStockMap, estimateDeliveryByRx, deductAgentStock } = stockMod;
 
 // ─── MiMo 大模型 ─────────────────────────────────────────────────────────────
 
@@ -347,91 +358,17 @@ async function loadAgents() {
 async function findAgent(token) {
   if (!token) return null;
   const agents = await loadAgents();
-  return agents.find(a => a.token === token) || null;
+  const tokenBuf = Buffer.from(token);
+  for (const a of agents) {
+    const aBuf = Buffer.from(a.token || "");
+    if (aBuf.length !== tokenBuf.length) continue;
+    if (timingSafeEqual(aBuf, tokenBuf)) return a;
+  }
+  return null;
 }
 
 // ─── 飞书 API ───────────────────────────────────────────────────────────────
 
-let _feishuToken = "";
-let _feishuTokenTime = 0;
-
-async function getFeishuToken() {
-  if (Date.now() - _feishuTokenTime < 7000 * 1000 && _feishuToken) return _feishuToken;
-  const res = await fetch(`${BASE}/auth/v3/tenant_access_token/internal`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ app_id: ENV.FEISHU_APP_ID, app_secret: ENV.FEISHU_APP_SECRET }),
-  });
-  let json;
-  try { json = await res.json(); } catch { return _feishuToken; }
-  if (json.tenant_access_token) {
-    _feishuToken = json.tenant_access_token;
-    _feishuTokenTime = Date.now();
-  }
-  return _feishuToken;
-}
-
-async function feishuApi(method, path, body) {
-  const token = await getFeishuToken();
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  let json;
-  try {
-    json = await res.json();
-  } catch {
-    const text = await res.text().catch(() => "");
-    console.error(`  飞书 API 非 JSON 响应 [${method} ${path}]: HTTP ${res.status} ${text.slice(0, 200)}`);
-    return null;
-  }
-  if (json.code !== 0) {
-    console.error(`  飞书 API 错误 [${method} ${path}]:`, json.msg);
-    // token 失效 → 清空缓存，下次请求自动刷新
-    if (json.code === 99991663 || /invalid access token/i.test(json.msg || "")) {
-      _feishuToken = "";
-      _feishuTokenTime = 0;
-    }
-    return null;
-  }
-  return json.data;
-}
-
-async function listRecords(tableId, fieldNames) {
-  const records = [];
-  let pageToken = "";
-  const fnParam = fieldNames ? `&field_names=${fieldNames.map(encodeURIComponent).join(",")}` : "";
-  while (true) {
-    const qs = pageToken ? `?page_size=100&page_token=${pageToken}${fnParam}` : `?page_size=100${fnParam}`;
-    const data = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records${qs}`);
-    if (!data) break;
-    if (data.items) records.push(...data.items);
-    if (!data.has_more) break;
-    pageToken = data.page_token;
-  }
-  return records;
-}
-
-async function createRecord(tableId, fields) {
-  return feishuApi("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records`, { fields });
-}
-
-async function batchCreateRecords(tableId, records) {
-  for (let i = 0; i < records.length; i += 500) {
-    const batch = records.slice(i, i + 500);
-    const res = await feishuApi("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records/batch_create`, { records: batch });
-    if (!res) return false;
-  }
-  return true;
-}
-
-async function updateRecord(tableId, recordId, fields) {
-  return feishuApi("PUT", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records/${recordId}`, { fields });
-}
 
 // ─── SKU + 库存缓存 ──────────────────────────────────────────────────────────
 
@@ -465,31 +402,6 @@ function getModelSkus(allSkus) {
   return allSkus.filter(s => !s.sku.includes(" "));
 }
 
-// ─── 度数级库存缓存 ────────────────────────────────────────────────────────
-// key = "SKU|SPH|CYL"（SPH/CYL 保留两位小数），value = { stock, recordId }
-const STOCK_TTL = 2 * 60 * 1000; // 2 分钟
-let _stockCache = { map: null, time: 0 };
-
-async function getStockMap(fresh = false) {
-  if (fresh) _stockCache = { map: null, time: 0 };
-  if (_stockCache.map && Date.now() - _stockCache.time < STOCK_TTL) return _stockCache.map;
-  const rows = await listRecords(TABLES.stock_detail);
-  const map = new Map();
-  for (const r of rows) {
-    const f = r.fields || {};
-    const sku = typeof f["SKU编号"] === "string" ? f["SKU编号"] : (Array.isArray(f["SKU编号"]) ? f["SKU编号"][0]?.text : "");
-    const sph = Number(f["SPH"]);
-    const cyl = Number(f["CYL"]);
-    const stock = Number(f["当前库存"]) || 0;
-    if (!sku || !Number.isFinite(sph) || !Number.isFinite(cyl)) continue;
-    map.set(`${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`, { stock, recordId: r.record_id });
-  }
-  _stockCache = { map, time: Date.now() };
-  return map;
-}
-
-function clearStockCache() { _stockCache = { map: null, time: 0 }; }
-
 // ─── 共用辅助函数 ────────────────────────────────────────────────────────────
 const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
 const fmt = (v) => {
@@ -508,14 +420,6 @@ async function findOrder(orderNo) {
   return (d?.items || [])[0] || null;
 }
 
-async function advanceOrderWorkflow(recordId, stepKey) {
-  const rec = await getRecord(TABLES.order, recordId);
-  const wf = parseWorkflow(rec.fields["流程步骤"]);
-  advanceWorkflow(wf, stepKey);
-  await updateRecord(TABLES.order, recordId, { "流程步骤": JSON.stringify(wf) });
-  return wf;
-}
-
 // ─── Per-key 异步锁 ─────────────────────────────────────────────────────────
 // 序列化对同一 SKU|SPH|CYL 的并发扣减，避免 lost update
 const _locks = new Map(); // key → Promise（链尾）
@@ -528,6 +432,17 @@ async function withLock(key, fn) {
   try { return await fn(); }
   finally { release(); if (_locks.get(key) === next) _locks.delete(key); }
 }
+
+// ─── 模块初始化（依赖 fmt/withLock，必须在它们之后）────────────────────────
+
+feishuMod.init({ base: BASE, appToken: APP_TOKEN, env: ENV });
+printerMod.init({
+  configPath: resolve(__dirname, "printer_config.json"),
+  serverBaseUrl: () => ENV.SERVER_BASE_URL || `http://localhost:${PORT}`,
+  fmtFn: fmt, fmtAxisFn: fmtAxis,
+});
+notifyMod.init({ env: ENV });
+stockMod.init({ feishuApi, listRecords, withLock, tables: TABLES, appToken: APP_TOKEN, stdSphRange: STD_SPH_RANGE, stdCylRange: STD_CYL_RANGE });
 
 // ─── 幂等存储 ───────────────────────────────────────────────────────────────
 // 防止双击/重试导致重复下单
@@ -551,201 +466,6 @@ function setIdempotent(id, resp) {
 let _dashCache = null;
 const _execLog = []; // 规则执行历史（内存，最多200条）
 const MAX_EXEC_LOG = 200;
-
-// ─── 度数级库存扣减（锁内 fresh read + write） ─────────────────────────────
-async function deductStockDetail(sku, sph, cyl, qty) {
-  const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
-  const map = await getStockMap();
-  const info = map.get(key);
-  if (!info) return { success: false, reason: "not_found" };
-
-  return withLock(key, async () => {
-    // 锁内 fresh read — 只 GET 单条记录（~200ms，不拉全表）
-    const freshData = await feishuApi("GET",
-      `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`
-    );
-    const currentStock = Number(freshData?.record?.fields?.["当前库存"]) || 0;
-
-    const deductQty = Math.min(currentStock, qty);
-    if (deductQty <= 0) {
-      console.log(`  ⏭️ 无库存可扣: ${key}，走生产`);
-      return { success: true, newStock: 0, deducted: 0 };
-    }
-
-    const newStock = currentStock - deductQty;
-    const now = Date.now();
-
-    const patchRes = await feishuApi("PUT",
-      `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`,
-      { fields: { "当前库存": newStock, "最近出库": now } }
-    );
-    if (!patchRes) {
-      console.error(`  ⚠️ 库存扣减写入失败: ${key}`);
-      return { success: false, reason: "write_failed" };
-    }
-
-    clearStockCache();
-    console.log(`  📉 度数扣减: ${key} -${deductQty} → ${newStock}`);
-    return { success: true, newStock, deducted: deductQty };
-  });
-}
-
-// ─── 代理商本地库存缓存 ─────────────────────────────────────────────────────
-// 每个代理商独立缓存，key = "SKU|SPH.toFixed(2)|CYL.toFixed(2)"
-// value = { owned, consigned, total, consignDate }
-const AGENT_STOCK_TTL = 2 * 60 * 1000; // 2 分钟
-let _agentStockCaches = {}; // { agentId: { map, time } }
-
-async function getAgentStockMap(agentId) {
-  if (!TABLES.agent_stock) return null; // 表未配置则跳过
-  const cached = _agentStockCaches[agentId];
-  if (cached?.map && Date.now() - cached.time < AGENT_STOCK_TTL) return cached.map;
-
-  const encoded = encodeURIComponent(`"${agentId}"`);
-  const data = await feishuApi("GET",
-    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.agent_stock}/records?page_size=500&filter=CurrentValue.[agent_id]=${encoded}`
-  );
-  const map = new Map();
-  for (const r of data?.items || []) {
-    const f = r.fields || {};
-    const sku = typeof f["SKU编号"] === "string" ? f["SKU编号"] : (Array.isArray(f["SKU编号"]) ? f["SKU编号"][0]?.text : "");
-    const sph = Number(f["SPH"]);
-    const cyl = Number(f["CYL"]);
-    const owned = Number(f["自有库存"]) || 0;
-    const consigned = Number(f["寄售库存"]) || 0;
-    if (!sku || !Number.isFinite(sph) || !Number.isFinite(cyl)) continue;
-    const key = `${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`;
-    const consignDate = f["寄售入库日期"] || null;
-    map.set(key, { owned, consigned, total: owned + consigned, consignDate });
-  }
-  _agentStockCaches[agentId] = { map, time: Date.now() };
-  return map;
-}
-
-function clearAgentStockCache(agentId) {
-  delete _agentStockCaches[agentId];
-}
-
-function inRange(x, [lo, hi]) { return x >= lo && x <= hi; }
-
-// 度数级交期判定 — 返回 { deliveryType, days, promiseDate, available, stock, agentStock? }
-// agentId 可选：有则优先查代理商本地库存，无则走厂家总仓
-async function estimateDeliveryByRx(sku, sph, cyl, qty, agentId) {
-  const now = Date.now();
-  const sphN = Number(sph);
-  const cylN = Number(cyl);
-
-  // 超出常规备货度数范围 → 定制
-  if (!Number.isFinite(sphN) || !Number.isFinite(cylN) ||
-      !inRange(sphN, STD_SPH_RANGE) || !inRange(cylN, STD_CYL_RANGE)) {
-    return { deliveryType: "定制7-10天", days: 10, promiseDate: now + 10 * 86400000, available: false, stock: 0 };
-  }
-
-  const key = `${sku}|${sphN.toFixed(2)}|${cylN.toFixed(2)}`;
-
-  // 优先查代理商本地库存
-  if (agentId) {
-    const agentMap = await getAgentStockMap(agentId);
-    if (agentMap) {
-      const aStock = agentMap.get(key);
-      if (aStock && aStock.total > 0) {
-        const result = {
-          deliveryType: aStock.total >= qty ? "有货1-2天" : "排产5-7天",
-          days: aStock.total >= qty ? 2 : 7,
-          promiseDate: now + (aStock.total >= qty ? 2 : 7) * 86400000,
-          available: aStock.total >= qty,
-          stock: aStock.total,
-          agentStock: { owned: aStock.owned, consigned: aStock.consigned },
-        };
-        return result;
-      }
-    }
-  }
-
-  // 无代理商库存或代理商库存为0 → 走厂家总仓
-  const map = await getStockMap();
-  const stock = (map.get(key) || {}).stock ?? 0;
-
-  if (stock >= qty) {
-    return { deliveryType: "有货1-2天", days: 2, promiseDate: now + 2 * 86400000, available: true, stock };
-  }
-  return { deliveryType: "排产5-7天", days: 7, promiseDate: now + 7 * 86400000, available: false, stock };
-}
-
-// ─── 代理商库存扣减（先自有后寄售） ────────────────────────────────────────
-// 返回 { deducted, ownedUsed, consignedUsed, ledgerRecords }
-async function deductAgentStock(agentId, sku, sph, cyl, qty) {
-  if (!TABLES.agent_stock || !TABLES.consignment_ledger) return { deducted: 0 };
-
-  const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
-  const agentMap = await getAgentStockMap(agentId);
-  if (!agentMap) return { deducted: 0 };
-
-  const stockInfo = agentMap.get(key);
-  if (!stockInfo || stockInfo.total <= 0) return { deducted: 0 };
-
-  const deductQty = Math.min(qty, stockInfo.total);
-  let ownedUsed = Math.min(deductQty, stockInfo.owned);
-  let consignedUsed = deductQty - ownedUsed;
-
-  // 查找记录 record_id 做更新
-  const encoded = encodeURIComponent(`"${agentId}"`);
-  const data = await feishuApi("GET",
-    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.agent_stock}/records?page_size=500&filter=CurrentValue.[agent_id]=${encoded}`
-  );
-  let recordId = null;
-  for (const r of data?.items || []) {
-    const f = r.fields || {};
-    const rKey = `${f["SKU编号"]}|${Number(f["SPH"]).toFixed(2)}|${Number(f["CYL"]).toFixed(2)}`;
-    if (rKey === key) { recordId = r.record_id; break; }
-  }
-
-  if (!recordId) return { deducted: 0 };
-
-  // 更新库存
-  const newOwned = stockInfo.owned - ownedUsed;
-  const newConsigned = stockInfo.consigned - consignedUsed;
-  await api("PATCH",
-    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.agent_stock}/records/${recordId}`,
-    { fields: { "自有库存": newOwned, "寄售库存": newConsigned } }
-  );
-
-  // 清缓存
-  clearAgentStockCache(agentId);
-
-  // 写寄售流水
-  const ledgerRecords = [];
-  if (ownedUsed > 0) {
-    ledgerRecords.push({
-      fields: {
-        "流水号": `OUT-${agentId}-${sku}-${key}-${Date.now()}-OWNED`,
-        "agent_id": agentId,
-        "类型": "消耗",
-        "SKU编号": sku,
-        "SPH": Number(sph),
-        "CYL": Number(cyl),
-        "数量": -ownedUsed,
-        "备注": "自有库存消耗",
-      },
-    });
-  }
-  if (consignedUsed > 0) {
-    ledgerRecords.push({
-      fields: {
-        "流水号": `OUT-${agentId}-${sku}-${key}-${Date.now()}-CONSIGN`,
-        "agent_id": agentId,
-        "类型": "消耗",
-        "SKU编号": sku,
-        "SPH": Number(sph),
-        "CYL": Number(cyl),
-        "数量": -consignedUsed,
-        "备注": "寄售库存消耗",
-      },
-    });
-  }
-
-  return { deducted: deductQty, ownedUsed, consignedUsed, ledgerRecords };
-}
 
 // ─── 生成编号 ──────────────────────────────────────────────────────────────
 
@@ -856,109 +576,6 @@ async function getTerminalCustomers(agentId) {
   return result;
 }
 
-// ─── 飞书通知 ──────────────────────────────────────────────────────────────
-
-async function sendNotify(agentName, summary, orderNo) {
-  if (!ENV.FEISHU_WEBHOOK_URL) return;
-  try {
-    await fetch(ENV.FEISHU_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        msg_type: "interactive",
-        card: {
-          header: { title: { tag: "plain_text", content: "📋 新订单待处理" }, template: "blue" },
-          elements: [{
-            tag: "markdown",
-            content: `**代理商：** ${agentName}\n**订单号：** ${orderNo}\n**摘要：** ${summary}\n\n请登录飞书多维表查看。`,
-          }],
-        },
-      }),
-    });
-  } catch (e) {
-    console.error("通知发送失败:", e.message);
-  }
-}
-
-// ─── 飞书 App 卡片通知（群聊）──────────────────────────────────────────
-
-let _notifyToken = "", _notifyTokenTime = 0;
-async function getNotifyToken() {
-  if (Date.now() - _notifyTokenTime < 7000000 && _notifyToken) return _notifyToken;
-  if (!ENV.NOTIFY_APP_ID || !ENV.NOTIFY_APP_SECRET) return null;
-  const r = await fetch("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ app_id: ENV.NOTIFY_APP_ID, app_secret: ENV.NOTIFY_APP_SECRET }),
-  });
-  let json;
-  try { json = await r.json(); } catch { return null; }
-  if (json.tenant_access_token) {
-    _notifyToken = json.tenant_access_token;
-    _notifyTokenTime = Date.now();
-  }
-  return _notifyToken;
-}
-
-async function sendFeishuCard(card) {
-  const chatId = ENV.NOTIFY_CHAT_ID;
-  if (!chatId) return;
-  try {
-    const token = await getNotifyToken();
-    if (!token) return;
-    await fetch("https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ receive_id: chatId, msg_type: "interactive", content: JSON.stringify(card) }),
-    });
-  } catch (e) {
-    console.error("飞书卡片通知失败:", e.message);
-  }
-}
-
-function shipCard({ orderNo, customerName, sku, agentName, courierName, trackingNo, lensCount }) {
-  return {
-    header: { title: { tag: "plain_text", content: "🚚 订单已发货" }, template: "blue" },
-    elements: [
-      { tag: "div", fields: [
-        { is_short: true, text: { tag: "lark_md", content: `**订单号**\n${orderNo}` } },
-        { is_short: true, text: { tag: "lark_md", content: `**顾客**\n${customerName}` } },
-      ]},
-      { tag: "div", fields: [
-        { is_short: true, text: { tag: "lark_md", content: `**SKU**\n${sku}` } },
-        { is_short: true, text: { tag: "lark_md", content: `**镜片数**\n${lensCount} 片` } },
-      ]},
-      { tag: "hr" },
-      { tag: "div", fields: [
-        { is_short: true, text: { tag: "lark_md", content: `**快递公司**\n${courierName}` } },
-        { is_short: true, text: { tag: "lark_md", content: `**快递单号**\n\`${trackingNo}\`` } },
-      ]},
-      { tag: "div", fields: [
-        { is_short: true, text: { tag: "lark_md", content: `**代理商**\n${agentName}` } },
-      ]},
-      { tag: "note", elements: [{ tag: "plain_text", content: `发货时间：${new Date().toLocaleString("zh-CN")} | 高视星供应链系统` }] },
-    ],
-  };
-}
-
-function deliveredCard({ orderNo, customerName, sku, agentName, signedAt }) {
-  return {
-    header: { title: { tag: "plain_text", content: "✅ 消费者已签收" }, template: "green" },
-    elements: [
-      { tag: "div", fields: [
-        { is_short: true, text: { tag: "lark_md", content: `**订单号**\n${orderNo}` } },
-        { is_short: true, text: { tag: "lark_md", content: `**顾客**\n${customerName}` } },
-      ]},
-      { tag: "div", fields: [
-        { is_short: true, text: { tag: "lark_md", content: `**SKU**\n${sku}` } },
-        { is_short: true, text: { tag: "lark_md", content: `**代理商**\n${agentName}` } },
-      ]},
-      { tag: "hr" },
-      { tag: "markdown", content: `🎉 **订单全流程完成！**\n下单 → 生产 → 发货 → **签收 ✓**\n签收时间：${signedAt}` },
-    ],
-  };
-}
-
 // ─── 工具函数 ──────────────────────────────────────────────────────────────
 
 // 允许的跨域来源（从 .env 读取，支持逗号分隔多个）
@@ -1065,144 +682,38 @@ function isAdmin(req) {
   try {
     const a = Buffer.from(adminToken.padEnd(64), "utf-8").slice(0, 64);
     const b = Buffer.from(envToken.padEnd(64), "utf-8").slice(0, 64);
-    return timingSafeEqual(a, b) && adminToken === envToken;
+    return timingSafeEqual(a, b);
   } catch {
     return false;
   }
 }
 
-// ─── 打印机配置 ──────────────────────────────────────────────────────────
+// ─── 规则配置缓存 ────────────────────────────────────────────────────────
 
-const PRINTER_CONFIG_PATH = resolve(__dirname, "printer_config.json");
-let _printerConfig = null;
-let _printerConfigTime = 0;
-const PRINTER_CONFIG_TTL = 30_000; // 30s 缓存
+const RULES_CONFIG_PATH = resolve(__dirname, "rules_config.json");
+let _rulesConfigCache = null;
+let _rulesConfigCacheTime = 0;
+const RULES_CONFIG_TTL = 30_000;
 
-function loadPrinterConfig() {
+function loadRulesConfig() {
   const now = Date.now();
-  if (_printerConfig && now - _printerConfigTime < PRINTER_CONFIG_TTL) return _printerConfig;
+  if (_rulesConfigCache && now - _rulesConfigCacheTime < RULES_CONFIG_TTL) return _rulesConfigCache;
   try {
-    _printerConfig = JSON.parse(readFileSync(PRINTER_CONFIG_PATH, "utf-8"));
+    _rulesConfigCache = JSON.parse(readFileSync(RULES_CONFIG_PATH, "utf-8"));
   } catch {
-    _printerConfig = {
-      default_connection: "tcp",
-      tcp: { enabled: true, host: "192.168.0.208", port: 9100, timeout_ms: 5000 },
-      usb: { enabled: false, bridge_url: "http://localhost:9101" },
-      printer_model: "ZT410", dpi: 203,
-      label_width_mm: 75, label_height_mm: 40,
-      auto_print_on_ship: false, copies: 1,
-    };
+    _rulesConfigCache = {};
   }
-  _printerConfigTime = now;
-  return _printerConfig;
+  _rulesConfigCacheTime = now;
+  return _rulesConfigCache;
 }
 
-function savePrinterConfig(config) {
-  writeFileSync(PRINTER_CONFIG_PATH, JSON.stringify(config, null, 2) + "\n", "utf-8");
-  _printerConfig = config;
-  _printerConfigTime = Date.now();
-}
-
-// ─── ZPL 标签生成（斑马打印机 ZPL II，75×40mm @ 203dpi = 600×320dots）────────
-
-function buildZpl(rec) {
-  const f = rec.fields || rec;
-  const orderNo = f["订单编号"] || "";
-  const customerName = f["顾客姓名"] || "";
-  const sku = f["产品型号"] || "";
-  const eye = f["眼别"] || "";
-  const isRight = eye.includes("右");
-  const eyeLabel = isRight ? "R" : "L";
-  const sph = f["球镜SPH"] ?? "";
-  const cyl = f["柱镜CYL"] ?? "";
-  const axis = f["轴位AXIS"] ?? "";
-  const lensCode = f["镜片码"] || "";
-  const agentName = f["代理商名称"] || "";
-  const agentId = f["代理商ID"] || "";
-  const verifyUrl = `${getServerBaseUrl()}/verify/${lensCode}`;
-
-  const zpl = [
-    "^XA",
-    "^CI28",
-    "^PW600",
-    "^LL320",
-    "",
-    `^FO30,10^BY2^BCN,70,Y,N,N^FD${orderNo}^FS`,
-    `^FO30,90^A0N,20,20^FD${orderNo}^FS`,
-    `^FO30,120^A0N,24,24^FD${customerName}^FS`,
-    `^FO280,120^A0N,18,18^FD${sku}^FS`,
-    `^FO30,155^A0N,30,30^FD${eyeLabel} ${eye}^FS`,
-    "^FO30,192^A0N,16,16^FDSPH^FS",
-    "^FO130,192^A0N,16,16^FDCYL^FS",
-    "^FO230,192^A0N,16,16^FDAXIS^FS",
-    `^FO30,214^A0N,24,24^FD${fmt(sph)}^FS`,
-    `^FO130,214^A0N,24,24^FD${fmt(cyl)}^FS`,
-    `^FO230,214^A0N,24,24^FD${fmtAxis(axis)}^FS`,
-    `^FO450,10^BQN,2,4^FDQA,${verifyUrl}^FS`,
-    "^FO468,135^A0N,12,12^FDQR验真^FS",
-    `^FO30,250^A0N,18,18^FD${lensCode}^FS`,
-    "^FO30,238^GB530,1,1^FS",
-    "^FO30,278^A0N,18,18^FDGAUSH | CLEAR^FS",
-    `^FO250,278^A0N,14,14^FD${agentId} ${agentName}^FS`,
-    "^XZ",
-  ].join("\n");
-
-  return zpl;
-}
-
-// ─── 打印机通信 ──────────────────────────────────────────────────────────
-
-async function sendTcpZpl(zplString, host, port = 9100, timeoutMs = 5000) {
-  return new Promise((resolve, reject) => {
-    const sock = new Socket();
-    sock.setTimeout(timeoutMs);
-    sock.connect(port, host, () => {
-      sock.write(Buffer.from(zplString, "utf-8"), () => {
-        sock.end();
-        resolve({ ok: true, method: "tcp", host, port });
-      });
-    });
-    sock.on("error", (err) => reject(new Error(`TCP 打印失败 (${host}:${port}): ${err.message}`)));
-    sock.on("timeout", () => { sock.destroy(); reject(new Error(`TCP 连接超时 (${host}:${port})`)); });
-  });
-}
-
-async function sendUsbZpl(zplString, bridgeUrl) {
-  const res = await fetch(`${bridgeUrl}/print`, {
-    method: "POST",
-    headers: { "Content-Type": "text/plain" },
-    body: zplString,
-  });
-  if (!res.ok) throw new Error(`USB 桥接失败: ${res.status}`);
-  return res.json();
-}
-
-async function sendZplToPrinter(zplString) {
-  const config = loadPrinterConfig();
-  const conn = config.default_connection || "tcp";
-  if (conn === "tcp" && config.tcp?.enabled) {
-    return sendTcpZpl(zplString, config.tcp.host, config.tcp.port, config.tcp.timeout_ms);
-  }
-  if (conn === "usb" && config.usb?.enabled) {
-    return sendUsbZpl(zplString, config.usb.bridge_url);
-  }
-  throw new Error(`打印机未配置或未启用 (connection=${conn})`);
+function saveRulesConfig(config) {
+  writeFileSync(RULES_CONFIG_PATH, JSON.stringify(config, null, 2) + "\n", "utf-8");
+  _rulesConfigCache = config;
+  _rulesConfigCacheTime = Date.now();
 }
 
 // ─── 打印队列（Mac 拉模式）───────────────────────────────────────────────────
-
-function buildTestZpl() {
-  return [
-    "^XA", "^CI28", "^PW600", "^LL320",
-    "^FO170,20^A0N,36,36^FDGAUSH TEST^FS",
-    "^FO30,70^BY2^BCN,70,Y,N,N^FDTEST-PRINT^FS",
-    "^FO30,155^A0N,22,22^FD测试标签 / Test Label^FS",
-    "^FO30,185^A0N,18,18^FD" + new Date().toLocaleString("zh-CN") + "^FS",
-    "^FO30,215^A0N,16,16^FD打印机: " + loadPrinterConfig().printer_model + "^FS",
-    "^FO450,70^BQN,2,3^FDQA,https://gaushclear.com^FS",
-    "^XZ",
-  ].join("\n");
-}
 
 const printQueue = new Map();
 let _pqSeq = 0;
@@ -1230,7 +741,7 @@ function advanceWorkflow(wf, stepKey) {
   if (wf.steps[stepKey]) return { wf, ok: true, skipped: true };
   // 校验：只能前进一步（允许从 confirmed 直接到 producing，因为 confirm 端点同时设置两步）
   const currentIdx = wf.current || 0;
-  if (targetIdx > currentIdx + 1 && !(stepKey === "producing" && wf.steps["confirmed"])) {
+  if (targetIdx > currentIdx + 1 && !(stepKey === "producing" && wf.steps["confirmed"]) && !(stepKey === "packed" && (wf.steps["producing"] || wf.steps["labeled"]))) {
     return { wf, ok: false, error: `不能跳步: 当前 ${STEP_ORDER[currentIdx]}(${currentIdx})，目标 ${stepKey}(${targetIdx})` };
   }
   wf.steps[stepKey] = { ts: Date.now() };
@@ -1280,10 +791,17 @@ async function assignLensCodes(orderNo, customerName, pairIndex) {
 
 async function getLensDetailsByOrder(orderNo) {
   const encoded = encodeURIComponent(`"${orderNo}"`);
-  const data = await feishuApi("GET",
-    `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.lens_detail}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`
-  );
-  const items = data?.items || [];
+  const items = [];
+  let pageToken = "";
+  while (true) {
+    let qs = `?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`;
+    if (pageToken) qs += `&page_token=${pageToken}`;
+    const data = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.lens_detail}/records${qs}`);
+    if (!data) break;
+    items.push(...(data.items || []));
+    if (!data.has_more) break;
+    pageToken = data.page_token;
+  }
   items.sort((a, b) => {
     const ca = a.fields["顾客姓名"] || "", cb = b.fields["顾客姓名"] || "";
     const nc = ca.localeCompare(cb, "zh-CN");
@@ -1349,7 +867,7 @@ function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
       "订单号": f["订单编号"] || "",
       "顾客": f["顾客姓名"] || "",
       "产品型号": f["产品型号"] || "",
-      "数量": 1,
+      "数量": info.quantity || 1,
       "眼别": f["眼别"] || "",
       "球镜SPH": f["球镜SPH"] != null ? Number(f["球镜SPH"]).toFixed(2) : "",
       "柱镜CYL": f["柱镜CYL"] != null ? Number(f["柱镜CYL"]).toFixed(2) : "",
@@ -1895,8 +1413,12 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // Rate Limiting（全局）
-  const clientIp = req.headers["x-forwarded-for"]?.split(",")[0].trim() || req.socket.remoteAddress || "unknown";
+  // Rate Limiting（全局）— 仅当直连来自反向代理（localhost）时信任 x-forwarded-for
+  const directIp = req.socket.remoteAddress || "";
+  const isFromProxy = directIp === "127.0.0.1" || directIp === "::1" || directIp === "::ffff:127.0.0.1";
+  const clientIp = isFromProxy
+    ? (req.headers["x-forwarded-for"]?.split(",")[0].trim() || directIp)
+    : directIp;
   const verifyLimit = pathname.startsWith("/verify/") ? VERIFY_RATE_LIMIT_MAX : RATE_LIMIT_MAX;
   if (!checkRateLimit(clientIp, verifyLimit)) {
     res.writeHead(429, { "Content-Type": "application/json; charset=utf-8" });
@@ -2074,10 +1596,12 @@ const server = createServer(async (req, res) => {
       const { address, patients, terminalCustomer, clientRequestId } = payload;
 
       // 幂等检查 — 防止双击/重试
-      if (clientRequestId) {
-        const cached = getIdempotent(clientRequestId);
-        if (cached) { jsonRes(res, 200, cached); return logReq(req, 200, start); }
+      if (!clientRequestId) {
+        jsonRes(res, 400, { error: "缺少 clientRequestId，请升级客户端" });
+        return logReq(req, 400, start);
       }
+      const cached = getIdempotent(clientRequestId);
+      if (cached) { jsonRes(res, 200, cached); return logReq(req, 200, start); }
 
       if (!terminalCustomer?.name?.trim()) {
         jsonRes(res, 400, { error: "请填写终端客户" });
@@ -2224,6 +1748,15 @@ const server = createServer(async (req, res) => {
         return logReq(req, 500, start);
       }
 
+      // Bitable 写入成功后立即注册幂等键 — 防止后续步骤失败导致重试重复写入
+      const responseData = {
+        success: true,
+        orderNo,
+        items,
+        summary: { totalPatients: patients.length, totalLenses },
+      };
+      setIdempotent(clientRequestId, responseData);
+
       // ── 写入镜片明细表 ──
       if (lensRecords.length > 0) {
         const okLens = await batchCreateRecords(TABLES.lens_detail, lensRecords);
@@ -2284,13 +1817,6 @@ const server = createServer(async (req, res) => {
       delete _customerCache[agent.id];
       delete _terminalCustomerCache[agent.id];
 
-      const responseData = {
-        success: true,
-        orderNo,
-        items,
-        summary: { totalPatients: patients.length, totalLenses },
-      };
-      setIdempotent(clientRequestId, responseData);
       jsonRes(res, 200, responseData);
       return logReq(req, 200, start);
     }
@@ -2785,12 +2311,14 @@ const server = createServer(async (req, res) => {
           skuName: skuMatch?.name || skuCode,
         };
 
-        // 同订单同客户同产品的眼别匹配（避免同名不同处方混入）
+        // 同订单同客户同产品同序号的眼别匹配（避免同名不同处方/多副混入）
         const srcSku = lf["产品型号"] || "";
+        const srcPi = lf["序号"] || 1;
         const allLens = await getLensDetailsByOrder(srcOrderNo);
         const samePair = allLens.filter(r =>
           (r.fields["顾客姓名"] || "") === srcCustomer &&
-          (r.fields["产品型号"] || "") === srcSku
+          (r.fields["产品型号"] || "") === srcSku &&
+          (r.fields["序号"] || 1) === srcPi
         );
         eyes = samePair.map(r => ({
           side: r.fields["眼别"] || "",
@@ -2876,6 +2404,7 @@ const server = createServer(async (req, res) => {
           lensCode: f["镜片码"] || "",
           assembly: f["是否装配"] || "",
           remark: f["备注"] || "",
+          pairIndex: f["序号"] || 1,
         };
       });
 
@@ -2967,6 +2496,7 @@ const server = createServer(async (req, res) => {
 
       const orderNos = orderNosParam.split(",").map(s => s.trim()).filter(Boolean);
       const customerFilter = url.searchParams.get("customer") || "";
+      const pairFilter = Number(url.searchParams.get("pairIndex")) || 0;
       const allDetails = [];
       const orderInfoMap = {}; // "orderNo|customerName|pairIndex" → { remark, address, contact, phone, quantity }
 
@@ -2978,6 +2508,9 @@ const server = createServer(async (req, res) => {
         if (customerFilter) {
           const names = customerFilter.split(",").map(s => s.trim()).filter(Boolean);
           details = details.filter(r => names.includes(r.fields["顾客姓名"] || ""));
+        }
+        if (pairFilter) {
+          details = details.filter(r => (r.fields["序号"] || 1) === pairFilter);
         }
         if (!details.length) continue;
 
@@ -3051,6 +2584,13 @@ const server = createServer(async (req, res) => {
           if (pairIndex) {
             records = records.filter(r => (r.fields["序号"] || 1) === pairIndex);
             if (!records.length) { results.push({ orderNo, ok: false, error: `未找到第${pairIndex}副` }); continue; }
+          }
+
+          // 状态守卫：仅"待处理"可确认
+          const badConfirm = records.filter(r => (r.fields["订单状态"] || "") !== "待处理");
+          if (badConfirm.length) {
+            const badStatus = [...new Set(badConfirm.map(r => r.fields["订单状态"] || "未知"))].join(",");
+            results.push({ orderNo, ok: false, error: `当前状态"${badStatus}"，仅"待处理"可确认` }); continue;
           }
 
           // 生成镜片码（幂等，按客户+序号过滤）
@@ -3229,15 +2769,15 @@ const server = createServer(async (req, res) => {
           return shipTime && shipTime >= dayStart && shipTime < dayEnd;
         });
         if (!filtered.length) { jsonRes(res, 404, { error: `${dateStr} 无已发货记录` }); return logReq(req, 404, start); }
-        // 按顾客姓名+收货地址分组
+        // 按顾客姓名+序号分组（多副各自一张）
         const groupMap = {};
         for (const r of filtered) {
           const f = r.fields;
           const cname = rawVal(f["顾客姓名"]) || "未知";
-          const addr = rawVal(f["收货地址"]) || "";
-          const key = `${cname}__${addr}`;
+          const pi = f["序号"] || 1;
+          const key = `${cname}__${pi}`;
           if (!groupMap[key]) groupMap[key] = {
-            customerName: cname, address: addr,
+            customerName: cname, pairIndex: pi, address: rawVal(f["收货地址"]) || "",
             agentName: rawVal(f["代理商名称"]) || "", agentId: rawVal(f["代理商ID"]) || "",
             trackingNo: rawVal(f["快递单号"]) || "", courierName: rawVal(f["物流公司"]) || "",
             shipDate: f["发货时间"] ? new Date(f["发货时间"]).toLocaleDateString("zh-CN") : new Date().toLocaleDateString("zh-CN"),
@@ -3246,7 +2786,7 @@ const server = createServer(async (req, res) => {
           groupMap[key].records.push(r);
         }
         let groups = Object.values(groupMap);
-        if (keyFilter) groups = groups.filter(g => `${g.customerName}__${g.address}` === keyFilter);
+        if (keyFilter) groups = groups.filter(g => `${g.customerName}__${g.pairIndex}` === keyFilter);
         // 单分组直接返回同行单 HTML
         if (groups.length === 1) {
           const g = groups[0];
@@ -3256,16 +2796,13 @@ const server = createServer(async (req, res) => {
           for (const lensDetails of allLens) {
             for (const ld of lensDetails) {
               const f = ld.fields;
+              if ((f["序号"] || 1) !== g.pairIndex) continue;
               rows.push({ eye: rawVal(f["眼别"]) || "—", sku: rawVal(f["产品型号"]),
                 sph: f["球镜SPH"] ?? "", cyl: f["柱镜CYL"] ?? "", axis: f["轴位AXIS"] ?? "",
                 lensCode: rawVal(f["镜片码"]), pairIndex: f["序号"] || 1 });
             }
           }
-          rows.sort((a, b) => {
-            const pi = (a.pairIndex || 1) - (b.pairIndex || 1);
-            if (pi !== 0) return pi;
-            return a.eye.includes("右") ? -1 : 1;
-          });
+          rows.sort((a, b) => a.eye.includes("右") ? -1 : 1);
           const html = slipHTML({
             orderNos, customerName: g.customerName, address: g.address,
             agentName: g.agentName, agentId: g.agentId, shipDate: g.shipDate,
@@ -3290,8 +2827,9 @@ a{color:inherit;text-decoration:none}</style></head><body>
         const cards = groups.map(g => {
           const orderNos = [...new Set(g.records.map(r => rawVal(r.fields["订单编号"])))];
           const addrShort = g.address.length > 20 ? g.address.slice(0, 20) + "…" : g.address;
-          const key = `${g.customerName}__${g.address}`;
-          return `<a class="card" href="/api/admin/slip-batch?date=${dateStr}&key=${encodeURIComponent(key)}"><h3>${g.customerName}</h3>
+          const key = `${g.customerName}__${g.pairIndex}`;
+          const piBadge = g.pairIndex > 1 ? ` <span style="color:#e67e22">第${g.pairIndex}副</span>` : "";
+          return `<a class="card" href="/api/admin/slip-batch?date=${dateStr}&key=${encodeURIComponent(key)}"><h3>${g.customerName}${piBadge}</h3>
 <p>地址：${addrShort || "—"}</p><p>订单：${orderNos.join(", ")}</p><p>快递：${g.trackingNo || "—"} ${g.courierName || ""}</p>
 <p>${g.records.length} 条记录</p><span class="btn">查看同行单 →</span></a>`;
         }).join("");
@@ -3300,6 +2838,41 @@ a{color:inherit;text-decoration:none}</style></head><body>
         res.end(html);
         return logReq(req, 200, start);
       } catch (e) { jsonRes(res, 500, { error: e.message }); return logReq(req, 500, start); }
+    }
+
+    // POST /api/admin/pack — 打包（推进工作流到 packed，不改订单状态）
+    if (pathname === "/api/admin/pack" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req);
+      const orderNos = payload.orderNos || [];
+      const customerName = payload.customerName || "";
+      const pairIndex = payload.pairIndex || 0;
+      if (!orderNos.length) { jsonRes(res, 400, { error: "请提供 orderNos" }); return logReq(req, 400, start); }
+
+      const results = [];
+      for (const orderNo of orderNos) {
+        try {
+          const encoded = encodeURIComponent(`"${orderNo}"`);
+          const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+          let records = d?.items || [];
+          if (customerName) records = records.filter(r => (r.fields["顾客姓名"] || "") === customerName);
+          if (pairIndex) records = records.filter(r => (r.fields["序号"] || 1) === pairIndex);
+          if (!records.length) { results.push({ orderNo, ok: false, error: "未找到" }); continue; }
+
+          let packErr = "";
+          for (const rec of records) {
+            const wf = parseWorkflow(rec.fields["流程步骤"]);
+            if (!wf.steps["producing"] && !wf.steps["labeled"]) { packErr = "尚未生产，无法打包"; break; }
+            const r = advanceWorkflow(wf, "packed");
+            if (!r.ok) { packErr = r.error; break; }
+            await updateRecord(TABLES.order, rec.record_id, { "流程步骤": JSON.stringify(wf) });
+          }
+          if (packErr) { results.push({ orderNo, ok: false, error: packErr }); continue; }
+          results.push({ orderNo, ok: true });
+        } catch (e) { results.push({ orderNo, ok: false, error: e.message }); }
+      }
+      jsonRes(res, 200, { results });
+      return logReq(req, 200, start);
     }
 
     // POST /api/admin/ship — 发货（逐单或批量，可按客户维度）
@@ -3350,6 +2923,13 @@ a{color:inherit;text-decoration:none}</style></head><body>
             if (!records.length) { results.push({ orderNo, ok: false, error: `未找到第${pairIndex}副` }); continue; }
           }
 
+          // 状态守卫：仅"生产中"可发货
+          const badShip = records.filter(r => (r.fields["订单状态"] || "") !== "生产中");
+          if (badShip.length) {
+            const badStatus = [...new Set(badShip.map(r => r.fields["订单状态"] || "未知"))].join(",");
+            results.push({ orderNo, ok: false, error: `当前状态"${badStatus}"，仅"生产中"可发货` }); continue;
+          }
+
           const f0 = records[0].fields;
           const agentId = rawVal(f0["代理商ID"]) || "";
           const ck = courierKey || autoSelectCourierWeb(agentId);
@@ -3378,10 +2958,11 @@ a{color:inherit;text-decoration:none}</style></head><body>
             await updateRecord(TABLES.lens_detail, rec.record_id, { "订单状态": "已发货" });
           }
 
-          // 推进工作流步骤 → shipped
+          // 推进工作流步骤 → packed → shipped（向后兼容：未打包则自动补 packed）
           try {
             for (const rec of records) {
               const wf = parseWorkflow(rec.fields["流程步骤"]);
+              if (!wf.steps["packed"]) advanceWorkflow(wf, "packed");
               advanceWorkflow(wf, "shipped");
               await updateRecord(TABLES.order, rec.record_id, { "流程步骤": JSON.stringify(wf) });
             }
@@ -3435,11 +3016,17 @@ a{color:inherit;text-decoration:none}</style></head><body>
             if (!records.length) { results.push({ orderNo, ok: false, error: `未找到第${pairIndex}副` }); continue; }
           }
 
+          // 状态守卫：仅"已发货"可标记待签收
+          const badDeliver = records.filter(r => (r.fields["订单状态"] || "") !== "已发货");
+          if (badDeliver.length) {
+            const badStatus = [...new Set(badDeliver.map(r => r.fields["订单状态"] || "未知"))].join(",");
+            results.push({ orderNo, ok: false, error: `当前状态"${badStatus}"，仅"已发货"可标记待签收` }); continue;
+          }
+
           for (const rec of records) {
             await updateRecord(TABLES.order, rec.record_id, {
               "订单状态": "待签收",
               "物流状态": "待签收",
-              "签收时间": now,
             });
           }
 
@@ -4205,8 +3792,7 @@ a{color:inherit;text-decoration:none}</style></head><body>
     // GET /api/admin/rules — 读取当前规则配置 + 元数据
     if (pathname === "/api/admin/rules" && req.method === "GET") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
-      let config = {};
-      try { config = JSON.parse(readFileSync(resolve(__dirname, "rules_config.json"), "utf-8")); } catch {}
+      let config = loadRulesConfig();
       jsonRes(res, 200, { config, manifest: RULE_MANIFEST });
       return logReq(req, 200, start);
     }
@@ -4216,12 +3802,10 @@ a{color:inherit;text-decoration:none}</style></head><body>
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const body = await readBody(req);
       if (!body.rule || !body.param) { jsonRes(res, 400, { error: "需要 rule 和 param 字段" }); return logReq(req, 400, start); }
-      const configPath = resolve(__dirname, "rules_config.json");
-      let config = {};
-      try { config = JSON.parse(readFileSync(configPath, "utf-8")); } catch {}
+      let config = loadRulesConfig();
       if (!config[body.rule]) config[body.rule] = {};
       config[body.rule][body.param] = body.value;
-      writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+      saveRulesConfig(config);
       jsonRes(res, 200, { ok: true, rule: body.rule, param: body.param, value: body.value });
       return logReq(req, 200, start);
     }
@@ -4351,8 +3935,7 @@ a{color:inherit;text-decoration:none}</style></head><body>
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const body = await readBody(req);
       if (!body.message) { jsonRes(res, 400, { error: "需要 message 字段" }); return logReq(req, 400, start); }
-      let config = {};
-      try { config = JSON.parse(readFileSync(resolve(__dirname, "rules_config.json"), "utf-8")); } catch {}
+      let config = loadRulesConfig();
       const systemPrompt = `你是眼镜库存管理系统的 AI 助手，深度理解以下业务规则和数据模型。
 
 ## 系统架构
