@@ -880,3 +880,147 @@ Clark 要求整体审视三系统架构（CRM + 订单 + 库存），产出两�
 
 ### 库存扣减提醒
 - 移除 `/api/submit` 中库存扣减失败写入订单备注的逻辑（`[系统] 库存扣减失败/异常需人工处理`），仅保留 console.error
+
+## 2026-04-23 pairIndex 透传修复（Review 跟进）
+
+Code review 发现 pairIndex 未透传到 3 处前端函数 + 2 处后端端点，导致多副订单在管理页操作全部作用于第 1 副。
+
+### 修复
+
+| 文件 | 问题 | 修复 |
+|------|------|------|
+| `server.js:2879` | `/api/admin/orders` mapper 缺 pairIndex | +`pairIndex: f["序号"] \|\| 1` |
+| `server.js:2971-2984` | `/api/admin/batch-zip` 不接受 pairIndex | +pairFilter 参数 + 度数级过滤 |
+| `server.js:3237-3270` | slip-batch 按 customer+address 分组，多副合并一张 | 改为 customer+pairIndex 分组，多副各自一张 |
+| `server.js:3264` | slip 单分组不按 pairIndex 过滤镜片 | +`序号 !== g.pairIndex` 过滤 |
+| `labels.html:1725` | quickZip 调用未传 pi | +`${pi}` |
+| `labels.html:1938` | quickZip 签名缺 pairIndex | +pairIndex 参数 |
+| `labels.html:1944` | quickSlip 签名缺 pairIndex | +pairIndex 参数 + URL 拼接 |
+| `labels.html:1949` | quickZplPrint 签名缺 pairIndex | +pairIndex 参数 + POST body |
+
+### 验证覆盖
+- 单副全流程不退化
+- 同名同型号 2 副独立确认/发货/打印
+- 同行单按顾客+序号分组（多副各自一张）
+- 工厂 Excel 导出按 pairIndex 过滤
+- Dashboard fieldNames 投影不含序号（不依赖，正确）
+
+## 2026-04-24 开发效率提升：Schema 守卫 + 测试整合 + CI
+
+### /simplify 清理（7 项）
+
+server.js 死代码清理：
+- 移除未使用解构导入：`getNotifyToken`、`sendUsbZpl`、`clearAgentStockCache`
+- 移除死常量 `STOCK_TTL`、死函数 `advanceOrderWorkflow`、死常量 `PRINTER_CONFIG_PATH`
+- 移除 3 个占位注释 stub
+
+stock.js 优化：
+- `getAgentStockMap` 缓存新增 `recordId`，`deductAgentStock` 复用缓存消除冗余 API 调用
+
+### Bitable 字段修复
+
+- automations.js 模具表 4 个字段名修正：`模芯编号`→`模具编号`、`总寿命（次）`→`总寿命`、`已使用次数`→`已使用`、`剩余次数`→`剩余寿命`
+- 订单主表补 5 个字段、镜片明细补序号（通过 API 添加）
+
+### Schema 守卫（check_schema.js）
+
+新增 `check_schema.js`：16 张表字段对比，缺失报错，exit code 1。覆盖订单/镜片/代理商/终端客户/SKU/库存/模具/毛坯/排产/流水等全部表。
+
+### 测试整合（test.mjs）
+
+新增 `test.mjs` 统一测试入口，7 个本地测试 + 2 个云端测试，支持按标签过滤：
+```bash
+node test.mjs           # 全部本地
+node test.mjs schema    # 只跑字段守卫
+node test.mjs e2e       # 只跑 E2E
+node test.mjs --cloud   # 本地+云端
+```
+5 个过时测试脚本移入 `tests/archive/`。
+
+### CI（GitHub Actions）
+
+`.github/workflows/ci.yml`：push 触发 → checkout → node 20 → check_schema.js → 失败时飞书通知。
+**状态：** ✅ 已推送，CI 首次通过。6 个 Secrets 全部配好（FEISHU_APP_ID/SECRET, NOTIFY_*, ADMIN_TOKEN）。
+
+### E2E 测试
+
+`e2e_full_sim.mjs` 添加 `clientRequestId`（幂等保护要求）。
+
+### 测试结果
+
+| 测试 | 结果 |
+|------|------|
+| 字段守卫 | ✅ 通过 |
+| 库存并发 | ❌ 2/17 失败（测试数据耗尽，非代码问题） |
+| E2E 全流程 | 待跑 |
+| 统一入口 test.mjs | ✅ 5/7 通过 |
+
+### 待办
+
+- [ ] 推送 ci.yml 到 GitHub（网络恢复后）
+- [ ] 验证 CI 触发
+- [ ] 库存测试数据补充（SPH=-1 CYL=-0.5 已归零）
+
+---
+
+## 2026-04-23 测试设计 Bug 修复（静态分析 6+3）
+
+测试设计静态分析发现 6 个确认 Bug + 3 个边界场景验证。
+
+### 修复
+
+| # | Bug | 代码位置 | 修复 |
+|---|-----|---------|------|
+| T5.2/5.3 | 验真页多副串号 | `server.js:2791` samePair | +`srcPi` 序号过滤 |
+| T7.2 | deliver 预设签收时间 | `server.js:3445` | 删除"签收时间"字段，仅 webhook 已签收时写入 |
+| T6.1/6.2 | 状态机无守卫 | `server.js:3309,3412` | confirm 仅"待处理"、ship 仅"生产中"、deliver 仅"已发货" |
+| T1.6 | Rate limit 绕过 | `server.js:1899` | 仅 remoteAddress 为 localhost 时信任 x-forwarded-for |
+| T3.2 | 幂等键写入时机 | `server.js:2299` | setIdempotent 移到 Bitable 写入成功后立即执行 |
+| — | 幂等键必填 | `server.js:2077` | clientRequestId 缺失返回 400 |
+
+### 边界场景验证（全部 PASS）
+- T2: SPH=-6.00/CYL=-2.00 命中常规范围（inRange 闭区间）
+- T8: slip-batch pairIndex=2 只含第 2 副处方（line 3279 过滤）
+- T9: XSS 转义全覆盖、Bitable filter encodeURIComponent 防注入、异常眼别 fallback 不崩溃
+
+## 2026-04-25 同事 bug 文档修复（飞书汇总）
+
+同事通过飞书文档汇总 bug（https://gausheyetech.feishu.cn/wiki/SZatwFnHLixDCskrhqdcFZNXn7c），交叉对比 STATE.md 已修复记录，定位 4 个未解决 root cause 并修复。
+
+### Root Cause 分析
+
+| Bug | 描述 | 严重度 | Root Cause | 修复 |
+|-----|------|--------|-----------|------|
+| ④ Excel格式不对 | 有时导出excel格式不对，需手动修改 | 5 | `buildFactoryExcel` 第863行 `"数量": 1` 硬编码，不从订单主表读实际数量 | → `info.quantity \|\| 1` |
+| ④ ZIP无Excel | 勾选不同订单号导出zip无excel | 2 | `getLensDetailsByOrder` 无分页（page_size=100 无 page_token 循环），极端情况丢失数据 | → 加分页循环 |
+| ⑦-1 按钮没反应 | 点击按钮没反应 | — | `api()`/`adminApi()` 调 `r.json()` 不检查 `r.ok`，服务端 401 返回 HTML → JSON.parse 崩溃 → 批量操作无 try-catch 静默失败 | → adminApi 加 `r.ok` 检查 + confirm/ship/pack/deliver 全加 try-catch |
+| ⑧-2 AXIS缺参数 | 手工拼接URL扫出无轴位 | 2 | verify.html 第249行 `getElementById('eyeTag')` 引用不存在元素 → JS TypeError 中断渲染 | → 移除死代码 |
+
+### 涉及文件
+
+- `server.js`：`buildFactoryExcel` 数量修复 + `getLensDetailsByOrder` 分页
+- `public/labels.html`：`api()`/`adminApi()` 错误处理 + 4个批量操作 try-catch
+- `public/verify.html`：移除 eyeTag 死代码
+- `public/track.html`：`exportCsv()` 加 `res.ok` 检查
+- `Dockerfile`：添加 `COPY lib/`（模块化重构新增 lib/ 目录）
+
+### 部署
+
+- GitHub commit `74c76eb` + `d98a552`（Dockerfile），网络不通未 push
+- ECS SCP 热更新：server.js + lib/ + labels.html + verify.html + track.html → docker cp → restart
+- 验证：`/health` 200（41 agents）、batch-zip 200（19KB Excel）、验真页 AXIS=90/85 正确
+
+### 飞书文档中其他状态
+
+| 项 | 状态 |
+|----|------|
+| ④ Excel格式 | ✅ 已修复（数量从订单主表读取） |
+| ④ ZIP无Excel | ✅ 已修复（分页） |
+| ⑦-1 按钮没反应 | ✅ 已修复（错误处理） |
+| ⑦ 批量打印 | ✅ 已实现（打印队列），待同事验证 |
+| ⑦ 标签格式 | ✅ 已实现（ZPL+Code128条形码），待确认是否匹配现用格式 |
+| ⑧-1 验证时间 | ✅ 4/21 已修复（扫码当前时间），同事可能用旧版 |
+| ⑧-2 AXIS | ✅ 已修复（移除死代码），AXIS 数据正常显示 |
+| ⑧ 标签独立化 | 新需求，待讨论 |
+| 库存筛选 | 新需求，待讨论 |
+| 供应商厂家列 | 新需求，待讨论 |
