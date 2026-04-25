@@ -105,6 +105,13 @@ function statusBadge(status) {
   return `<span class="badge ${map[status] || 'badge-pending'}">${status || '未知'}</span>`;
 }
 
+function deliveryBadge(deliveryType, promiseDate) {
+  if (!deliveryType) return "";
+  const cls = deliveryType.includes("有货") ? "badge-instock" : deliveryType.includes("排产") ? "badge-produce" : "badge-custom";
+  const dateStr = promiseDate ? formatDate(promiseDate) : "";
+  return `<span class="badge ${cls}">${deliveryType}${dateStr ? " · " + dateStr : ""}</span>`;
+}
+
 function formatDate(ts) {
   if (!ts) return "-";
   return new Date(ts).toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
@@ -254,6 +261,7 @@ function renderOrderList(orders) {
           <span class="sku-info">${item.sku} × ${item.quantity}</span>
         </div>
         <div class="right">
+          ${deliveryBadge(item.deliveryType, item.promiseDate)}
           ${statusBadge(item.status)}
         </div>
       </div>`;
@@ -306,6 +314,9 @@ async function showDetail(orderNo) {
     html += `<div style="margin-bottom:6px"><strong>下单时间：</strong>${formatDate(data.date)}</div>`;
     html += `<div style="margin-bottom:6px"><strong>收货地址：</strong>${data.address || '-'}</div>`;
     html += `<div style="margin-bottom:6px"><strong>订单状态：</strong>${statusBadge(data.status)}</div>`;
+    if (data.deliveryType) {
+      html += `<div style="margin-bottom:6px"><strong>预计交期：</strong>${deliveryBadge(data.deliveryType, data.promiseDate)}</div>`;
+    }
     html += `</div>`;
 
     // 物流信息

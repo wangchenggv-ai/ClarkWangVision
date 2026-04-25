@@ -1024,3 +1024,187 @@ node test.mjs --cloud   # 本地+云端
 | ⑧ 标签独立化 | 新需求，待讨论 |
 | 库存筛选 | 新需求，待讨论 |
 | 供应商厂家列 | 新需求，待讨论 |
+
+## 2026-04-25 交期预估迁移：下单页 → 确认回写 + 追踪页显示
+
+### 背景
+
+代理商下单页（order.html）每次输入 SPH/CYL 都调 `/api/delivery-estimate`（双眼患者 = 4 次并发请求），导致页面卡顿。交期预估在下单时非必要信息，确认后才有意义。
+
+### 改动
+
+| 文件 | 改动 |
+|------|------|
+| `public/order.html` | 删除交期预估 JS + HTML（~50 行）：`onSkuChange`/`onRxChange`/`fetchEstimateForEye`、`delivery-${id}-right/left` div、draft restore 中的 `onSkuChange()` 调用 |
+| `server.js` | confirm 端点 `assignLensCodes()` 后新增交期计算：按每个镜片调 `estimateDeliveryByRx()`，取最长天数，写入 `交期类型` + `预计交期` 字段 |
+| `server.js` | `/api/orders` 和 `/api/order/:orderNo` mapper 增加 `promiseDate`/`deliveryType` 字段 |
+| `public/track.html` | 新增 `deliveryBadge()` 函数，列表行 + 详情弹窗显示交期徽章（有货/排产/定制） |
+| `public/css/common.css` | 新增 `.badge-produce` 样式 |
+
+### Bitable 变更
+
+订单主表新增 2 个字段：
+- `预计交期`（日期类型）— 已存在
+- `交期类型`（文本类型）— 通过 API 创建
+
+### 部署
+
+- SCP 4 个文件（server.js + order.html + track.html + common.css）→ ECS → docker cp → restart
+- E2E 验证：提交订单 `ORD-20260425-6977FD3E` → 确认 → `deliveryType: "有货1-2天"`, `promiseDate: 2026-04-27`
+- order.html 确认无交期预估代码残留（grep 0 matches）
+
+### 交期判定逻辑（不变）
+
+| 情况 | 文案 | 天数 |
+|------|------|------|
+| 库存 ≥ 下单量 | 有货1-2天 | 2 |
+| 度数在常规范围但库存不足 | 排产5-7天 | 7 |
+| 度数超出常规范围 | 定制7-10天 | 10 |
+
+### 未改
+
+- `/api/delivery-estimate` 端点保留（备用）
+- `lib/stock.js` 的 `estimateDeliveryByRx()` 不动
+- 库存扣减逻辑不动
+
+## 2026-04-25 提交速度优化：封存库存扣减
+
+### 问题
+
+提交接口 `/api/submit` 耗时 ~14 秒，根因是 `getStockMap()` 读全表（~1575 条库存记录，16 页分页）耗时 10.6 秒。
+
+### 改动
+
+- `/api/submit` 移除库存相关调用：`getStockMap()`、`getAgentStockMap()`、`deductStockDetail()`、`deductAgentStock()`
+- 移除 `deductionPlan` 收集和扣减逻辑
+- 库存扣减代码保留在 `lib/stock.js`（封存，需要时重新启用）
+
+### 效果
+
+提交速度：**14 秒 → 3.5 秒**（缓存命中后）
+
+### confirm 端点 simplify 修复
+
+- 交期计算复用 `estimateDeliveryByRx` 返回的 `deliveryType`/`promiseDate`，不再手动重建映射
+- CLAUDE.md 更新：产品目录改为硬编码说明
+
+## 2026-04-25 业务简化 + 代码模块化
+
+### Step 1: confirm 端点去掉实时交期计算
+
+- 删除 confirm 端点中对每个镜片调 `estimateDeliveryByRx()` 的循环（~22 行）
+- 确认后 `交期类型` 和 `预计交期` 字段留空，由每日批处理统一填充
+- track.html 的 `deliveryBadge()` 对空 `deliveryType` 返回空字符串，安全
+
+### Step 2: Excel 解析增强
+
+- `findCol` 改为支持多别名（`findCol("顾客姓名", "姓名", "客户姓名", "配镜人")`）
+- `get()` 函数同步支持多参数
+- 表头行检测增加"客户姓名"、"姓名"、"眼别"关键词
+- 新增列名别名：近视/度数(SPH)、散光(CYL)、轴(AXIS)、型号/产品/SKU(产品型号)、副数/片数(数量)、说明/特殊要求(备注)、收货人(联系人)、手机(电话)、送货地址(收货地址)
+
+### Step 3: 创建 lib/helpers.js
+
+提取纯工具函数（零外部依赖）：
+- `rawVal` — Bitable 字段值解包
+- `fmt` — SPH/CYL 格式化（+/-前缀 + 2位小数）
+- `fmtAxis` — AXIS 格式化
+- `parsePagination` — 分页参数解析
+
+### Step 4: 创建 lib/templates.js
+
+提取 3 个 HTML 模板函数（~320 行）：
+- `slipHTML()` — 随货同行单 A4 模板
+- `buildLabelHtml()` — 可打印标签 HTML（QR 内嵌 base64）
+- `buildLabelHtmlFromFields()` — 从字段直接生成标签
+
+使用 `init({ getServerBaseUrl })` 依赖注入模式。
+
+### Step 5: 创建 lib/factory-export.js
+
+提取工厂导出函数（~155 行）：
+- `buildFactoryExcel()` — 生成工厂 Excel
+- `buildZipBuffer()` — 最小 ZIP 实现（Store 模式）
+- `crc32()` — CRC32 校验（内部函数）
+
+`buildFactoryZip` 留在 server.js（跨模块依赖 templates + QR）。
+
+### 改动文件
+
+| 文件 | 操作 | 行数变化 |
+|------|------|---------|
+| `server.js` | 修改 | 4267 → 3757（-510 行） |
+| `lib/helpers.js` | 新建 | 18 行 |
+| `lib/templates.js` | 新建 | 337 行 |
+| `lib/factory-export.js` | 新建 | 145 行 |
+| `CLAUDE.md` | 更新 | lib/ 模块列表新增 3 个 |
+
+### lib/ 模块全景（8 个）
+
+| 模块 | 行数 | 职责 |
+|------|------|------|
+| `feishu.js` | 88 | 飞书 API 封装 |
+| `stock.js` | 214 | 库存 + 交期判定 |
+| `printer.js` | 136 | 打印队列 + ZPL |
+| `notify.js` | 106 | 飞书通知 |
+| `helpers.js` | 18 | 纯工具函数 |
+| `templates.js` | 337 | HTML 模板 |
+| `factory-export.js` | 145 | 工厂导出 |
+| **合计** | **1044** | |
+
+server.js 从 4267 行降到 3757 行，lib/ 从 544 行增到 1044 行。
+
+## 2026-04-25 /simplify 代码审查 + Bug 修复
+
+### templates.js 标签函数去重
+
+`buildLabelHtml` 和 `buildLabelHtmlFromFields` 共享 ~70 行相同 HTML 模板。
+
+修复：提取 `_renderLabelHtml(f, orderNo)` 内部函数，两个公开函数各 4 行委托调用。
+
+```js
+async function _renderLabelHtml(f, orderNo) { /* 共享逻辑 */ }
+export async function buildLabelHtml(record, orderNo) {
+  const r = await _renderLabelHtml(record.fields, orderNo);
+  return r ? { name: `labels/...`, data: Buffer.from(r.html, "utf-8") } : null;
+}
+export async function buildLabelHtmlFromFields(f, orderNo) {
+  const r = await _renderLabelHtml(f, orderNo);
+  return r ? { orderNo, customer: r.customer, eye: r.eye, lensCode: r.lensCode, html: r.html } : null;
+}
+```
+
+### buildFactoryZip 并行化
+
+原代码逐条 `await buildLabelHtml`（每条含 QR 生成），改为 `Promise.all` 所有标签同时生成。
+
+```js
+// Before: sequential for loop
+// After:
+const labelEntries = await Promise.all(records.map(async (rec) => { ... }));
+files.push(...labelEntries.flat());
+```
+
+### feishu.js getFeishuToken URL 修复
+
+**Bug：** `BASE = "https://open.feishu.cn/open-apis"`，但 `getFeishuToken` 再拼 `${BASE}/open-apis/auth/v3/...`，导致双重 `/open-apis/open-apis/...` → 404 → token 获取失败 → 所有代理商 API 401。
+
+**修复：** `${BASE}/open-apis/auth/v3/...` → `${BASE}/auth/v3/...`
+
+**验证：** `curl /api/agent?t=AG-002-zxkmgoryb6nprmv6` → 200 `{"id":"AG-002","name":"测试代理商"}`
+
+### E2E 测试结果
+
+`e2e_full_sim.mjs` 6/7 步通过：
+
+| 步骤 | 状态 | 涉及改动 |
+|------|------|---------|
+| 1. 下单 | ✅ | helpers.js |
+| 2. 确认 | ✅ | confirm 去掉交期计算 |
+| 3. ZIP 导出 (18.8KB) | ✅ | factory-export.js + 并行化 |
+| 4. 发货 | ✅ | — |
+| 5. 标签预览 (4张) | ✅ | templates.js 去重 |
+| 6. 签收 | ✅ | — |
+| 7. 最终状态 | ❌ | 预期"已签收"实为"待签收"（预置问题：deliver 设置待签收，已签收由快递回调触发） |
+
+`check_schema.js` ✅ 通过。

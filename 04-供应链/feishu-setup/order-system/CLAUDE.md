@@ -1,5 +1,7 @@
 # CLAUDE.md — 订单系统项目宪法
 
+> **通用编码原则见根目录 [`CLAUDE_karpathy.md`](../../CLAUDE_karpathy.md)** — Think Before Coding / Simplicity First / Surgical Changes / Goal-Driven Execution
+> 
 > 本文件是 Claude Code 在本目录工作时的第一手上下文。**详细架构看 [ARCHITECTURE.md](ARCHITECTURE.md)**，本文件只写约束与关键事实。
 
 ---
@@ -46,7 +48,7 @@
 所有表 ID 从 `../shared/tables.js` 引用（单一真相源），**禁止硬编码表 ID**。
 
 ```js
-import { TABLES } from "../shared/tables.js";
+import { TABLES } from "./shared/tables.js";
 ```
 
 ### 两表架构（必须理解）
@@ -68,7 +70,7 @@ import { TABLES } from "../shared/tables.js";
 |----|----------------------|------|
 | 代理商表 | `TABLES.agent` | 代理商认证（ID/Token），由 CRM 同步 |
 | 终端客户表 | `TABLES.customer` | CRM 同步 + 门户下单自动创建的客户 |
-| SKU 主数据 | `TABLES.sku` | 产品目录 |
+| 产品型号 | `TABLES.product_model` | 产品目录（当前硬编码在 server.js `SKU_CATALOG`，不读表） |
 | 度数级库存 | `TABLES.stock_detail` | 度数级（SKU/SPH/CYL）库存，交期判定数据源 |
 
 ### 编号规则（改前先看 [ARCHITECTURE.md#编号规则](ARCHITECTURE.md)）
@@ -91,13 +93,15 @@ import { TABLES } from "../shared/tables.js";
 
 ### 产品目录
 
-产品目录从 Bitable `TABLES.product_model` 表读取（按 `排序号` 排序），用于前端下拉选择。新增/停售产品直接在飞书表里改，不用改代码。
+产品目录硬编码在 `server.js` 的 `SKU_CATALOG` 数组中（一年更新一次,改代码即可）。
 
 当前 SKU：Ultra双效、D8、时空之眼A/B/PRO/MAX、小旋风。
 
 ### 交期判定
 
-`/api/delivery-estimate` 端点**必须传 `sph` 和 `cyl` 参数**，统一走 `estimateDeliveryByRx()`：
+交期在**助理确认订单时**计算（`/api/admin/confirm`），回写到订单主表（`预计交期` + `交期类型`）。代理商在追踪页查看。
+
+核心函数 `estimateDeliveryByRx()` 在 `lib/stock.js`：
 
 | 情况 | 档位文案 | 交期天数 |
 |------|---------|---------|
@@ -107,21 +111,24 @@ import { TABLES } from "../shared/tables.js";
 
 **禁止在前端做档位计算** — 档位由后端返回，前端只渲染。
 
+`/api/delivery-estimate` 端点保留，但下单页**不调用**（确认时才用）。
+
 ### 度数常规范围
 
 - **SPH ∈ [-6.00, 0]**（近视，每 0.25D 一档，25 档）
 - **CYL ∈ [-2.00, 0]**（散光，每 0.25D 一档，9 档）
 - 单 SKU 完整覆盖 = 25 × 9 = 225 行
 
-### 库存数量展示（UX 铁律）
+### 库存扣减（已封存）
 
-- **默认不展示具体片数** — 防止代理商误判可拿量
-- **仅在库存 ≤ 5 片时显示"仅剩 N 片"** — 提醒紧张
-- **阈值常量：** `LOW_STOCK_THRESHOLD = 5`（见 `order.html`）
+- 提交时库存扣减代码保留在 `lib/stock.js`（`deductStockDetail` / `deductAgentStock`），但 **`/api/submit` 不再调用**
+- 原因：`getStockMap()` 读全表（~1575 条）耗时 10 秒，严重影响提交体验
+- 交期预估仍走 `estimateDeliveryByRx()`（确认时调用，单次查询不读全表）
 
 ### 缓存
 
-- 度数级库存缓存 TTL = **2 分钟**（`STOCK_TTL` in server.js）
+- 度数级库存缓存 TTL = **2 分钟**（`STOCK_TTL` in `lib/stock.js`）
+- 代理商列表缓存 TTL = **5 分钟**
 - 缓存在 server 内存，多实例部署时各自独立（当前单实例无问题）
 
 ---
@@ -191,6 +198,20 @@ node server.js            # 主服务，端口 3210
 node logistics.js webhook # 快递回调，端口 3211（可选）
 ```
 
+### 华为云 ECS 部署
+
+- ECS IP: `113.44.175.221`，域名: `lab.gaushclear.com`
+- SSH: `ssh -i 密钥/key-gaush-lab.pem root@113.44.175.221`
+- Docker 容器: `order-app`，工作目录 `/app/`
+- 部署流程: SCP 文件到 ECS → `docker cp` 进容器 → `docker restart order-app`
+
+```bash
+# 部署示例
+scp -i 密钥/key-gaush-lab.pem server.js root@113.44.175.221:/tmp/
+ssh -i 密钥/key-gaush-lab.pem root@113.44.175.221 \
+  "docker cp /tmp/server.js order-app:/app/server.js && docker restart order-app"
+```
+
 ### 环境变量（`../shared/.env`）
 
 | 变量 | 用途 |
@@ -214,10 +235,20 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 - [server.js](04-供应链/feishu-setup/order-system/server.js) — 主后端（所有 API 端点）
 - [public/order.html](public/order.html) — 代理商下单页
 - [public/labels.html](public/labels.html) — 助理管理页（确认/发货/签收/标签）
-- [public/control.html](public/control.html) — Admin 控制中心（仪表盘/规则/AI，3 Tab）
+- [public/control.html](public/control.html) — Admin 控制中心（仪表盘/规则/库存/数据流，4 Tab）
 - [public/track.html](public/track.html) — 代理商追踪页（只读）
 - [public/verify.html](public/verify.html) — 消费者验真页
+- [public/inventory.html](public/inventory.html) — 库存管理页（出入库/排产/寄售）
 - [logistics.js](logistics.js) — 物流 CLI + 通行单生成
+
+### lib/ 模块（从 server.js 拆出）
+- [lib/feishu.js](lib/feishu.js) — 飞书 API 封装（token / 读写 Bitable）
+- [lib/stock.js](lib/stock.js) — 库存逻辑（交期预估 / 扣减函数 / 缓存）
+- [lib/printer.js](lib/printer.js) — 打印队列（入队 / 状态查询）
+- [lib/notify.js](lib/notify.js) — 飞书 IM 通知（发货/签收卡片）
+- [lib/helpers.js](lib/helpers.js) — 纯工具函数（rawVal / fmt / fmtAxis / parsePagination）
+- [lib/templates.js](lib/templates.js) — HTML 模板（随货同行单 / 标签）
+- [lib/factory-export.js](lib/factory-export.js) — 工厂导出（Excel / ZIP / CRC32）
 
 ### 偶尔碰的
 - [automations.js](04-供应链/feishu-setup/order-system/automations.js) — 14条业务规则引擎（含 rule12 度数级库存预警、rule13 自动排产、rule14 自动回补）
@@ -226,8 +257,9 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 - [dashboard.js](dashboard.js) / [dashboard.html](dashboard.html) — KPI 看板
 - [delivery_analysis.js](delivery_analysis.js) — 交期分析
 - [print_labels.js](print_labels.js) — 标签生成（HTML 路径，工厂用）
-- [pull-print.js](pull-print.js) — Mac 本地守护进程，轮询云端队列→TCP 发打印机
+- [pull-print.js](pull-print.js) — 本地守护进程，轮询云端队列→TCP 发打印机
 - [pull-print-config.json](pull-print-config.json) — 守护进程配置（服务器/打印机/轮询）
+- [check_schema.js](check_schema.js) — Bitable 字段守卫，CI push 触发
 
 ### 一次性脚本（谨慎动）
 - `migrate_*.js`、`seed_*.js`、`import_*.js`、`setup_tables.js` — 初始化/迁移
@@ -264,6 +296,12 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 - **order.html 重复 const 声明** → JS 崩溃，白屏。改前 `grep` 确认变量名唯一
 - **/api/terminal-customers 同步加载** → 阻塞首屏渲染。必须异步加载且不堵死下单流程
 - **验真页同名混入** → 同名客户不同处方，按客户名过滤无法区分。修复：过滤条件加产品型号（`customerName + sku`），不能只按姓名
+- **/api/submit 慢（14秒）** → 根因是 `getStockMap()` 读全表 stock_detail（~1575条）耗时 10.6s。解法：封存库存扣减，提交不再读库存表，速度降到 3.5s
+- **交期预估不应在下单时调用** → 每次度数输入都调 API 导致页面卡顿。迁移至确认时一次性计算回写，代理商在追踪页查看
+- **confirm 端点重复构造交期** → `estimateDeliveryByRx` 已返回 `deliveryType`/`promiseDate`，不需要从 `maxDays` 手动重建。直接复用返回值
+- **Excel 导出改 Content-Type** → 从 ZIP 改为直接 Excel 后，测试还在检查 ZIP 格式，需更新断言
+- **眼别排序打散分组** → track.html 纯按 eye 排序导致同顾客双眼分散。必须先按 customerName 分组再排眼别
+- **Bitable 字段不匹配** → 订单主表缺 5 个字段、镜片明细缺序号。`check_schema.js` 可在 CI 自动检测
 
 ---
 

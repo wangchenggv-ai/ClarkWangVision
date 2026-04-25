@@ -248,6 +248,7 @@ select.error + .error-tip { display: block; }
 .badge-low { background: var(--gold-light); color: #B8860B; }
 .badge-out { background: var(--error-light); color: var(--error); }
 .badge-custom { background: #F0ECFF; color: #5B3CC4; }
+.badge-produce { background: var(--brand-light); color: var(--brand); }
 
 /* 订单状态 */
 .badge-pending { background: var(--gold-light); color: #B8860B; }
