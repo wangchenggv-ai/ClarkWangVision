@@ -32,6 +32,9 @@ import * as feishuMod from "./lib/feishu.js";
 import * as printerMod from "./lib/printer.js";
 import * as notifyMod from "./lib/notify.js";
 import * as stockMod from "./lib/stock.js";
+import { rawVal, fmt, fmtAxis, parsePagination } from "./lib/helpers.js";
+import * as templatesMod from "./lib/templates.js";
+import { buildFactoryExcel, buildZipBuffer } from "./lib/factory-export.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
@@ -131,6 +134,7 @@ const { feishuApi, listRecords, createRecord, batchCreateRecords, updateRecord, 
 const { loadPrinterConfig, savePrinterConfig, buildZpl, buildTestZpl, sendTcpZpl, sendZplToPrinter } = printerMod;
 const { sendNotify, sendFeishuCard, shipCard, deliveredCard } = notifyMod;
 const { getStockMap, clearStockCache, deductStockDetail, getAgentStockMap, estimateDeliveryByRx, deductAgentStock } = stockMod;
+const { slipHTML, buildLabelHtml, buildLabelHtmlFromFields } = templatesMod;
 
 // ─── MiMo 大模型 ─────────────────────────────────────────────────────────────
 
@@ -171,10 +175,10 @@ async function handleExcelUpload(file) {
   const allRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
   if (allRows.length < 2) return { patients: [], warnings: ["Excel 内容为空或无数据行"] };
 
-  // 2. 找表头行（包含"顾客姓名"的行）
+  // 2. 找表头行（包含"顾客姓名"或"姓名"或"眼别"的行）
   let headerIdx = -1;
   for (let i = 0; i < allRows.length; i++) {
-    if (allRows[i].some(c => String(c || "").includes("顾客姓名"))) { headerIdx = i; break; }
+    if (allRows[i].some(c => { const s = String(c || ""); return s.includes("顾客姓名") || s.includes("客户姓名") || s === "姓名" || s.includes("眼别"); })) { headerIdx = i; break; }
   }
   if (headerIdx === -1) {
     // 兜底：用第一行当表头
@@ -183,12 +187,15 @@ async function handleExcelUpload(file) {
 
   const headers = allRows[headerIdx].map(c => String(c || "").trim());
 
-  // 模糊匹配列
-  const findCol = (name) => {
-    let idx = headers.indexOf(name);
-    if (idx >= 0) return idx;
-    idx = headers.findIndex(h => h.startsWith(name) || h.includes(name));
-    return idx;
+  // 模糊匹配列（支持多别名）
+  const findCol = (...names) => {
+    for (const name of names) {
+      let idx = headers.indexOf(name);
+      if (idx >= 0) return idx;
+      idx = headers.findIndex(h => h.startsWith(name) || h.includes(name));
+      if (idx >= 0) return idx;
+    }
+    return -1;
   };
 
   // 3. 解析数据行
@@ -202,28 +209,28 @@ async function handleExcelUpload(file) {
     // 跳过空行
     if (!row.some(c => c != null && String(c).trim() !== "")) continue;
 
-    const get = (name) => {
-      const idx = findCol(name);
+    const get = (...names) => {
+      const idx = findCol(...names);
       return idx >= 0 ? row[idx] : undefined;
     };
 
-    const customerName = String(get("顾客姓名") || "").trim();
-    const eye = String(get("眼别") || "").trim();
+    const customerName = String(get("顾客姓名", "姓名", "客户姓名", "配镜人") || "").trim();
+    const eye = String(get("眼别", "眼", "左右眼") || "").trim();
 
     // 跳过有眼别但无任何度数的行（Excel 空行模板）
-    const _sph = get("球镜") ?? get("SPH") ?? get("球镜SPH");
-    const _cyl = get("柱镜") ?? get("CYL") ?? get("柱镜CYL");
-    const _axis = get("轴位") ?? get("AXIS") ?? get("轴位AXIS");
+    const _sph = get("球镜", "SPH", "球镜SPH", "近视", "度数");
+    const _cyl = get("柱镜", "CYL", "柱镜CYL", "散光");
+    const _axis = get("轴位", "AXIS", "轴位AXIS", "轴");
     if (eye && (_sph == null || String(_sph).trim() === "") && (_cyl == null || String(_cyl).trim() === "") && (_axis == null || String(_axis).trim() === "")) continue;
-    const productModel = String(get("产品型号") || "").trim();
-    const sph = get("球镜") ?? get("SPH") ?? get("球镜SPH");
-    const cyl = get("柱镜") ?? get("CYL") ?? get("柱镜CYL");
-    const axis = get("轴位") ?? get("AXIS") ?? get("轴位AXIS");
-    const qty = get("数量（副）") || get("数量") || 1;
-    const remark = String(get("备注") || "").trim();
-    const contact = String(get("联系人") || "").trim();
-    const phone = String(get("联系电话") || "").trim();
-    const address = String(get("收货地址") || "").trim();
+    const productModel = String(get("产品型号", "型号", "产品", "SKU") || "").trim();
+    const sph = get("球镜", "SPH", "球镜SPH", "近视", "度数");
+    const cyl = get("柱镜", "CYL", "柱镜CYL", "散光");
+    const axis = get("轴位", "AXIS", "轴位AXIS", "轴");
+    const qty = get("数量（副）", "数量", "副数", "片数") || 1;
+    const remark = String(get("备注", "说明", "特殊要求") || "").trim();
+    const contact = String(get("联系人", "收货人") || "").trim();
+    const phone = String(get("联系电话", "电话", "手机") || "").trim();
+    const address = String(get("收货地址", "地址", "送货地址") || "").trim();
 
     // 填充顾客姓名（Excel 中同组可能只填第一行）
     const name = customerName || lastCustomerName;
@@ -372,28 +379,19 @@ async function findAgent(token) {
 
 // ─── SKU + 库存缓存 ──────────────────────────────────────────────────────────
 
-const CACHE_TTL = 5 * 60 * 1000; // 5分钟
-let _skuCache = { data: null, time: 0 };
+// 产品目录硬编码（一年更新一次，改这里即可）
+const SKU_CATALOG = [
+  { sku: "Ultra双效", name: "Ultra双效" },
+  { sku: "D8", name: "D8" },
+  { sku: "时空之眼A", name: "时空之眼A" },
+  { sku: "时空之眼B", name: "时空之眼B" },
+  { sku: "时空之眼PRO", name: "时空之眼PRO" },
+  { sku: "时空之眼MAX", name: "时空之眼MAX" },
+  { sku: "小旋风", name: "小旋风" },
+];
 
-// 产品目录从 Bitable product_model 表读取（不含库存数字 — 库存判定走 stock_detail 表）
 async function getSkusWithInventory() {
-  if (_skuCache.data && Date.now() - _skuCache.time < CACHE_TTL) {
-    return _skuCache.data;
-  }
-  const rows = await listRecords(TABLES.product_model);
-  const catalog = rows
-    .map(r => {
-      const f = r.fields || {};
-      return {
-        sku: f["产品型号"],
-        name: f["产品型号"],
-        sort: Number(f["排序号"]) || 0,
-      };
-    })
-    .filter(s => s.sku)
-    .sort((a, b) => a.sort - b.sort);
-  _skuCache = { data: catalog, time: Date.now() };
-  return catalog;
+  return SKU_CATALOG;
 }
 
 // ─── 产品级 SKU 过滤（无空格 = 产品级，有空格 = 处方级） ──────────────────────
@@ -402,15 +400,7 @@ function getModelSkus(allSkus) {
   return allSkus.filter(s => !s.sku.includes(" "));
 }
 
-// ─── 共用辅助函数 ────────────────────────────────────────────────────────────
-const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
-const fmt = (v) => {
-  if (v === "" || v === null || v === undefined) return "--";
-  const n = Number(v);
-  if (isNaN(n)) return String(v);
-  return (n >= 0 ? "+" : "") + n.toFixed(2);
-};
-const fmtAxis = (v) => (v === "" || v === null || v === undefined || Number(v) === 0) ? "--" : `${v}`;
+// ─── 共用辅助函数（rawVal/fmt/fmtAxis/parsePagination 已移至 lib/helpers.js）──
 
 async function findOrder(orderNo) {
   const encoded = encodeURIComponent(`"${orderNo}"`);
@@ -443,6 +433,7 @@ printerMod.init({
 });
 notifyMod.init({ env: ENV });
 stockMod.init({ feishuApi, listRecords, withLock, tables: TABLES, appToken: APP_TOKEN, stdSphRange: STD_SPH_RANGE, stdCylRange: STD_CYL_RANGE });
+templatesMod.init({ getServerBaseUrl: () => ENV.SERVER_BASE_URL || `http://localhost:${PORT}` });
 
 // ─── 幂等存储 ───────────────────────────────────────────────────────────────
 // 防止双击/重试导致重复下单
@@ -595,12 +586,6 @@ function jsonRes(res, status, data) {
     "Content-Type": "application/json; charset=utf-8",
   });
   res.end(JSON.stringify(data));
-}
-
-function parsePagination(url, defaultPageSize = 50, maxPageSize = 200) {
-  const page = Math.max(1, parseInt(url.searchParams.get("page")) || 1);
-  const pageSize = Math.min(maxPageSize, Math.max(1, parseInt(url.searchParams.get("pageSize")) || defaultPageSize));
-  return { page, pageSize };
 }
 
 // 默认请求体上限 1MB，Excel 上传端点单独校验 5MB
@@ -838,414 +823,26 @@ async function generateQRPng(lensCode) {
   return filePath;
 }
 
-// 生成工厂 Excel 文件
-// orderInfoMap: { ["orderNo|customerName|pairIndex"]: { remark, address, contact, phone, quantity } } 按顾客维度
-// 兼容旧调用：也支持单个 info 对象 { remark, address, contact, phone }
-function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
-  const isMap = orderInfoMap && !orderInfoMap.remark && !orderInfoMap.address;
-  const getInfo = (recOrderNo, recCustomer, recPairIndex) => {
-    if (!isMap) return orderInfoMap; // 旧格式：单个 info
-    // 新格式：先按 "orderNo|customerName|pairIndex" 精确匹配，再按 "orderNo|customerName" 回退，再按 orderNo 回退
-    const fullKey = `${recOrderNo}|${recCustomer}|${recPairIndex || 1}`;
-    const nameKey = `${recOrderNo}|${recCustomer}`;
-    return orderInfoMap[fullKey] || orderInfoMap[nameKey] || orderInfoMap[recOrderNo] || Object.values(orderInfoMap)[0] || {};
-  };
-  const sorted = [...records].sort((a, b) => {
-    const nameCmp = String(a.fields["顾客姓名"] || "").localeCompare(String(b.fields["顾客姓名"] || ""), "zh-CN");
-    if (nameCmp !== 0) return nameCmp;
-    const pa = a.fields["序号"] || 1, pb = b.fields["序号"] || 1;
-    if (pa !== pb) return pa - pb;
-    const ea = a.fields["眼别"] || "", eb = b.fields["眼别"] || "";
-    if (ea.includes("右") && !eb.includes("右")) return -1;
-    if (!ea.includes("右") && eb.includes("右")) return 1;
-    return 0;
-  });
-  const rows = sorted.map(rec => {
-    const f = rec.fields;
-    const info = getInfo(f["订单编号"] || "", f["顾客姓名"] || "", f["序号"] || 1);
-    return {
-      "订单号": f["订单编号"] || "",
-      "顾客": f["顾客姓名"] || "",
-      "产品型号": f["产品型号"] || "",
-      "数量": info.quantity || 1,
-      "眼别": f["眼别"] || "",
-      "球镜SPH": f["球镜SPH"] != null ? Number(f["球镜SPH"]).toFixed(2) : "",
-      "柱镜CYL": f["柱镜CYL"] != null ? Number(f["柱镜CYL"]).toFixed(2) : "",
-      "轴位AXIS": f["轴位AXIS"] != null ? Number(f["轴位AXIS"]).toFixed(0) : "",
-      "镜片码": f["镜片码"] || "",
-      "是否装配": f["是否装配"] || "",
-      "联系人": info.contact || "",
-      "联系电话": info.phone || "",
-      "收货地址": info.address || "",
-      "备注": info.remark || "",
-    };
-  });
+// ─── 工厂导出（Excel + ZIP）已移至 lib/factory-export.js ─────────────────────
 
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = [
-    { wch: 20 }, { wch: 10 }, { wch: 20 }, { wch: 6 },
-    { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
-    { wch: 16 }, { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
-  ];
-  XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`.slice(0, 31));
-  return Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
-}
-
-// ─── 随货同行单 HTML 模板 ──────────────────────────────────────────────────────
-
-function slipHTML(order) {
-  const { orderNo, orderNos: orderNosIn, customerName, agentName, agentId, shipDate, promiseDate,
-          courierName, trackingNo, address, rows } = order;
-  const orderNos = orderNosIn?.length ? orderNosIn : [orderNo];
-  const orderNosStr = orderNos.join(", ");
-  const base = getServerBaseUrl();
-
-  const eyeRow = (r) => {
-    const lc = r.lensCode || "—";
-    const qr = `https://api.qrserver.com/v1/create-qr-code/?size=64x64&ecc=M&data=${encodeURIComponent(base + "/verify/" + lc)}`;
-    return `
-    <tr>
-      <td class="eye ${r.eye === "左眼" ? "eye-l" : "eye-r"}">${r.eye === "左眼" ? "L<br><span>左眼</span>" : "R<br><span>右眼</span>"}</td>
-      <td class="sku">${r.sku || "—"}</td>
-      <td class="rx">${fmt(r.sph)}</td>
-      <td class="rx">${fmt(r.cyl)}</td>
-      <td class="rx">${r.axis || "—"}</td>
-      <td class="lc"><span class="lc-code">${lc}</span></td>
-      <td class="qr-cell"><img src="${qr}" alt="QR" width="52" height="52"></td>
-    </tr>`;
-  };
-
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<title>随货同行单 ${orderNosStr}</title>
-<style>
-  @page { size: A4; margin: 12mm 14mm; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; font-size: 10pt; color: #1a1a2e; background: #fff; }
-  .header { display: flex; align-items: flex-end; justify-content: space-between;
-            border-bottom: 1.5pt solid #c0392b; padding-bottom: 4mm; margin-bottom: 5mm; }
-  .brand { display: flex; flex-direction: column; gap: 1mm; }
-  .brand-name { font-size: 18pt; font-weight: 900; letter-spacing: 3px; color: #c0392b; }
-  .brand-sub  { font-size: 7.5pt; color: #888; letter-spacing: 1.5px; }
-  .doc-title  { text-align: right; }
-  .doc-title h1 { font-size: 16pt; font-weight: 800; letter-spacing: 4px; color: #1a1a2e; }
-  .doc-title p  { font-size: 7pt; color: #aaa; margin-top: 1mm; letter-spacing: 1px; }
-  .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3mm;
-          background: #fdf5f5; border: 0.5pt solid #f0d0d0; border-radius: 2mm;
-          padding: 4mm 5mm; margin-bottom: 5mm; }
-  .meta-item { display: flex; flex-direction: column; gap: 0.8mm; }
-  .meta-label { font-size: 6pt; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
-  .meta-value { font-size: 10pt; font-weight: 700; color: #1a1a2e; }
-  .meta-value.mono { font-family: "Courier New", monospace; font-size: 9pt; }
-  .meta-value.red  { color: #c0392b; }
-  .rx-title { font-size: 8pt; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
-              color: #c0392b; margin-bottom: 2.5mm; padding-left: 2mm;
-              border-left: 2pt solid #c0392b; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 6mm; }
-  thead th { background: #1a1a2e; color: white; font-size: 7pt; font-weight: 600;
-             letter-spacing: 0.5px; padding: 2.5mm 3mm; text-align: center; }
-  thead th:first-child { text-align: left; padding-left: 4mm; }
-  tbody tr { border-bottom: 0.4pt solid #eee; }
-  tbody tr:nth-child(even) { background: #fafafa; }
-  td.eye { width: 14mm; font-size: 16pt; font-weight: 900; text-align: center;
-           padding: 3mm 0; line-height: 1; }
-  td.eye span { font-size: 6pt; font-weight: 400; display: block; margin-top: 0.5mm; }
-  td.eye-r { color: #c0392b; }
-  td.eye-l { color: #2980b9; }
-  td.sku  { padding: 3mm; font-size: 8pt; font-weight: 600; }
-  td.rx   { padding: 3mm; text-align: center; font-family: "Courier New",monospace;
-            font-size: 11pt; font-weight: 700; color: #c0392b; }
-  td.lc   { padding: 3mm; }
-  .lc-code { font-family: "Courier New",monospace; font-size: 7.5pt; font-weight: 700;
-             background: #1a1a2e; color: #fff; padding: 1mm 2mm; border-radius: 1mm; letter-spacing: 1px; }
-  td.qr-cell { padding: 2mm; text-align: center; width: 18mm; }
-  .logistics { display: flex; gap: 5mm; margin-bottom: 6mm; }
-  .logistics-box { flex: 1; border: 0.5pt solid #ddd; border-radius: 2mm; padding: 4mm; }
-  .logistics-box h3 { font-size: 7pt; font-weight: 700; letter-spacing: 1.5px;
-                       text-transform: uppercase; color: #888; margin-bottom: 3mm; }
-  .tracking-no { font-family: "Courier New",monospace; font-size: 14pt; font-weight: 900;
-                 color: #1a1a2e; letter-spacing: 2px; }
-  .courier-name { font-size: 9pt; color: #555; margin-top: 1mm; }
-  .sign-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5mm; margin-bottom: 6mm; }
-  .sign-box { border: 0.5pt solid #ddd; border-radius: 2mm; padding: 4mm; min-height: 22mm; }
-  .sign-box h3 { font-size: 7pt; color: #aaa; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2mm; }
-  .sign-box .sign-line { border-bottom: 0.5pt solid #ccc; margin: 10mm 2mm 2mm; }
-  .sign-box .sign-hint { font-size: 6pt; color: #ccc; text-align: center; }
-  .footer { border-top: 0.5pt solid #eee; padding-top: 3mm; display: flex;
-            justify-content: space-between; align-items: center; }
-  .footer-left { font-size: 6.5pt; color: #bbb; }
-  .footer-right { font-size: 6pt; color: #ccc; font-family: "Courier New",monospace; }
-  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none; } }
-  .print-btn { position: fixed; bottom: 20px; right: 20px; padding: 13px 28px;
-               background: #c0392b; color: white; border: none; border-radius: 8px;
-               font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
-</style>
-</head>
-<body>
-<button class="print-btn no-print" onclick="window.print()">打印 / 导出 PDF</button>
-<div class="header">
-  <div class="brand">
-    <div class="brand-name">GAUSH | CLEAR</div>
-    <div class="brand-sub">高视星 · 镜片溯源系统</div>
-  </div>
-  <div class="doc-title">
-    <h1>随货同行单</h1>
-    <p>PACKING SLIP / DELIVERY NOTE</p>
-  </div>
-</div>
-<div class="meta">
-  <div class="meta-item">
-    <div class="meta-label">订单号 Order No.</div>
-    <div class="meta-value mono red">${orderNosStr}</div>
-  </div>
-  <div class="meta-item">
-    <div class="meta-label">顾客 Customer</div>
-    <div class="meta-value">${customerName}</div>
-  </div>${address ? `
-  <div class="meta-item">
-    <div class="meta-label">收货地址 Address</div>
-    <div class="meta-value" style="font-size:8pt">${address}</div>
-  </div>` : ""}
-  <div class="meta-item">
-    <div class="meta-label">代理商 Agent</div>
-    <div class="meta-value">${agentName} <span style="font-size:7pt;color:#aaa">${agentId}</span></div>
-  </div>
-  <div class="meta-item">
-    <div class="meta-label">发货日期 Ship Date</div>
-    <div class="meta-value">${shipDate}</div>
-  </div>
-  <div class="meta-item">
-    <div class="meta-label">承诺交期 Promise Date</div>
-    <div class="meta-value">${promiseDate || "—"}</div>
-  </div>
-  <div class="meta-item">
-    <div class="meta-label">镜片数量 Qty</div>
-    <div class="meta-value red">${rows.length} 片</div>
-  </div>
-</div>
-<div class="rx-title">处方参数 Prescription</div>
-<table>
-  <thead><tr><th>眼别</th><th>SKU / 型号</th><th>SPH 球镜</th><th>CYL 柱镜</th><th>AXIS 轴位</th><th>镜片码 Lens Code</th><th>溯源</th></tr></thead>
-  <tbody>${rows.map(eyeRow).join("\n")}</tbody>
-</table>
-<div class="logistics">
-  <div class="logistics-box">
-    <h3>物流信息 Shipping</h3>
-    <div class="tracking-no">${trackingNo || "—"}</div>
-    <div class="courier-name">${courierName || "—"}</div>
-  </div>
-  <div class="logistics-box" style="flex:2">
-    <h3>温馨提示 Notes</h3>
-    <p style="font-size:8pt;color:#555;line-height:1.8">
-      1. 请在签收前检查包装完好性，如有破损请拒收并联系代理商。<br>
-      2. 扫描各镜片上的二维码可查询溯源信息及真伪验证。<br>
-      3. 如有疑问请联系：<strong>${agentName}</strong>
-    </p>
-  </div>
-</div>
-<div class="sign-section">
-  <div class="sign-box">
-    <h3>发货方签章 Shipper</h3>
-    <div class="sign-line"></div>
-    <div class="sign-hint">高视星 / GAUSH CLEAR</div>
-  </div>
-  <div class="sign-box">
-    <h3>代理商签章 Agent</h3>
-    <div class="sign-line"></div>
-    <div class="sign-hint">${agentName}</div>
-  </div>
-  <div class="sign-box">
-    <h3>顾客签收 Customer Sign</h3>
-    <div class="sign-line"></div>
-    <div class="sign-hint">签收日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;月&nbsp;&nbsp;日</div>
-  </div>
-</div>
-<div class="footer">
-  <div class="footer-left">高视星镜片溯源系统 GAUSH CLEAR Supply Chain v1.0 &nbsp;|&nbsp; 本单据随货附带，请妥善保存</div>
-  <div class="footer-right">打印时间 ${new Date().toLocaleString("zh-CN")} &nbsp;|&nbsp; ${orderNosStr}</div>
-</div>
-</body></html>`;
-}
-
-// 生成可打印 HTML 标签（QR 内嵌为 base64 data URL）
-async function buildLabelHtml(record, orderNo) {
-  const f = record.fields;
-  const lensCode = f["镜片码"];
-  if (!lensCode) return null;
-
-  const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
-  const eye = f["眼别"] || "";
-  const isRight = eye.includes("右");
-  const eyeColor = isRight ? "#c0392b" : "#1a6fb5";
-  const eyeLabel = isRight ? "R  右眼" : "L  左眼";
-  const eyeBg = isRight ? "#fff5f5" : "#f0f7ff";
-  const sku = f["产品型号"] || "";
-  const sph = f["球镜SPH"] ?? "";
-  const cyl = f["柱镜CYL"] ?? "";
-  const axis = f["轴位AXIS"] ?? "";
-  const agentName = f["代理商名称"] || "";
-  const agentId = f["代理商ID"] || "";
-
-  const qrDataUrl = await QRCode.toDataURL(
-    `${getServerBaseUrl()}/verify/${lensCode}`,
-    { errorCorrectionLevel: "H", width: 180, margin: 1 }
-  );
-
-  const html = `<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8">
-<title>${orderNo} ${customer} ${eye}</title>
-<style>
-@page{size:75mm 40mm;margin:0}
-*{margin:0;padding:0;box-sizing:border-box}
-body{width:75mm;min-height:40mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:6pt;background:#fff}
-.label{width:75mm;min-height:40mm;display:flex;flex-direction:column;border:.3mm solid #ddd}
-.header{display:flex;align-items:center;justify-content:space-between;background:${eyeColor};color:#fff;padding:.8mm 2mm;height:6.5mm;flex-shrink:0}
-.eye-badge{font-size:9pt;font-weight:900;letter-spacing:1px}
-.brand{font-size:6.5pt;font-weight:700;letter-spacing:1.5px;opacity:.92}
-.order-no{font-size:5pt;opacity:.85;font-family:monospace}
-.body{display:flex;flex:1;padding:1mm 1.5mm .8mm;gap:1.5mm;background:${eyeBg}}
-.info{flex:1;display:flex;flex-direction:column;gap:.4mm;min-width:0}
-.customer-row{display:flex;align-items:baseline;gap:1.5mm;border-bottom:.2mm solid ${eyeColor}44;padding-bottom:.8mm;margin-bottom:.4mm}
-.customer-name{font-size:8pt;font-weight:800;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:24mm}
-.sku-name{font-size:5.5pt;color:${eyeColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rx-grid{display:grid;grid-template-columns:auto auto auto;column-gap:2mm;row-gap:.2mm;margin:.3mm 0}
-.rx-label{font-size:4.5pt;color:#888;text-transform:uppercase;letter-spacing:.3px}
-.rx-value{font-size:7.5pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas",monospace;line-height:1.1}
-.rx-value.hl{color:${eyeColor}}
-.meta-row{display:flex;gap:1.5mm;margin-top:.3mm;flex-wrap:wrap}
-.meta-item{display:flex;align-items:center;gap:.6mm}
-.meta-label{font-size:4.5pt;color:#aaa}
-.meta-value{font-size:5.5pt;color:#444;font-weight:600}
-.qr-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.8mm;flex-shrink:0}
-.qr-col img{width:15mm;height:15mm;display:block;border:.3mm solid #ddd;border-radius:1mm}
-.qr-label{font-size:3.5pt;color:#bbb;text-align:center}
-.footer{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-top:.2mm solid #e9ecef;padding:.6mm 2mm;height:5.5mm;flex-shrink:0}
-.lens-code{font-family:"Courier New",monospace;font-size:5.5pt;font-weight:700;color:#495057;letter-spacing:1px}
-.footer-meta{display:flex;flex-direction:column;align-items:flex-end}
-.agent-tag{font-size:4pt;color:#ccc;margin-top:.2mm}
-@media print{body{padding:0}}
-</style></head><body>
-<div class="label">
-<div class="header"><div class="eye-badge">${eyeLabel}</div><div style="text-align:right"><div class="brand">GAUSH | CLEAR</div><div class="order-no">${orderNo}</div></div></div>
-<div class="body"><div class="info">
-<div class="customer-row"><div class="customer-name">${f["顾客姓名"]||""}</div><div class="sku-name">${sku}</div></div>
-<div class="rx-grid">
-<div class="rx-label">SPH</div><div class="rx-label">CYL</div><div class="rx-label">AXIS</div>
-<div class="rx-value hl">${fmt(sph)}</div><div class="rx-value hl">${fmt(cyl)}</div><div class="rx-value">${fmtAxis(axis)}</div>
-</div>
-<div class="meta-row"><div class="meta-item"><span class="meta-label">渠道</span><span class="meta-value">${agentId}</span></div></div>
-</div><div class="qr-col"><img src="${qrDataUrl}" alt="QR"><div class="qr-label">扫码验真</div></div></div>
-<div class="footer"><div class="lens-code">${lensCode}</div><div class="footer-meta"><div class="agent-tag">${agentName}</div></div></div>
-</div></body></html>`;
-
-  return { name: `labels/${orderNo}_${customer}_${eye}.html`, data: Buffer.from(html, "utf-8") };
-}
-
-// 从字段直接生成标签 HTML（兼容镜片明细表）
-async function buildLabelHtmlFromFields(f, orderNo) {
-  const lensCode = f["镜片码"];
-  if (!lensCode) return null;
-
-  const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
-  const eye = f["眼别"] || "";
-  const isRight = eye.includes("右");
-  const eyeColor = isRight ? "#c0392b" : "#1a6fb5";
-  const eyeLabel = isRight ? "R  右眼" : "L  左眼";
-  const eyeBg = isRight ? "#fff5f5" : "#f0f7ff";
-  const sku = f["产品型号"] || "";
-  const sph = f["球镜SPH"] ?? "";
-  const cyl = f["柱镜CYL"] ?? "";
-  const axis = f["轴位AXIS"] ?? "";
-  const agentName = f["代理商名称"] || "";
-  const agentId = f["代理商ID"] || "";
-
-  const qrDataUrl = await QRCode.toDataURL(
-    `${getServerBaseUrl()}/verify/${lensCode}`,
-    { errorCorrectionLevel: "H", width: 180, margin: 1 }
-  );
-
-  const html = `<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8">
-<title>${orderNo} ${customer} ${eye}</title>
-<style>
-@page{size:75mm 40mm;margin:0}
-*{margin:0;padding:0;box-sizing:border-box}
-body{width:75mm;min-height:40mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:6pt;background:#fff}
-.label{width:75mm;min-height:40mm;display:flex;flex-direction:column;border:.3mm solid #ddd}
-.header{display:flex;align-items:center;justify-content:space-between;background:${eyeColor};color:#fff;padding:.8mm 2mm;height:6.5mm;flex-shrink:0}
-.eye-badge{font-size:9pt;font-weight:900;letter-spacing:1px}
-.brand{font-size:6.5pt;font-weight:700;letter-spacing:1.5px;opacity:.92}
-.order-no{font-size:5pt;opacity:.85;font-family:monospace}
-.body{display:flex;flex:1;padding:1mm 1.5mm .8mm;gap:1.5mm;background:${eyeBg}}
-.info{flex:1;display:flex;flex-direction:column;gap:.4mm;min-width:0}
-.customer-row{display:flex;align-items:baseline;gap:1.5mm;border-bottom:.2mm solid ${eyeColor}44;padding-bottom:.8mm;margin-bottom:.4mm}
-.customer-name{font-size:8pt;font-weight:800;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:24mm}
-.sku-name{font-size:5.5pt;color:${eyeColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rx-grid{display:grid;grid-template-columns:auto auto auto;column-gap:2mm;row-gap:.2mm;margin:.3mm 0}
-.rx-label{font-size:4.5pt;color:#888;text-transform:uppercase;letter-spacing:.3px}
-.rx-value{font-size:7.5pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas",monospace;line-height:1.1}
-.rx-value.hl{color:${eyeColor}}
-.meta-row{display:flex;gap:1.5mm;margin-top:.3mm;flex-wrap:wrap}
-.meta-item{display:flex;align-items:center;gap:.6mm}
-.meta-label{font-size:4.5pt;color:#aaa}
-.meta-value{font-size:5.5pt;color:#444;font-weight:600}
-.qr-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.8mm;flex-shrink:0}
-.qr-col img{width:15mm;height:15mm;display:block;border:.3mm solid #ddd;border-radius:1mm}
-.qr-label{font-size:3.5pt;color:#bbb;text-align:center}
-.footer{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-top:.2mm solid #e9ecef;padding:.6mm 2mm;height:5.5mm;flex-shrink:0}
-.lens-code{font-family:"Courier New",monospace;font-size:5.5pt;font-weight:700;color:#495057;letter-spacing:1px}
-.footer-meta{display:flex;flex-direction:column;align-items:flex-end}
-.agent-tag{font-size:4pt;color:#ccc;margin-top:.2mm}
-@media print{body{padding:0}}
-</style></head><body>
-<div class="label">
-<div class="header"><div class="eye-badge">${eyeLabel}</div><div style="text-align:right"><div class="brand">GAUSH | CLEAR</div><div class="order-no">${orderNo}</div></div></div>
-<div class="body"><div class="info">
-<div class="customer-row"><div class="customer-name">${f["顾客姓名"]||""}</div><div class="sku-name">${sku}</div></div>
-<div class="rx-grid">
-<div class="rx-label">SPH</div><div class="rx-label">CYL</div><div class="rx-label">AXIS</div>
-<div class="rx-value hl">${fmt(sph)}</div><div class="rx-value hl">${fmt(cyl)}</div><div class="rx-value">${fmtAxis(axis)}</div>
-</div>
-<div class="meta-row"><div class="meta-item"><span class="meta-label">渠道</span><span class="meta-value">${agentId}</span></div></div>
-</div><div class="qr-col"><img src="${qrDataUrl}" alt="QR"><div class="qr-label">扫码验真</div></div></div>
-<div class="footer"><div class="lens-code">${lensCode}</div><div class="footer-meta"><div class="agent-tag">${agentName}</div></div></div>
-</div></body></html>`;
-
-  return { orderNo, customer, eye, lensCode, html };
-}
-
-// 构建工厂导出 ZIP
-// orderInfo: { remark, address, contact, phone } 来自订单主表
+// 构建工厂导出 ZIP（buildFactoryExcel + buildZipBuffer 已移至 lib/factory-export.js）
 async function buildFactoryZip(records, orderNo, orderInfo = {}) {
   const files = [];
-
-  // Excel 文件
   try {
     files.push({ name: `订单_${orderNo}.xlsx`, data: buildFactoryExcel(records, orderNo, orderInfo) });
   } catch (e) { console.error("⚠️ Excel 生成失败:", e.message); }
-
-  // QR + 标签
-  for (const rec of records) {
+  const labelEntries = await Promise.all(records.map(async (rec) => {
     const f = rec.fields;
     const lensCode = f["镜片码"];
-    if (!lensCode) continue;
-
-    const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
-    const eye = f["眼别"] || "unknown";
-
+    if (!lensCode) return [];
     const qrPath = resolve(QR_DIR, `${lensCode}.png`);
-    if (existsSync(qrPath)) {
-      files.push({ name: `qrcodes/${lensCode}.png`, data: readFileSync(qrPath) });
-    }
-
+    const qrFile = existsSync(qrPath)
+      ? [{ name: `qrcodes/${lensCode}.png`, data: readFileSync(qrPath) }]
+      : [];
     const labelEntry = await buildLabelHtml(rec, orderNo);
-    if (labelEntry) files.push(labelEntry);
-  }
-
-  // 说明文件
+    return labelEntry ? [...qrFile, labelEntry] : qrFile;
+  }));
+  files.push(...labelEntries.flat());
   const labelCount = files.filter(f => f.name.startsWith("labels/")).length;
   const qrCount = files.filter(f => f.name.startsWith("qrcodes/")).length;
   const readme = `工厂打印包 — 订单 ${orderNo}
@@ -1267,99 +864,7 @@ ${"=".repeat(34)}
   - Excel 包含完整处方参数，可直接用于生产排产
 `;
   files.push({ name: "说明.txt", data: Buffer.from(readme, "utf-8") });
-
   return buildZipBuffer(files);
-}
-
-// 最小 ZIP 实现（Store 模式，不压缩）
-function buildZipBuffer(fileEntries) {
-  const localHeaders = [];
-  const centralHeaders = [];
-  let offset = 0;
-
-  const parts = [];
-
-  for (const entry of fileEntries) {
-    const nameBuf = Buffer.from(entry.name, "utf-8");
-    const data = entry.data;
-    const crc = crc32(data);
-
-    // Local file header
-    const local = Buffer.alloc(30 + nameBuf.length);
-    local.writeUInt32LE(0x04034b50, 0);  // signature
-    local.writeUInt16LE(20, 4);           // version needed
-    local.writeUInt16LE(0, 6);            // flags
-    local.writeUInt16LE(0, 8);            // compression (store)
-    local.writeUInt16LE(0, 10);           // mod time
-    local.writeUInt16LE(0, 12);           // mod date
-    local.writeUInt32LE(crc, 14);         // crc32
-    local.writeUInt32LE(data.length, 18); // compressed size
-    local.writeUInt32LE(data.length, 22); // uncompressed size
-    local.writeUInt16LE(nameBuf.length, 26);
-    local.writeUInt16LE(0, 28);           // extra field length
-    nameBuf.copy(local, 30);
-
-    parts.push(local, data);
-
-    // Central directory header
-    const central = Buffer.alloc(46 + nameBuf.length);
-    central.writeUInt32LE(0x02014b50, 0); // signature
-    central.writeUInt16LE(20, 4);          // version made by
-    central.writeUInt16LE(20, 6);          // version needed
-    central.writeUInt16LE(0, 8);           // flags
-    central.writeUInt16LE(0, 10);          // compression
-    central.writeUInt16LE(0, 12);          // mod time
-    central.writeUInt16LE(0, 14);          // mod date
-    central.writeUInt32LE(crc, 16);        // crc32
-    central.writeUInt32LE(data.length, 20);// compressed size
-    central.writeUInt32LE(data.length, 24);// uncompressed size
-    central.writeUInt16LE(nameBuf.length, 28);
-    central.writeUInt16LE(0, 30);          // extra field length
-    central.writeUInt16LE(0, 32);          // file comment length
-    central.writeUInt16LE(0, 34);          // disk number start
-    central.writeUInt16LE(0, 36);          // internal attributes
-    central.writeUInt32LE(0, 38);          // external attributes
-    central.writeUInt32LE(offset, 42);     // relative offset of local header
-    nameBuf.copy(central, 46);
-
-    centralHeaders.push(central);
-    offset += local.length + data.length;
-  }
-
-  const centralDirOffset = offset;
-  const centralDirBuf = Buffer.concat(centralHeaders);
-
-  // End of central directory
-  const eocd = Buffer.alloc(22);
-  eocd.writeUInt32LE(0x06054b50, 0);
-  eocd.writeUInt16LE(0, 4);               // disk number
-  eocd.writeUInt16LE(0, 6);               // disk with central dir
-  eocd.writeUInt16LE(fileEntries.length, 8);
-  eocd.writeUInt16LE(fileEntries.length, 10);
-  eocd.writeUInt32LE(centralDirBuf.length, 12);
-  eocd.writeUInt32LE(centralDirOffset, 16);
-  eocd.writeUInt16LE(0, 20);              // comment length
-
-  return Buffer.concat([...parts, centralDirBuf, eocd]);
-}
-
-// CRC32 查找表
-const _crc32Table = (() => {
-  const table = new Uint32Array(256);
-  for (let i = 0; i < 256; i++) {
-    let c = i;
-    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    table[i] = c;
-  }
-  return table;
-})();
-
-function crc32(buf) {
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < buf.length; i++) {
-    crc = _crc32Table[(crc ^ buf[i]) & 0xFF] ^ (crc >>> 8);
-  }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
 // 确保镜片码字段存在
@@ -1649,12 +1154,8 @@ const server = createServer(async (req, res) => {
       const now = Date.now();
       const orderRecords = [];    // 订单主表记录
       const lensRecords = [];     // 镜片明细表记录
-      const deductionPlan = [];   // 库存扣减计划（预检+实际扣减共用）
       const items = [];
       let totalLenses = 0;
-
-      // 预拉库存缓存（避免每个 eye 重复调 API）
-      await Promise.all([getAgentStockMap(agent.id), getStockMap()]);
 
       for (const p of patients) {
         const { customerName, sku, quantity, eyes, assembly, remark, pairIndex } = p;
@@ -1665,14 +1166,6 @@ const server = createServer(async (req, res) => {
           return order(a.side) - order(b.side);
         });
 
-        // 交期取双眼中最慢的（优先查代理商本地库存）
-        let est = { deliveryType: "定制7-10天", days: 10, promiseDate: now + 10 * 86400000 };
-        for (const eye of sortedEyes) {
-          if (eye.sph != null && eye.cyl != null) {
-            const eyeEst = await estimateDeliveryByRx(sku, eye.sph, eye.cyl, quantity, agent.id);
-            if (eyeEst.days > est.days) est = eyeEst;
-          }
-        }
         const lensCount = eyes.length;
 
         // 写入订单主表（每笔患者 = 1 行）
@@ -1682,7 +1175,6 @@ const server = createServer(async (req, res) => {
             "产品型号": sku,
             "数量": quantity * lensCount,
             "订单状态": "待处理",
-            "预计交期": est.promiseDate,
             "下单日期": now,
             "顾客姓名": customerName.trim(),
             "序号": pairIndex || 1,
@@ -1718,10 +1210,6 @@ const server = createServer(async (req, res) => {
             },
           });
           totalLenses++;
-          // 收集扣减计划（不在此时扣减）
-          if (eye.sph != null && eye.cyl != null) {
-            deductionPlan.push({ sku, sph: eye.sph, cyl: eye.cyl, qty: quantity });
-          }
         }
 
         items.push({
@@ -1730,9 +1218,6 @@ const server = createServer(async (req, res) => {
           quantity,
           lensCount: quantity * lensCount,
           customerName: customerName.trim(),
-          deliveryType: est.deliveryType,
-          promiseDate: est.promiseDate,
-          promiseDateFormatted: formatDate(est.promiseDate),
         });
       }
 
@@ -1741,12 +1226,16 @@ const server = createServer(async (req, res) => {
         return logReq(req, 400, start);
       }
 
-      // ── 写入订单主表（库存不足时照常下单，交期自动变长） ──
-      const okOrder = await batchCreateRecords(TABLES.order, orderRecords);
+      // ── 并行写入订单主表 + 镜片明细表 ──
+      const [okOrder, okLens] = await Promise.all([
+        batchCreateRecords(TABLES.order, orderRecords),
+        lensRecords.length > 0 ? batchCreateRecords(TABLES.lens_detail, lensRecords) : Promise.resolve(true),
+      ]);
       if (!okOrder) {
         jsonRes(res, 500, { error: "写入飞书失败（订单主表），请重试" });
         return logReq(req, 500, start);
       }
+      if (!okLens) console.error(`  ⚠️ 镜片明细写入失败，订单 ${orderNo} 主表已写入`);
 
       // Bitable 写入成功后立即注册幂等键 — 防止后续步骤失败导致重试重复写入
       const responseData = {
@@ -1757,32 +1246,7 @@ const server = createServer(async (req, res) => {
       };
       setIdempotent(clientRequestId, responseData);
 
-      // ── 写入镜片明细表 ──
-      if (lensRecords.length > 0) {
-        const okLens = await batchCreateRecords(TABLES.lens_detail, lensRecords);
-        if (!okLens) {
-          console.error(`  ⚠️ 镜片明细写入失败，订单 ${orderNo} 主表已写入`);
-        }
-      }
-
-      // ── 库存扣减（订单已写入，锁内再检+扣减） ──
-      const deductErrors = [];
-      for (const d of deductionPlan) {
-        const result = await deductStockDetail(d.sku, d.sph, d.cyl, d.qty);
-        if (!result.success) {
-          deductErrors.push({ ...d, reason: result.reason });
-        }
-      }
-      // 代理商库存扣减（先自有后寄售），写寄售流水
-      for (const d of deductionPlan) {
-        const deductResult = await deductAgentStock(agent.id, d.sku, d.sph, d.cyl, d.qty);
-        if (deductResult.ledgerRecords?.length > 0) {
-          await batchCreateRecords(TABLES.consignment_ledger, deductResult.ledgerRecords);
-        }
-      }
-      if (deductErrors.length > 0) {
-        console.error(`  ⚠️ 订单 ${orderNo} 部分库存扣减失败:`, deductErrors);
-      }
+      // (镜片明细已并行写入)
 
       // 镜片码+QR 异步生成（不阻塞下单返回），带重试
       (async () => {
@@ -1810,7 +1274,7 @@ const server = createServer(async (req, res) => {
       })();
 
       // 通知
-      const summary = items.map(i => `${i.skuName}×${i.quantity}(${i.deliveryType})`).join("、");
+      const summary = items.map(i => `${i.skuName}×${i.quantity}`).join("、");
       sendNotify(agent.name, summary, orderNo);
 
       // 清除客户名缓存
@@ -1985,6 +1449,7 @@ const server = createServer(async (req, res) => {
           customerName: f["顾客姓名"] || "",
           date: f["下单日期"] || f["同步时间"] || null,
           promiseDate: f["预计交期"] || null,
+          deliveryType: f["交期类型"] || "",
           address: f["收货地址"] || "",
           remark: f["备注"] || "",
         };
@@ -2089,6 +1554,8 @@ const server = createServer(async (req, res) => {
         courier: firstItem.fields["物流公司"] || "",
         trackingNo: firstItem.fields["快递单号"] || "",
         shipTime: firstItem.fields["发货时间"] || null,
+        promiseDate: firstItem.fields["预计交期"] || null,
+        deliveryType: firstItem.fields["交期类型"] || "",
         items: displayItems,
         lenses,
       });
@@ -2597,6 +2064,7 @@ const server = createServer(async (req, res) => {
           const lensCodes = await assignLensCodes(orderNo, customerName, pairIndex);
 
           // 更新状态为生产中 + 回写镜片码（合并已有码，不覆盖其他客户的码）
+          // 交期不在此处计算，由每日批处理统一填充
           for (const rec of records) {
             const existingCodes = String(rec.fields["镜片码"] || "").split(",").filter(Boolean);
             const mergedCodes = [...new Set([...existingCodes, ...lensCodes])];

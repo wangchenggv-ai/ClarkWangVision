@@ -217,54 +217,6 @@ let patientCount = 0;
 let draftTimer = null;
 const DRAFT_KEY = `orderDraft_${token}`;
 
-// ─── 交期预估（每眼独立，度数级） ──────────────────────────────────────────
-const LOW_STOCK_THRESHOLD = 5;
-const _estimateTimers = {};
-function onSkuChange(id) { onRxChange(id); }
-function onRxChange(id) {
-  clearTimeout(_estimateTimers[id]);
-  _estimateTimers[id] = setTimeout(() => {
-    fetchEstimateForEye(id, "right");
-    fetchEstimateForEye(id, "left");
-  }, 300);
-}
-
-async function fetchEstimateForEye(id, side) {
-  const el = document.getElementById(`delivery-${id}-${side}`);
-  if (!el) return;
-  const sku = document.getElementById(`sku-${id}`)?.value;
-  const qty = Number(document.getElementById(`qty-${id}`)?.value) || 1;
-  const checked = document.getElementById(`eye-check-${id}-${side}`)?.checked;
-  const sph = document.getElementById(`sph-${id}-${side}`)?.value;
-  const cyl = document.getElementById(`cyl-${id}-${side}`)?.value || "0";
-
-  if (!sku || !checked || sph === "" || sph == null) { el.style.display = "none"; return; }
-
-  try {
-    const res = await fetch(`/api/delivery-estimate?t=${token}&sku=${encodeURIComponent(sku)}&qty=${qty}&sph=${encodeURIComponent(sph)}&cyl=${encodeURIComponent(cyl)}`);
-    if (!res.ok) { el.style.display = "none"; return; }
-    const data = await res.json();
-    if (!data.deliveryType) { el.style.display = "none"; return; }
-
-    el.className = `delivery-estimate-inline ${data.available ? 'instock' : 'custom'}`;
-    let text = `${data.deliveryType} · 预计 ${data.promiseDateFormatted || ''} 交付`;
-    if (data.available && Number(data.stock) > 0 && Number(data.stock) <= LOW_STOCK_THRESHOLD) {
-      text = `仅剩 ${data.stock} 片 · ${text}`;
-    }
-    // 代理商库存分拆提示
-    if (data.agentStock) {
-      const parts = [];
-      if (data.agentStock.owned > 0) parts.push(`自有 ${data.agentStock.owned}`);
-      if (data.agentStock.consigned > 0) parts.push(`寄售 ${data.agentStock.consigned}`);
-      if (parts.length > 0) {
-        text += `（${parts.join(" + ")}）`;
-      }
-    }
-    el.textContent = text;
-    el.style.display = "inline-flex";
-  } catch { el.style.display = "none"; }
-}
-
 // ─── 处方校验 ──────────────────────────────────────────────────────────────
 function validatePrescription(patients) {
   let warnings = [];
@@ -365,8 +317,6 @@ function restoreDraft() {
       toggleAssemblyStyle(id);
       if (p.remark) { const rEl = document.getElementById(`remark-${id}`); if (rEl) rEl.value = p.remark; }
 
-      // 恢复后触发交期预估
-      onSkuChange(id);
     }
     updateSummary();
     showToast("已恢复草稿", "success");
@@ -509,12 +459,12 @@ function addPatient() {
     </div>
     <div class="field">
       <label>产品型号 <span class="req">*</span></label>
-      <select id="sku-${id}" onchange="onRxChange(${id})">${skuOptions}</select>
+      <select id="sku-${id}">${skuOptions}</select>
       <div class="error-tip">请选择产品型号</div>
     </div>
     <div class="field">
       <label>数量（副）<span class="req">*</span></label>
-      <input type="number" id="qty-${id}" min="1" max="100" value="1" inputmode="numeric" oninput="onRxChange(${id})">
+      <input type="number" id="qty-${id}" min="1" max="100" value="1" inputmode="numeric">
       <div class="error-tip">数量需在 1-100 之间</div>
     </div>
     <div class="eye-block eye-right">
@@ -524,14 +474,13 @@ function addPatient() {
       </div>
       <div class="eye-fields" id="eye-fields-${id}-right">
         <div class="rx-grid">
-          <div class="rx-field"><label>球镜 SPH</label><input type="number" step="0.25" id="sph-${id}-right" placeholder="-2.75" inputmode="decimal" oninput="onRxChange(${id})"></div>
-          <div class="rx-field"><label>柱镜 CYL</label><input type="number" step="0.25" id="cyl-${id}-right" placeholder="-1.00" inputmode="decimal" oninput="onRxChange(${id})"></div>
+          <div class="rx-field"><label>球镜 SPH</label><input type="number" step="0.25" id="sph-${id}-right" placeholder="-2.75" inputmode="decimal"></div>
+          <div class="rx-field"><label>柱镜 CYL</label><input type="number" step="0.25" id="cyl-${id}-right" placeholder="-1.00" inputmode="decimal"></div>
         </div>
         <div class="rx-grid" style="margin-top:8px">
           <div class="rx-field"><label>轴位 AXIS</label><input type="number" min="0" max="180" step="1" id="axis-${id}-right" placeholder="0-180" inputmode="numeric"></div>
           <div class="rx-field"></div>
         </div>
-        <div id="delivery-${id}-right" class="delivery-estimate-inline" style="display:none;margin-top:8px"></div>
       </div>
     </div>
 
@@ -542,14 +491,13 @@ function addPatient() {
       </div>
       <div class="eye-fields" id="eye-fields-${id}-left">
         <div class="rx-grid">
-          <div class="rx-field"><label>球镜 SPH</label><input type="number" step="0.25" id="sph-${id}-left" placeholder="-2.75" inputmode="decimal" oninput="onRxChange(${id})"></div>
-          <div class="rx-field"><label>柱镜 CYL</label><input type="number" step="0.25" id="cyl-${id}-left" placeholder="-1.00" inputmode="decimal" oninput="onRxChange(${id})"></div>
+          <div class="rx-field"><label>球镜 SPH</label><input type="number" step="0.25" id="sph-${id}-left" placeholder="-2.75" inputmode="decimal"></div>
+          <div class="rx-field"><label>柱镜 CYL</label><input type="number" step="0.25" id="cyl-${id}-left" placeholder="-1.00" inputmode="decimal"></div>
         </div>
         <div class="rx-grid" style="margin-top:8px">
           <div class="rx-field"><label>轴位 AXIS</label><input type="number" min="0" max="180" step="1" id="axis-${id}-left" placeholder="0-180" inputmode="numeric"></div>
           <div class="rx-field"></div>
         </div>
-        <div id="delivery-${id}-left" class="delivery-estimate-inline" style="display:none;margin-top:8px"></div>
       </div>
     </div>
 
@@ -588,7 +536,6 @@ function removePatient(id) {
 function toggleEye(id, side) {
   const checked = document.getElementById(`eye-check-${id}-${side}`).checked;
   document.getElementById(`eye-fields-${id}-${side}`).classList.toggle("disabled", !checked);
-  fetchEstimateForEye(id, side);
 }
 
 function copyEye(id, from, to) {
