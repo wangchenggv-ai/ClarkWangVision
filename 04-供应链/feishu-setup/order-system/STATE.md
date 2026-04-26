@@ -1224,6 +1224,58 @@ Docker 镜像构建 → SWR 推送 → ECS `docker compose pull && up -d`，容�
 
 **结论：** 本次改动（模板去重、并行化、feishu URL 修复）未引入回归。14 项失败均为已知问题或测试时序问题。
 
+## 2026-04-27 工厂导出修复 + 库存/供应商内联筛选
+
+### Excel 格式修复
+
+| Bug | 修复 |
+|-----|------|
+| `orderInfoMap` 回退到第一个值，多顾客拿到同一联系人 | 删除 `Object.values(orderInfoMap)[0]` 回退 |
+| `Number()` 对空值产生 NaN 写入 Excel | 加 `isFinite()` 检查 |
+
+### batch-zip 无数据提示
+
+- 跳过的订单记录到 `skipped` 数组
+- 404 返回 `"所选 N 个订单均无匹配镜片数据（可能未确认或已过滤）"` + skipped 详情
+
+### 库存/供应商内联筛选
+
+labels.html 表格新增两列（装配和状态之间）：
+- **是否有库存** — 下拉：`-` / `有库存` / `无库存`，选中即保存
+- **供应商** — 下拉：`-` / `九次方` / `圣谱` / `欧陆`，选中即保存
+
+保存逻辑：`inlineFieldUpdate()` → `POST /api/admin/update-field` → 飞书 Bitable
+
+### 供应商厂家字段
+
+- 启动时自动创建 `供应商厂家` 单选字段（九次方/圣谱/欧陆）
+- 合并 `ensureLensCodeField` + `ensureSupplierField` 为通用 `ensureField(name, def)`
+
+### 交期类型常量化
+
+`lib/stock.js` 导出 `DELIVERY_IN_STOCK` / `DELIVERY_PRODUCE` / `DELIVERY_CUSTOM` 常量，替代硬编码字符串。
+
+### 涉及文件
+
+| 文件 | 改动 |
+|------|------|
+| `lib/factory-export.js` | orderInfoMap 回退修复 + NaN 防护 |
+| `lib/helpers.js` | `fmt()` 增加 `isFinite` 检查 |
+| `lib/stock.js` | 导出交期类型常量 |
+| `server.js` | `POST /api/admin/update-field` 端点 + `ensureField` 通用化 + confirm 支持 stockStatus/supplier |
+| `public/labels.html` | 表格新增库存/供应商内联下拉列 |
+
+### 测试
+
+| 场景 | 结果 |
+|------|------|
+| Excel 导出（空值不产生 NaN） | ✅ |
+| batch-zip 无数据返回 skipped | ✅ |
+| 内联下拉选中即保存 | ✅ |
+| 筛选 `stock=yes` | ✅ 3 单 |
+| 筛选 `supplier=圣谱` | ✅ 1 单 |
+| 确认订单 + 写入交期类型/供应商 | ✅ |
+
 ## 2026-04-26 标签打印重构：双模式打印 + 格式重写
 
 ### 背景
@@ -1420,4 +1472,64 @@ Docker 镜像构建 → SWR 推送 → ECS `docker compose pull && up -d`，容�
 | stock-check API（Ultra双效 SPH=-2/-1.75） | ✅ 有库存(70/40)，推荐九次方 |
 | stock-check API（Ultra双效 SPH=-3/-3.5） | ✅ 需生产(0/0)，推荐九次方 |
 | labels.html 语法检查 | ✅ JS OK |
+
+## 2026-04-27 工厂导出修复 + 库存/供应商内联筛选 + 验真修复
+
+### Excel 格式修复（lib/factory-export.js）
+
+| Bug | 修复 |
+|-----|------|
+| `orderInfoMap` 回退到 `Object.values(orderInfoMap)[0]`，多顾客拿到同一联系人 | 删除危险回退，匹配失败返回 `{}` |
+| `Number()` 对空值产生 NaN 写入 Excel | 加 `isFinite()` 检查 |
+
+### batch-zip 无数据提示（server.js）
+
+- 跳过的订单记录到 `skipped` 数组
+- 404 返回 `"所选 N 个订单均无匹配镜片数据（可能未确认或已过滤）"` + skipped 详情
+
+### 库存/供应商内联筛选（labels.html + server.js）
+
+labels.html 表格新增两列（装配和状态之间）：
+- **是否有库存** — 下拉：`-` / `有库存` / `无库存`，选中即保存
+- **供应商** — 下拉：`-` / `九次方` / `圣谱` / `欧陆`，选中即保存
+
+保存逻辑：`inlineFieldUpdate()` → `POST /api/admin/update-field` → 飞书 Bitable
+
+### 供应商厂家字段（server.js）
+
+- 启动时自动创建 `供应商厂家` 单选字段（九次方/圣谱/欧陆）
+- 合并 `ensureLensCodeField` + `ensureSupplierField` 为通用 `ensureField(name, def)`
+
+### 交期类型常量化（lib/stock.js）
+
+`lib/stock.js` 导出 `DELIVERY_IN_STOCK` / `DELIVERY_PRODUCE` / `DELIVERY_CUSTOM` 常量，替代硬编码字符串。
+
+### fmt() isFinite 修复（lib/helpers.js）
+
+`fmt()` 从 `isNaN` 改为 `isFinite`，`Infinity` 值现在返回 `"--"`。
+
+### 验真页修复（server.js）
+
+| 问题 | 修复 |
+|------|------|
+| 验证时间显示 UTC（差8小时） | `toLocaleString("zh-CN")` → 加 `{ timeZone: "Asia/Shanghai" }` |
+| 双眼显示 | 代码已支持（同订单同客户同序号的双眼都会显示） |
+
+### 测试
+
+| 场景 | 结果 |
+|------|------|
+| Excel 导出（空值不产生 NaN） | ✅ |
+| batch-zip 无数据返回 skipped | ✅ |
+| 内联下拉选中即保存 | ✅ |
+| 筛选 `stock=yes` | ✅ 3 单 |
+| 筛选 `supplier=圣谱` | ✅ 1 单 |
+| 确认订单 + 写入交期类型/供应商 | ✅ |
+| 验真页时间（Asia/Shanghai） | ✅ `2026/4/27 00:55:23` |
+| 验真页双眼（83668705B5817649） | ✅ 右眼+左眼 |
+
+### 部署
+
+- SCP server.js + lib/ + labels.html → ECS → docker cp → restart
+- 验证：labels.html 新功能 12 处匹配、suppliers API 返回 `['圣谱', '欧陆']`、验真时间正确
 | 服务器健康检查 | ✅ 41 agents, uptime 7s |
