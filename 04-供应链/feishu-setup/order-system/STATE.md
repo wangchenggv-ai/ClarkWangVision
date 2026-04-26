@@ -1531,5 +1531,4 @@ labels.html 表格新增两列（装配和状态之间）：
 ### 部署
 
 - SCP server.js + lib/ + labels.html → ECS → docker cp → restart
-- 验证：labels.html 新功能 12 处匹配、suppliers API 返回 `['圣谱', '欧陆']`、验真时间正确
-| 服务器健康检查 | ✅ 41 agents, uptime 7s |
+- 验证：labels.html 新功能 7 处匹配、suppliers API 返回、验真时间正确
