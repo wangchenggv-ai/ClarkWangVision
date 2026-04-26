@@ -951,6 +951,10 @@ const server = createServer(async (req, res) => {
       serveStatic(res, resolve(__dirname, "public/labels.html"));
       return logReq(req, 200, start);
     }
+    if (pathname === "/labels-print" || pathname === "/labels-print.html") {
+      serveStatic(res, resolve(__dirname, "public/labels-print.html"));
+      return logReq(req, 200, start);
+    }
     if (pathname === "/control" || pathname === "/control.html") {
       serveStatic(res, resolve(__dirname, "public/control.html"));
       return logReq(req, 200, start);
@@ -1801,7 +1805,7 @@ const server = createServer(async (req, res) => {
         );
         const orderRecord = orderData?.items?.[0];
         if (orderRecord?.created_time) {
-          orderInfo.createTime = new Date(orderRecord.created_time * 1000).toLocaleString("zh-CN");
+          orderInfo.createTime = new Date(orderRecord.created_time * 1000).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
         }
       }
 
@@ -1830,7 +1834,7 @@ const server = createServer(async (req, res) => {
       const codeHtml = eyes.map(e => `<span class="lens-code-item"><span class="lens-code-side">${escapeHtml(e.side)}</span> <span class="mono">${escapeHtml(e.lensCode)}</span></span>`).join("\n");
       html = html.replace("{{LENS_CODES}}", codeHtml);
 
-      html = html.replace("{{NOW}}", escapeHtml(new Date().toLocaleString("zh-CN")));
+      html = html.replace("{{NOW}}", escapeHtml(new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })));
 
       res.writeHead(found ? 200 : 404, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
