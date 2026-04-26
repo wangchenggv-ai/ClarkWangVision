@@ -10,7 +10,7 @@ export function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
     if (!isMap) return orderInfoMap; // 旧格式：单个 info
     const fullKey = `${recOrderNo}|${recCustomer}|${recPairIndex || 1}`;
     const nameKey = `${recOrderNo}|${recCustomer}`;
-    return orderInfoMap[fullKey] || orderInfoMap[nameKey] || orderInfoMap[recOrderNo] || Object.values(orderInfoMap)[0] || {};
+    return orderInfoMap[fullKey] || orderInfoMap[nameKey] || orderInfoMap[recOrderNo] || {};
   };
   const sorted = [...records].sort((a, b) => {
     const nameCmp = String(a.fields["顾客姓名"] || "").localeCompare(String(b.fields["顾客姓名"] || ""), "zh-CN");
@@ -31,9 +31,9 @@ export function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
       "产品型号": f["产品型号"] || "",
       "数量": info.quantity || 1,
       "眼别": f["眼别"] || "",
-      "球镜SPH": f["球镜SPH"] != null ? Number(f["球镜SPH"]).toFixed(2) : "",
-      "柱镜CYL": f["柱镜CYL"] != null ? Number(f["柱镜CYL"]).toFixed(2) : "",
-      "轴位AXIS": f["轴位AXIS"] != null ? Number(f["轴位AXIS"]).toFixed(0) : "",
+      "球镜SPH": f["球镜SPH"] != null && isFinite(Number(f["球镜SPH"])) ? Number(f["球镜SPH"]).toFixed(2) : "",
+      "柱镜CYL": f["柱镜CYL"] != null && isFinite(Number(f["柱镜CYL"])) ? Number(f["柱镜CYL"]).toFixed(2) : "",
+      "轴位AXIS": f["轴位AXIS"] != null && isFinite(Number(f["轴位AXIS"])) ? Number(f["轴位AXIS"]).toFixed(0) : "",
       "镜片码": f["镜片码"] || "",
       "是否装配": f["是否装配"] || "",
       "联系人": info.contact || "",

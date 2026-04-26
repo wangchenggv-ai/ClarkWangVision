@@ -1,6 +1,10 @@
 // lib/stock.js — 度数级库存 + 代理商库存 + 交期判定
 
-let feishuApi, listRecords, withLock, TABLES, APP_TOKEN, STD_SPH_RANGE, STD_CYL_RANGE;
+export const DELIVERY_IN_STOCK = "有货1-2天";
+export const DELIVERY_PRODUCE = "排产5-7天";
+export const DELIVERY_CUSTOM = "定制7-10天";
+
+let feishuApi, listRecords, filterRecords, withLock, TABLES, APP_TOKEN, STD_SPH_RANGE, STD_CYL_RANGE;
 
 function inRange(x, [lo, hi]) { return x >= lo && x <= hi; }
 
@@ -9,9 +13,10 @@ function inRange(x, [lo, hi]) { return x >= lo && x <= hi; }
 const STOCK_TTL = 2 * 60 * 1000;
 let _stockCache = { map: null, time: 0 };
 
-export function init({ feishuApi: api, listRecords: lr, withLock: wl, tables, appToken, stdSphRange, stdCylRange }) {
+export function init({ feishuApi: api, listRecords: lr, filterRecords: fr, withLock: wl, tables, appToken, stdSphRange, stdCylRange }) {
   feishuApi = api;
   listRecords = lr;
+  filterRecords = fr;
   withLock = wl;
   TABLES = tables;
   APP_TOKEN = appToken;
@@ -38,6 +43,33 @@ export async function getStockMap(fresh = false) {
 }
 
 export function clearStockCache() { _stockCache = { map: null, time: 0 }; }
+
+// ─── 单条库存查询（不走全表扫描） ─────────────────────────────────────
+
+export async function queryStockByRx(sku, sph, cyl) {
+  const sphN = Number(sph);
+  const cylN = Number(cyl);
+  if (!Number.isFinite(sphN) || !Number.isFinite(cylN)) return null;
+  const key = `${sku}|${sphN.toFixed(2)}|${cylN.toFixed(2)}`;
+
+  const filter = {
+    conjunction: "and",
+    conditions: [
+      { field_name: "SKU编号", operator: "is", value: [sku] },
+      { field_name: "SPH", operator: "is", value: [String(sphN)] },
+      { field_name: "CYL", operator: "is", value: [String(cylN)] },
+    ],
+  };
+  const items = await filterRecords(TABLES.stock_detail, filter);
+  if (!items.length) return null;
+  const f = items[0].fields || {};
+  return {
+    stock: Number(f["当前库存"]) || 0,
+    safetyStock: Number(f["安全库存"]) || 0,
+    recordId: items[0].record_id,
+    key,
+  };
+}
 
 // ─── 度数级库存扣减（锁内 fresh read + write） ─────────────────────────
 
@@ -121,7 +153,7 @@ export async function estimateDeliveryByRx(sku, sph, cyl, qty, agentId) {
 
   if (!Number.isFinite(sphN) || !Number.isFinite(cylN) ||
       !inRange(sphN, STD_SPH_RANGE) || !inRange(cylN, STD_CYL_RANGE)) {
-    return { deliveryType: "定制7-10天", days: 10, promiseDate: now + 10 * 86400000, available: false, stock: 0 };
+    return { deliveryType: DELIVERY_CUSTOM, days: 10, promiseDate: now + 10 * 86400000, available: false, stock: 0 };
   }
 
   const key = `${sku}|${sphN.toFixed(2)}|${cylN.toFixed(2)}`;
@@ -132,7 +164,7 @@ export async function estimateDeliveryByRx(sku, sph, cyl, qty, agentId) {
       const aStock = agentMap.get(key);
       if (aStock && aStock.total > 0) {
         const result = {
-          deliveryType: aStock.total >= qty ? "有货1-2天" : "排产5-7天",
+          deliveryType: aStock.total >= qty ? DELIVERY_IN_STOCK : DELIVERY_PRODUCE,
           days: aStock.total >= qty ? 2 : 7,
           promiseDate: now + (aStock.total >= qty ? 2 : 7) * 86400000,
           available: aStock.total >= qty,
@@ -148,9 +180,9 @@ export async function estimateDeliveryByRx(sku, sph, cyl, qty, agentId) {
   const stock = (map.get(key) || {}).stock ?? 0;
 
   if (stock >= qty) {
-    return { deliveryType: "有货1-2天", days: 2, promiseDate: now + 2 * 86400000, available: true, stock };
+    return { deliveryType: DELIVERY_IN_STOCK, days: 2, promiseDate: now + 2 * 86400000, available: true, stock };
   }
-  return { deliveryType: "排产5-7天", days: 7, promiseDate: now + 7 * 86400000, available: false, stock };
+  return { deliveryType: DELIVERY_PRODUCE, days: 7, promiseDate: now + 7 * 86400000, available: false, stock };
 }
 
 // ─── 代理商库存扣减（先自有后寄售） ────────────────────────────────────

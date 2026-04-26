@@ -5,7 +5,7 @@ export const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v 
 export const fmt = (v) => {
   if (v === "" || v === null || v === undefined) return "--";
   const n = Number(v);
-  if (isNaN(n)) return String(v);
+  if (!isFinite(n)) return "--";
   return (n >= 0 ? "+" : "") + n.toFixed(2);
 };
 
