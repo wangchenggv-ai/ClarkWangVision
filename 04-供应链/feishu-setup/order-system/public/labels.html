@@ -1181,10 +1181,6 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
     <div class="action-group">
       <button class="btn btn-outline ctx-btn act-confirm-btn" style="color:#1677ff;border-color:#1677ff" onclick="confirmOrders()">确认订单</button>
       <button class="btn btn-outline" style="color:#0958d9;border-color:#91caff" onclick="downloadExcel()">导出Excel给工厂</button>
-      <button class="btn btn-outline ctx-btn act-pack-btn" style="color:#1890ff;border-color:#1890ff" onclick="packOrders()">批量打包</button>
-      <button class="btn btn-outline ctx-btn act-ship-btn" style="color:#52c41a;border-color:#52c41a" onclick="shipOrders()">确认发货</button>
-      <button class="btn btn-outline ctx-btn act-slip-btn" style="color:#c0392b;border-color:#f0d0d0" onclick="batchSlip()">同行单</button>
-      <button class="btn btn-outline ctx-btn act-deliver-btn" style="color:#13c2c2;border-color:#87e8de" onclick="deliverOrders()">标记待签收</button>
     </div>
     <span class="count" id="selectedCount">已选 0 个订单</span>
   </div>
@@ -1326,8 +1322,8 @@ function statusBadge(s) {
 
 function stockStatusBadge(s) {
   if (!s) return '<span style="color:#ccc">-</span>';
-  const clsMap = { "有库存":"badge-instock", "需生产":"badge-producing", "定制":"badge-shipped" };
-  const colorMap = { "有库存":"#52c41a", "需生产":"#fa8c16", "定制":"#f5222d" };
+  const clsMap = { "有库存":"badge-instock", "需生产":"badge-producing" };
+  const colorMap = { "有库存":"#52c41a", "需生产":"#fa8c16" };
   return `<span class="badge ${clsMap[s]||'badge-pending'}" style="color:${colorMap[s]||'#666'}">${s}</span>`;
 }
 
@@ -1570,10 +1566,8 @@ function getQuickAction(o) {
   const cn = jsAttr(o.customerName);
   const pi = o.pairIndex || 1;
   if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}',${pi})">确认</button>`;
-  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}','${cn}',${pi})" title="导出拣货Excel">拣货单</button> <button class="row-action-btn" onclick="quickPack('${o.orderNo}','${cn}',${pi})" title="打包">打包</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}',${pi})">发货</button>`;
-  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}',${pi})">待签收</button>`;
-  if (o.status === "待签收") return `<button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
-  if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
+  if (o.status === "生产中") return `<span style="color:#52c41a;font-size:12px">&#10003; 已确认</span>`;
+  if (o.status === "已发货" || o.status === "待签收" || o.status === "已签收") return `<span style="color:#389e0d;font-size:12px">&#128666; 已发货</span>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
 }
 
@@ -1665,7 +1659,6 @@ function renderDetail(panel, data) {
     html += '<option value="">未选择</option>';
     html += `<option value="有库存" ${stockVal === '有库存' ? 'selected' : ''}>有库存</option>`;
     html += `<option value="需生产" ${stockVal === '需生产' ? 'selected' : ''}>需生产</option>`;
-    html += `<option value="定制" ${stockVal === '定制' ? 'selected' : ''}>定制</option>`;
     html += '</select></div>';
     html += '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#666">供应商</span>';
     html += `<select id="detail-supplier-${key}" style="padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px" ${isPending ? '' : 'disabled'}>`;
@@ -1694,8 +1687,6 @@ async function autoCheckStock(key, orderNo, customerName, pairIndex, lensCount) 
       if (!el) return;
       if (l.status === '有库存') {
         el.innerHTML = '<span style="color:#52c41a">' + (l.stock <= 5 ? '仅剩' + l.stock + '片' : '有货') + '</span>';
-      } else if (l.status === '定制') {
-        el.innerHTML = '<span style="color:#f5222d">超范围</span>';
       } else {
         el.innerHTML = '<span style="color:#fa8c16">需生产</span>';
       }
@@ -1750,17 +1741,7 @@ function updateContextualActions() {
     const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName && (x.pairIndex || 1) === pairIndex);
     if (o) statuses.add(o.status);
   });
-
-  const showConfirm = statuses.has("待处理");
-  const showShip = statuses.has("生产中");
-  const showDeliver = statuses.has("已发货");
-  const showSlip = statuses.has("已发货") || statuses.has("待签收") || statuses.has("已签收");
-
-  document.querySelector(".act-confirm-btn").classList.toggle("visible", showConfirm);
-  document.querySelector(".act-pack-btn").classList.toggle("visible", showShip);
-  document.querySelector(".act-ship-btn").classList.toggle("visible", showShip);
-  document.querySelector(".act-slip-btn").classList.toggle("visible", showSlip);
-  document.querySelector(".act-deliver-btn").classList.toggle("visible", showDeliver);
+  document.querySelector(".act-confirm-btn").classList.toggle("visible", statuses.has("待处理"));
 }
 
 // ─── 分页 ───────────────────────────────────────────────────────────
@@ -1859,12 +1840,6 @@ function quickZip(orderNo, customerName, pairIndex) {
   window.open(url, "_blank");
 }
 
-function quickSlip(orderNo, customerName, pairIndex) {
-  const q = customerName ? `&customer=${encodeURIComponent(customerName)}` : "";
-  const pi = pairIndex ? `&pairIndex=${pairIndex}` : "";
-  window.open(`/api/admin/slip/${orderNo}?admin=${adminToken}${q}${pi}`, "_blank");
-}
-
 async function quickConfirm(orderNo, customerName, pairIndex) {
   const pi = pairIndex || 1;
   const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
@@ -1874,43 +1849,6 @@ async function quickConfirm(orderNo, customerName, pairIndex) {
   const r = data.results[0];
   if (r.ok) { showToast(`${orderNo} ${customerName} 已确认`, "success"); loadOrders(); }
   else showToast(`确认失败: ${r.error}`, "error");
-}
-
-async function quickPack(orderNo, customerName, pairIndex) {
-  const pi = pairIndex || 1;
-  const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
-  const ok = await showConfirmModal({ title: "确认打包", body: `标记 <b>${orderNo}</b> · <b>${customerName}</b>${badge} 已打包？<br>打包后可生成随货同行单并发货。` });
-  if (!ok) return;
-  const data = await adminApi("/api/admin/pack", { orderNos: [orderNo], customerName, pairIndex: pi });
-  const r = data.results[0];
-  if (r.ok) {
-    showToast(`${orderNo} ${customerName} 已打包`, "success");
-    loadOrders();
-  } else showToast(`打包失败: ${r.error}`, "error");
-}
-
-async function quickShip(orderNo, customerName, pairIndex) {
-  const pi = pairIndex || 1;
-  const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
-  const ok = await showConfirmModal({ title: "确认发货", body: `发货 <b>${orderNo}</b> · <b>${customerName}</b>${badge}？<br>将自动生成快递单号。` });
-  if (!ok) return;
-  const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName, pairIndex: pi });
-  const r = data.results[0];
-  if (r.ok) {
-    showToast(`${orderNo} ${customerName} 已发货: ${r.courier} ${r.trackingNo}`, "success");
-    loadOrders();
-  } else showToast(`发货失败: ${r.error}`, "error");
-}
-
-async function quickDeliver(orderNo, customerName, pairIndex) {
-  const pi = pairIndex || 1;
-  const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
-  const ok = await showConfirmModal({ title: "标记待签收", body: `标记 <b>${orderNo}</b> · <b>${customerName}</b>${badge} 为"待签收"？<br><small style="color:#888">快递签收后将自动变更为"已签收"</small>` });
-  if (!ok) return;
-  const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName, pairIndex: pi });
-  const r = data.results[0];
-  if (r.ok) { showToast(`${orderNo} ${customerName} 已标记待签收`, "success"); loadOrders(); }
-  else showToast(`标记失败: ${r.error}`, "error");
 }
 
 // ─── 批量操作 ───────────────────────────────────────────────────────
@@ -1930,108 +1868,6 @@ async function confirmOrders() {
   }
   showToast(`确认完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
   loadOrders();
-}
-
-async function packOrders() {
-  const keys = getSelectedByStatus("生产中");
-  if (keys.length === 0) { showToast("没有生产中的订单可打包", "info"); return; }
-  const ok = await showConfirmModal({ title: "批量打包", body: `标记 <b>${keys.length}</b> 项已打包？<br>打包后可生成随货同行单并发货。` });
-  if (!ok) return;
-  let done = 0, fail = 0;
-  for (const key of keys) {
-    const { orderNo, customerName, pairIndex } = parseKey(key);
-    try {
-      const data = await adminApi("/api/admin/pack", { orderNos: [orderNo], customerName, pairIndex });
-      if (data.results?.[0]?.ok) done++; else fail++;
-    } catch { fail++; }
-  }
-  showToast(`打包完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
-  loadOrders();
-}
-
-async function shipOrders() {
-  const keys = getSelectedByStatus("生产中");
-  if (keys.length === 0) { showToast("没有生产中的订单可发货", "info"); return; }
-
-  // 1. 发货前预览
-  const orderNosSet = new Set(), customersSet = new Set();
-  for (const key of keys) {
-    const { orderNo, customerName } = parseKey(key);
-    orderNosSet.add(orderNo);
-    if (customerName) customersSet.add(customerName);
-  }
-  let preview;
-  try { preview = await adminApi(`/api/admin/ship-preview?orderNos=${[...orderNosSet].join(",")}&customer=${[...customersSet].join(",")}`); }
-  catch (e) { showToast(`预览失败: ${e.message}`, "error"); return; }
-  let previewHtml = "";
-  if (preview.orders?.length) {
-    previewHtml = preview.orders.map(o => {
-      o.rows.sort((a, b) => {
-        const nc = (a.customerName || '').localeCompare(b.customerName || '', 'zh-CN');
-        if (nc !== 0) return nc;
-        return (a.eye?.includes('右') ? 0 : 1) - (b.eye?.includes('右') ? 0 : 1);
-      });
-      const rowsHtml = o.rows.map(r =>
-        `<tr><td class="eye-${r.eye.includes('右') ? 'r' : 'l'}">${r.eye.includes('右') ? 'R' : 'L'}</td><td>${r.sku}</td><td>${r.sph != null ? Number(r.sph).toFixed(2) : ''}</td><td>${r.cyl != null ? Number(r.cyl).toFixed(2) : ''}</td><td>${r.axis}</td><td style="font-family:monospace;font-size:8pt">${r.lensCode}</td></tr>`
-      ).join("");
-      return `<div style="margin-bottom:12px;padding:10px;background:#fafafa;border-radius:6px;border:1px solid #eee">
-        <div style="font-weight:700;margin-bottom:6px">${o.customerName}${o.pairIndex > 1 ? ' <span style="color:#e67e22;font-size:9pt">第' + o.pairIndex + '副</span>' : ''} <span style="color:#888;font-size:9pt">${o.orderNo}</span> <span style="color:#888;font-size:9pt">${o.agentName}</span></div>
-        <div style="padding:8px 10px;background:#fff;border:1px solid #e8e8e8;border-radius:4px;margin-bottom:8px;font-size:9pt;line-height:1.8">
-          <div><span style="display:inline-block;width:48px;color:#888">联系人</span>${o.contact || "—"}</div>
-          <div><span style="display:inline-block;width:48px;color:#888">电话</span>${o.phone || "—"}</div>
-          <div><span style="display:inline-block;width:48px;color:#888">地址</span>${o.address || "—"}</div>
-          ${o.remark ? '<div><span style="display:inline-block;width:48px;color:#888">备注</span>' + o.remark + '</div>' : ""}
-        </div>
-        <table style="width:100%;border-collapse:collapse;font-size:9pt"><thead><tr style="background:#1a1a2e;color:#fff;font-size:8pt">
-          <th style="padding:3px 6px">眼</th><th style="padding:3px 6px">SKU</th><th style="padding:3px 6px">SPH</th><th style="padding:3px 6px">CYL</th><th style="padding:3px 6px">AXIS</th><th style="padding:3px 6px">镜片码</th></tr></thead>
-          <tbody>${rowsHtml}</tbody></table></div>`;
-    }).join("");
-  }
-  const ok = await showConfirmModal({ title: `发货预览 (${keys.length} 项)`, body: previewHtml || `发货 <b>${keys.length}</b> 项？<br>将自动生成快递单号。` });
-  if (!ok) return;
-
-  // 2. 执行发货
-  let done = 0, fail = 0;
-  const details = [];
-  for (const key of keys) {
-    const { orderNo, customerName, pairIndex } = parseKey(key);
-    try {
-      const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName, pairIndex });
-      if (data.results?.[0]?.ok) {
-        done++;
-        details.push(`${orderNo} ${customerName}: ${data.results[0].courier} ${data.results[0].trackingNo}`);
-      } else fail++;
-    } catch { fail++; }
-  }
-
-  // 3. 发货完成，显示快递单号 + 复制按钮
-  let resultHtml = details.map(d => `<div style="font-size:9pt;margin-bottom:2px">${d}</div>`).join("");
-  const trackingNos = details.map(d => { const m = d.match(/[A-Z]{2}\d{12}/); return m ? m[0] : ""; }).filter(Boolean).join("\n");
-  resultHtml += `<div style="margin-top:10px"><button class="btn btn-outline" style="font-size:9pt;padding:4px 12px" onclick="navigator.clipboard.writeText(\`${trackingNos.replace(/`/g, "\\`")}\`);this.textContent='已复制'">复制全部单号</button></div>`;
-  await showConfirmModal({ title: "发货完成", body: `成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, confirmText: "关闭", cancelText: "", resultHtml });
-  loadOrders();
-}
-
-async function deliverOrders() {
-  const keys = getSelectedByStatus("已发货");
-  if (keys.length === 0) { showToast("没有已发货的订单可标记待签收", "info"); return; }
-  const ok = await showConfirmModal({ title: "批量标记待签收", body: `标记 <b>${keys.length}</b> 项为"待签收"？<br><small style="color:#888">快递签收后将自动变更为"已签收"</small>` });
-  if (!ok) return;
-  let done = 0, fail = 0;
-  for (const key of keys) {
-    const { orderNo, customerName, pairIndex } = parseKey(key);
-    try {
-      const data = await adminApi("/api/admin/deliver", { orderNos: [orderNo], customerName, pairIndex });
-      if (data.results?.[0]?.ok) done++; else fail++;
-    } catch { fail++; }
-  }
-  showToast(`标记待签收完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
-  loadOrders();
-}
-
-function batchSlip() {
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  window.open(`/api/admin/slip-batch?date=${today}&admin=${adminToken}`, "_blank");
 }
 
 function getSelectedByStatus(status) {
