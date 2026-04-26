@@ -1208,3 +1208,216 @@ files.push(...labelEntries.flat());
 | 7. 最终状态 | ❌ | 预期"已签收"实为"待签收"（预置问题：deliver 设置待签收，已签收由快递回调触发） |
 
 `check_schema.js` ✅ 通过。
+
+### 华为云部署 + 全量回归
+
+Docker 镜像构建 → SWR 推送 → ECS `docker compose pull && up -d`，容器重建成功。
+
+`test_cloud_regression.mjs`（`https://lab.gaushclear.com`）：**65/79 通过，14 项失败**。
+
+| 类别 | 数量 | 说明 |
+|------|------|------|
+| 核心流程 | ✅ 65 | 下单→确认→发货→签收→导出→标签 全部正常 |
+| 验真单眼展示 | ❌ 5 | ⑧-1/⑧-2 验真页应只显示单眼（已知业务逻辑问题） |
+| Excel 联系人 | ❌ 1 | ④-3 导出缺少联系人信息（已知问题） |
+| 最终状态验证 | ❌ 8 | Part 8 "全部已签收"检查失败（Bitable 写入延迟，签收步骤本身 ✅） |
+
+**结论：** 本次改动（模板去重、并行化、feishu URL 修复）未引入回归。14 项失败均为已知问题或测试时序问题。
+
+## 2026-04-26 标签打印重构：双模式打印 + 格式重写
+
+### 背景
+
+助理反馈三个问题：
+1. "入队打印"按钮无功能（依赖 pull-print.js 守护进程，未运行则任务永久滞留）
+2. 标签打印和随货同行单需要可靠的批量打印
+3. 标签格式需改为物理标签样式：每只眼独立一张，带条形码
+
+### 方案：双模式打印
+
+- **浏览器打印**（普通打印机 + 不干胶纸）→ HTML 标签 + `window.open()` + 浏览器 `print()`
+- **斑马打印机**（ZPL + pull-print.js）→ 保留入队打印，改名"斑马打印"
+
+### 改动文件
+
+| 文件 | 改动 |
+|------|------|
+| `lib/templates.js` | 标签布局重写：`_buildLabelFragment()` 生成片段（条形码 SVG + 处方 + QR），`_renderLabelHtml()` 包装完整页面（含 JsBarcode CDN），`buildPrintPage()` 批量打印页。提取 `LABEL_CSS` 常量消除 CSS 重复 |
+| `lib/printer.js` | `buildZpl()` 坐标重排匹配新格式：条形码 → 产品型号 → 客户名+眼别 → 处方 → QR → 镜片码 |
+| `server.js` | 新增 `GET /api/admin/labels/print` 端点（并行查询 + 批量生成可打印 HTML） |
+| `public/labels.html` | 按钮重构："打印标签"🖨（浏览器打印）、"斑马打印"🖨（ZPL 入队）。新增 `printSelectedLabels()`、`quickLabelPrint()`。`handleScan()` 复用 `quickLabelPrint()`。`testPrinter()` 改为浏览器测试标签 |
+
+### 新 API 端点
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| GET | `/api/admin/labels/print` | 批量生成可打印标签 HTML 页面（支持 orderNos/customer/pairIndex 过滤） |
+
+### 标签格式（75mm×40mm）
+
+```
+┌──────────────────────────────────────────────┐
+│  ▮▮▮▮ Code128 条形码（订单号）▮▮▮▮▮▮▮▮▮▮▮   │
+│  时空之眼PRO     顾客姓名       ┌─────────┐ │
+│  R 右眼                          │ QR code  │ │
+│  SPH     CYL     AXIS            └─────────┘ │
+│  -3.00   -1.25    180                        │
+│  ABCDEF1234567890       AG-001 测试代理商     │
+└──────────────────────────────────────────────┘
+```
+
+每只眼独立一张标签（左眼/右眼分开包装）。
+
+### /simplify 清理
+
+- CSS 重复 ~25行 → 提取 `LABEL_CSS` 常量
+- `handleScan` 复用 `quickLabelPrint()`
+- `/labels/print` 端点 N+1 → `Promise.all` 并行查询
+- `buildPrintPage` QR 顺序生成 → `Promise.all` 并行
+
+### 本地测试（4/26）
+
+服务器 `node server.js` 本地启动，所有端点验证通过：
+
+| 测试 | 结果 | 耗时 |
+|------|------|------|
+| `/health` | 200 ✅ 飞书连通，41 代理商 | 706ms |
+| `/api/admin/orders` | 200 ✅ 返回订单列表 | 657ms |
+| `/api/admin/labels/print` 单订单 | 200 ✅ 1张标签（含条形码 SVG + QR base64 + JsBarcode CDN） | 1950ms |
+| `/api/admin/labels/print` 双订单 | 200 ✅ 3张标签（Promise.all 并行查询） | 1277ms |
+| `/labels` 管理页 | 200 ✅ 页面加载正常 | — |
+
+标签 HTML 验证：
+- Code128 条形码 SVG：`data-value="ORD-20260425-4AF80D28"` ✅
+- QR 验真码：base64 data URL ✅
+- 眼别标签：`R 右眼`（红色 #c0392b）✅
+- JsBarcode CDN + `.init()` 调用 ✅
+
+### 待验证（同事测试）
+
+- [ ] 浏览器打印标签格式是否匹配物理标签
+- [ ] 条形码扫码是否可识别（Code128 + JsBarcode）
+- [ ] 批量打印分页是否正常
+- [ ] 斑马打印（pull-print.js）是否正常
+- [ ] 随货同行单批量打印是否正常
+
+## 2026-04-26 订单管理中心空白修复 + Dashboard 数据修复
+
+### Bug 1: Dashboard 控制中心无数据
+
+**现象：** `/control` 页面仪表盘所有指标为 0（总库存、订单数、代理商数全部空）。
+
+**根因：** `lib/feishu.js` 的 `listRecords()` 函数 `fieldNames` 参数格式错误。
+- 错误：`field_names=当前库存,安全库存,SKU编号`（逗号分隔字符串）
+- 正确：`field_names=["当前库存","安全库存","SKU编号"]`（JSON 数组）
+
+飞书 Bitable API 要求 `field_names` 是 JSON 数组格式，错误格式导致 API 返回空结果。Dashboard 调用 `listRecords` 时传了 `fieldNames`，而 `/api/admin/stock-detail` 等端点不传 `fieldNames`，所以不受影响。
+
+**修复：** `lib/feishu.js` 第 60 行，`fieldNames.map(encodeURIComponent).join(",")` → `encodeURIComponent(JSON.stringify(fieldNames))`
+
+### Bug 2: labels.html 订单管理页空白
+
+**现象：** `/labels?admin=xxx` 页面显示"共 0 笔订单"，所有统计为 0，但 API `/api/admin/orders` 返回 99 条数据正常。
+
+**根因：** labels.html 内联 JS 有两个语法错误，导致整个 `<script>` 块解析失败，`loadOrders()` 等所有函数未定义。
+
+1. **`packOrders()` 函数缺少闭合 `}`** — for 循环结束后直接开始 `shipOrders()`，函数未关闭（line 2063）
+2. **模板字符串内 `</script>` 提前关闭外层 script 标签** — `testPrinter()` 函数的 HTML 模板包含 `<script>...</script>`，浏览器 HTML 解析器遇到 `</script>` 就关闭了外层 script 块，导致后续初始化代码（`loadOrders()`）全部失效（line 2624）
+
+**修复：**
+- `packOrders()` 补上闭合 `}` + showToast + loadOrders 调用
+- 模板字符串 `</script>` → `<\/script>` 转义
+
+### 改动文件
+
+| 文件 | 改动 |
+|------|------|
+| `lib/feishu.js` | `listRecords` fieldNames 格式修复（1 行） |
+| `public/labels.html` | `packOrders()` 闭合 + `testPrinter()` 转义（3 行） |
+
+### 部署
+
+- SCP 两个文件到 ECS → docker cp → restart
+- 验证：dashboard 返回 5377 库存 / 99 订单 / 41 代理商；labels 页面正常显示订单列表
+
+## 2026-04-27 库存×订单打通：自动查库存 + 发货扣库存
+
+### 背景
+
+订单管理流程中，助理需要手动判断"有库存/需生产"和选择供应商。库存与订单没有自动关联，扣减也完全手动。需要打通库存系统与订单系统。
+
+### 设计决策
+
+- 供应商分配：混合模式（系统推荐 + 助理可覆盖）
+- 库存扣减：发货时扣减（确认只标记状态，发货才扣库存）
+- 补货：规则自动（rule13/14）+ 手动补充
+
+### 改动文件
+
+| 文件 | 改动 |
+|------|------|
+| `lib/feishu.js` | 新增 `filterRecords()` 单条查询函数（飞书 search API，~200ms） |
+| `lib/stock.js` | 新增 `queryStockByRx()` 单条库存查询；init 增加 `filterRecords` 参数 |
+| `server.js` | 新增 `GET /api/admin/order-stock-check`（确认前自动查库存+推荐供应商） |
+| `server.js` | 修改 `POST /api/admin/confirm` 保存"库存状态"字段 |
+| `server.js` | 修改 `POST /api/admin/ship` 发货时自动扣库存+写流水（有库存订单） |
+| `server.js` | `ensureFields` 增加"库存状态"单选字段（有库存/需生产/定制） |
+| `server.js` | `/api/admin/orders` 返回 `stockStatus` 字段 |
+| `server.js` | 新增 `inRange()` 辅助函数 |
+| `public/labels.html` | 订单列表增加"库存"列（绿色=有库存，橙色=需生产，红色=定制） |
+| `public/labels.html` | 展开详情增加每只眼库存量显示 |
+| `public/labels.html` | 库存状态下拉改为"有库存/需生产/定制"（原"有库存/无库存"） |
+| `public/labels.html` | 新增 `stockStatusBadge()` + `autoCheckStock()` 函数 |
+| `public/labels.html` | 确认弹窗自动查库存，预填库存状态和供应商 |
+| `rules_config.json` | 新增 `supplier_map` 段（7个SKU × 3个供应商映射） |
+
+### 新 API 端点
+
+| 方法 | 路径 | 功能 |
+|------|------|------|
+| GET | `/api/admin/order-stock-check` | 确认前自动查库存+推荐供应商（orderNo/customerName/pairIndex） |
+
+### 核心流程
+
+```
+确认订单：
+1. 助理展开订单详情 → 自动调用 /api/admin/order-stock-check
+2. 系统查每只眼的库存量 → 显示在处方表格中
+3. 预填"库存状态"（有库存/需生产/定制）+ 推荐供应商
+4. 助理可修改预选值 → 点确认 → 保存到订单记录
+
+发货订单：
+1. 读订单的"库存状态"字段
+2. 如果是"有库存" → 自动扣减 stock_detail + 写 stock_movement 出库流水
+3. 扣库存失败不阻断发货（库存是记录，物流是核心）
+4. 继续原有发货逻辑（快递单号、通知等）
+```
+
+### 供应商映射配置
+
+```json
+{
+  "supplier_map": {
+    "Ultra双效": { "in_stock": "九次方", "out_of_stock": "九次方" },
+    "D8": { "in_stock": "圣谱", "out_of_stock": "圣谱" },
+    "时空之眼A/B/PRO/MAX": { "in_stock": "欧陆", "out_of_stock": "欧陆" },
+    "小旋风": { "in_stock": "九次方", "out_of_stock": "九次方" }
+  }
+}
+```
+
+助理可在 rules_config.json 修改，也可在飞书规则配置表覆盖。
+
+### 部署
+
+- SCP 5 个文件到 ECS → docker cp → restart
+- 验证：health 200、stock-check API 正确返回库存+供应商推荐
+
+### 测试结果
+
+| 测试 | 结果 |
+|------|------|
+| stock-check API（Ultra双效 SPH=-2/-1.75） | ✅ 有库存(70/40)，推荐九次方 |
+| stock-check API（Ultra双效 SPH=-3/-3.5） | ✅ 需生产(0/0)，推荐九次方 |
+| labels.html 语法检查 | ✅ JS OK |
+| 服务器健康检查 | ✅ 41 agents, uptime 7s |

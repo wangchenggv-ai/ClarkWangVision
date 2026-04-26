@@ -189,8 +189,29 @@ export function slipHTML(order) {
 
 // ─── 标签 HTML ─────────────────────────────────────────────────────────────────
 
-// 内部共享：从 fields 生成标签 HTML
-async function _renderLabelHtml(f, orderNo) {
+const LABEL_CSS = `@page{size:75mm 40mm;margin:0}
+*{margin:0;padding:0;box-sizing:border-box}
+.label{width:75mm;min-height:40mm;border:.3mm solid #ccc;display:flex;flex-direction:column;overflow:hidden}
+.bc-section{padding:1mm 2mm 0;display:flex;justify-content:center;border-bottom:.2mm solid #eee}
+.bc-section svg{max-width:65mm;height:8mm}
+.content{display:flex;flex:1;padding:1.5mm 2mm;gap:2mm}
+.left{flex:1;display:flex;flex-direction:column;gap:.8mm;min-width:0}
+.right{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
+.qr-img{width:13mm;height:13mm;display:block}
+.qr-hint{font-size:4.5pt;color:#aaa;text-align:center;margin-top:.3mm}
+.sku-row{font-size:6pt;color:#666;font-weight:600;letter-spacing:.5px}
+.name-row{display:flex;align-items:baseline;gap:2mm}
+.customer-name{font-size:9pt;font-weight:800;color:#1a1a2e}
+.eye-tag{font-size:8pt;font-weight:900;letter-spacing:.5px}
+.rx-section{margin-top:.5mm}
+.rx-grid{display:grid;grid-template-columns:1fr 1fr 1fr;column-gap:3mm;row-gap:.2mm}
+.rx-label{font-size:5pt;color:#999;text-transform:uppercase;letter-spacing:.5px}
+.rx-value{font-size:9pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas","Courier New",monospace}
+.bottom-bar{display:flex;justify-content:space-between;align-items:center;background:#f8f9fa;border-top:.2mm solid #eee;padding:.8mm 2mm;font-size:5.5pt}
+.lens-code{font-family:"Courier New",monospace;font-weight:700;color:#495057;letter-spacing:1px}
+.agent-info{color:#aaa}`;
+
+async function _buildLabelFragment(f, orderNo) {
   const lensCode = f["镜片码"];
   if (!lensCode) return null;
 
@@ -198,8 +219,7 @@ async function _renderLabelHtml(f, orderNo) {
   const eye = f["眼别"] || "";
   const isRight = eye.includes("右");
   const eyeColor = isRight ? "#c0392b" : "#1a6fb5";
-  const eyeLabel = isRight ? "R  右眼" : "L  左眼";
-  const eyeBg = isRight ? "#fff5f5" : "#f0f7ff";
+  const eyeTag = isRight ? "R 右眼" : "L 左眼";
   const sku = f["产品型号"] || "";
   const sph = f["球镜SPH"] ?? "";
   const cyl = f["柱镜CYL"] ?? "";
@@ -212,54 +232,51 @@ async function _renderLabelHtml(f, orderNo) {
     { errorCorrectionLevel: "H", width: 180, margin: 1 }
   );
 
-  const html = `<!DOCTYPE html>
-<html lang="zh-CN"><head><meta charset="UTF-8">
-<title>${orderNo} ${customer} ${eye}</title>
-<style>
-@page{size:75mm 40mm;margin:0}
-*{margin:0;padding:0;box-sizing:border-box}
-body{width:75mm;min-height:40mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:6pt;background:#fff}
-.label{width:75mm;min-height:40mm;display:flex;flex-direction:column;border:.3mm solid #ddd}
-.header{display:flex;align-items:center;justify-content:space-between;background:${eyeColor};color:#fff;padding:.8mm 2mm;height:6.5mm;flex-shrink:0}
-.eye-badge{font-size:9pt;font-weight:900;letter-spacing:1px}
-.brand{font-size:6.5pt;font-weight:700;letter-spacing:1.5px;opacity:.92}
-.order-no{font-size:5pt;opacity:.85;font-family:monospace}
-.body{display:flex;flex:1;padding:1mm 1.5mm .8mm;gap:1.5mm;background:${eyeBg}}
-.info{flex:1;display:flex;flex-direction:column;gap:.4mm;min-width:0}
-.customer-row{display:flex;align-items:baseline;gap:1.5mm;border-bottom:.2mm solid ${eyeColor}44;padding-bottom:.8mm;margin-bottom:.4mm}
-.customer-name{font-size:8pt;font-weight:800;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:24mm}
-.sku-name{font-size:5.5pt;color:${eyeColor};font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rx-grid{display:grid;grid-template-columns:auto auto auto;column-gap:2mm;row-gap:.2mm;margin:.3mm 0}
-.rx-label{font-size:4.5pt;color:#888;text-transform:uppercase;letter-spacing:.3px}
-.rx-value{font-size:7.5pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas",monospace;line-height:1.1}
-.rx-value.hl{color:${eyeColor}}
-.meta-row{display:flex;gap:1.5mm;margin-top:.3mm;flex-wrap:wrap}
-.meta-item{display:flex;align-items:center;gap:.6mm}
-.meta-label{font-size:4.5pt;color:#aaa}
-.meta-value{font-size:5.5pt;color:#444;font-weight:600}
-.qr-col{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.8mm;flex-shrink:0}
-.qr-col img{width:15mm;height:15mm;display:block;border:.3mm solid #ddd;border-radius:1mm}
-.qr-label{font-size:3.5pt;color:#bbb;text-align:center}
-.footer{display:flex;align-items:center;justify-content:space-between;background:#f8f9fa;border-top:.2mm solid #e9ecef;padding:.6mm 2mm;height:5.5mm;flex-shrink:0}
-.lens-code{font-family:"Courier New",monospace;font-size:5.5pt;font-weight:700;color:#495057;letter-spacing:1px}
-.footer-meta{display:flex;flex-direction:column;align-items:flex-end}
-.agent-tag{font-size:4pt;color:#ccc;margin-top:.2mm}
-@media print{body{padding:0}}
-</style></head><body>
-<div class="label">
-<div class="header"><div class="eye-badge">${eyeLabel}</div><div style="text-align:right"><div class="brand">GAUSH | CLEAR</div><div class="order-no">${orderNo}</div></div></div>
-<div class="body"><div class="info">
-<div class="customer-row"><div class="customer-name">${f["顾客姓名"]||""}</div><div class="sku-name">${sku}</div></div>
-<div class="rx-grid">
-<div class="rx-label">SPH</div><div class="rx-label">CYL</div><div class="rx-label">AXIS</div>
-<div class="rx-value hl">${fmt(sph)}</div><div class="rx-value hl">${fmt(cyl)}</div><div class="rx-value">${fmtAxis(axis)}</div>
+  const html = `<div class="label">
+<div class="bc-section"><svg class="barcode" data-value="${orderNo}" data-options='{"format":"CODE128","width":1.2,"height":30,"displayValue":true,"fontSize":10,"margin":0}'></svg></div>
+<div class="content">
+  <div class="left">
+    <div class="sku-row">${sku}</div>
+    <div class="name-row"><span class="customer-name">${f["顾客姓名"]||""}</span><span class="eye-tag" style="color:${eyeColor}">${eyeTag}</span></div>
+    <div class="rx-section">
+      <div class="rx-grid">
+        <div class="rx-label">SPH</div><div class="rx-label">CYL</div><div class="rx-label">AXIS</div>
+        <div class="rx-value">${fmt(sph)}</div><div class="rx-value">${fmt(cyl)}</div><div class="rx-value">${fmtAxis(axis)}</div>
+      </div>
+    </div>
+  </div>
+  <div class="right">
+    <img class="qr-img" src="${qrDataUrl}" alt="QR">
+    <div class="qr-hint">扫码验真</div>
+  </div>
 </div>
-<div class="meta-row"><div class="meta-item"><span class="meta-label">渠道</span><span class="meta-value">${agentId}</span></div></div>
-</div><div class="qr-col"><img src="${qrDataUrl}" alt="QR"><div class="qr-label">扫码验真</div></div></div>
-<div class="footer"><div class="lens-code">${lensCode}</div><div class="footer-meta"><div class="agent-tag">${agentName}</div></div></div>
-</div></body></html>`;
+<div class="bottom-bar">
+  <span class="lens-code">${lensCode}</span>
+  <span class="agent-info">${agentId} ${agentName}</span>
+</div>
+</div>`;
 
   return { html, customer, eye, lensCode };
+}
+
+async function _renderLabelHtml(f, orderNo) {
+  const fragment = await _buildLabelFragment(f, orderNo);
+  if (!fragment) return null;
+
+  const html = `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<title>${orderNo} ${fragment.customer} ${fragment.eye}</title>
+<style>
+body{width:75mm;min-height:40mm;font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:8pt;background:#fff;padding:0}
+${LABEL_CSS}
+@media print{body{padding:0} .label{border:none}}
+</style></head><body>
+${fragment.html}
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>JsBarcode(".barcode").init();</script>
+</body></html>`;
+
+  return { html, customer: fragment.customer, eye: fragment.eye, lensCode: fragment.lensCode };
 }
 
 // 从记录对象生成标签（返回 Buffer，用于 ZIP 打包）
@@ -274,4 +291,35 @@ export async function buildLabelHtmlFromFields(f, orderNo) {
   const r = await _renderLabelHtml(f, orderNo);
   if (!r) return null;
   return { orderNo, customer: r.customer, eye: r.eye, lensCode: r.lensCode, html: r.html };
+}
+
+export async function buildPrintPage(labels) {
+  const fragments = (await Promise.all(
+    labels.map(({ fields, orderNo }) => _buildLabelFragment(fields, orderNo))
+  )).filter(Boolean);
+  if (!fragments.length) return null;
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<title>标签打印 — ${fragments.length} 张</title>
+<style>
+body{font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:8pt;background:#fff}
+.toolbar{position:fixed;top:0;left:0;right:0;z-index:100;background:#1a1a2e;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-size:13px}
+.toolbar button{background:#c0392b;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer}
+.labels-wrap{padding-top:50px}
+${LABEL_CSS}
+.label{page-break-after:always;margin:0 auto}
+.label:last-child{page-break-after:auto}
+@media print{.toolbar{display:none} .labels-wrap{padding-top:0} .label{border:none}}
+</style></head><body>
+<div class="toolbar no-print">
+  <span>GAUSH | CLEAR 标签打印 — ${fragments.length} 张</span>
+  <button onclick="window.print()">打印</button>
+</div>
+<div class="labels-wrap">
+${fragments.map(f => f.html).join("\n")}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>JsBarcode(".barcode").init();</script>
+</body></html>`;
 }

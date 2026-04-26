@@ -320,6 +320,8 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
 .row-action-btn.act-ship { background: linear-gradient(135deg, #f6ffed, #b7eb8f); color: #237804; }
 .row-action-btn.act-deliver { background: linear-gradient(135deg, #f9f0ff, #d3adf7); color: #531dab; }
 .row-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.inline-select { padding: 3px 6px; border: 1px solid #e0e0e0; border-radius: 4px; font-size: 12px; background: #fff; cursor: pointer; min-width: 70px; }
+.inline-select:hover { border-color: #40a9ff; }
 
 /* 镜片码 tooltip */
 .lens-code-cell { position: relative; cursor: default; }
@@ -1263,7 +1265,7 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
   <div class="scan-bar">
     <span class="scan-icon">&#128451;</span>
     <div class="scan-input-wrap">
-      <input type="text" id="scanInput" placeholder="扫枪扫描条形码自动入队打印..." autocomplete="off" spellcheck="false">
+      <input type="text" id="scanInput" placeholder="扫枪扫描条形码自动打开标签打印页..." autocomplete="off" spellcheck="false">
     </div>
     <span class="scan-status" id="scanStatus">等待扫描</span>
     <span class="scan-hint">支持 Code128 条形码</span>
@@ -1342,6 +1344,8 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
     <select id="filterAgent"><option value="">全部代理商</option></select>
     <select id="filterSku"><option value="">全部型号</option></select>
     <select id="filterAssembly"><option value="">全部装配</option><option value="是">已装配</option><option value="否">未装配</option></select>
+    <select id="filterStock"><option value="">全部库存</option><option value="yes">有库存</option><option value="no">无库存</option></select>
+    <select id="filterSupplier"><option value="">全部厂家</option></select>
     <div class="date-quick-btns">
       <button class="date-btn" onclick="quickDate('today')">今日</button>
       <button class="date-btn" onclick="quickDate('yesterday')">昨日</button>
@@ -1361,10 +1365,10 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
     <div class="divider"></div>
     <div class="action-group">
       <button class="btn btn-outline ctx-btn act-confirm-btn" style="color:#1677ff;border-color:#1677ff" onclick="confirmOrders()">确认订单</button>
-      <button class="btn btn-outline" style="color:#0958d9;border-color:#91caff" onclick="downloadZip()">导出Excel给工厂</button>
+      <button class="btn btn-outline" style="color:#0958d9;border-color:#91caff" onclick="downloadExcel()">导出Excel给工厂</button>
       <button class="btn btn-outline" style="color:#531dab;border-color:#d3adf7" onclick="previewSelected()">预览标签</button>
-      <button class="btn btn-outline" style="color:#722ed1;border-color:#d3adf7" onclick="printLabels()">批量打印标签</button>
-      <button class="btn btn-outline" style="color:#eb2f96;border-color:#ffadd2" onclick="printZplLabels()">&#128424; 入队打印</button>
+      <button class="btn btn-outline" style="color:#722ed1;border-color:#d3adf7" onclick="printSelectedLabels()">&#128438; 打印标签</button>
+      <button class="btn btn-outline" style="color:#eb2f96;border-color:#ffadd2" onclick="zebraPrintLabels()">&#128424; 斑马打印</button>
       <button class="btn btn-outline ctx-btn act-pack-btn" style="color:#1890ff;border-color:#1890ff" onclick="packOrders()">批量打包</button>
       <button class="btn btn-outline ctx-btn act-ship-btn" style="color:#52c41a;border-color:#52c41a" onclick="shipOrders()">确认发货</button>
       <button class="btn btn-outline ctx-btn act-slip-btn" style="color:#c0392b;border-color:#f0d0d0" onclick="batchSlip()">同行单</button>
@@ -1389,6 +1393,8 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
           <th>SKU</th>
           <th>数量</th>
           <th>装配</th>
+          <th>是否有库存</th>
+          <th>供应商</th>
           <th>状态</th>
           <th>下单日期</th>
           <th>天数</th>
@@ -1511,6 +1517,13 @@ function statusBadge(s) {
   return `<span class="badge ${clsMap[s]||'badge-pending'}">${dot}${s||'未知'}</span>`;
 }
 
+function stockStatusBadge(s) {
+  if (!s) return '<span style="color:#ccc">-</span>';
+  const clsMap = { "有库存":"badge-instock", "需生产":"badge-producing", "定制":"badge-shipped" };
+  const colorMap = { "有库存":"#52c41a", "需生产":"#fa8c16", "定制":"#f5222d" };
+  return `<span class="badge ${clsMap[s]||'badge-pending'}" style="color:${colorMap[s]||'#666'}">${s}</span>`;
+}
+
 function fmtDate(ts) {
   if (!ts) return "-";
   return new Date(ts).toLocaleDateString("zh-CN", { month:"2-digit", day:"2-digit" });
@@ -1573,8 +1586,12 @@ async function loadOrders() {
   if (agent) params.set("agent", agent);
   const sku = document.getElementById("filterSku")?.value;
   const assembly = document.getElementById("filterAssembly")?.value;
+  const stock = document.getElementById("filterStock")?.value;
+  const supplier = document.getElementById("filterSupplier")?.value;
   if (sku) params.set("sku", sku);
   if (assembly) params.set("assembly", assembly);
+  if (stock) params.set("stock", stock);
+  if (supplier) params.set("supplier", supplier);
   if (from && activeQuickFilter === "all") params.set("from", from);
   if (to && activeQuickFilter === "all") params.set("to", to);
   params.set("page", currentPage);
@@ -1617,6 +1634,12 @@ async function loadOrders() {
   const currentSku = skuSelect.value;
   const skus = [...new Set(allOrdersRaw.map(o => o.sku).filter(Boolean))].sort();
   skuSelect.innerHTML = '<option value="">全部型号</option>' + skus.map(s => `<option value="${s}" ${s===currentSku?'selected':''}>${s}</option>`).join("");
+
+  // 更新厂家下拉
+  const supplierSelect = document.getElementById("filterSupplier");
+  const currentSupplier = supplierSelect.value;
+  const suppliers = data.suppliers || [];
+  supplierSelect.innerHTML = '<option value="">全部厂家</option>' + suppliers.map(s => `<option value="${s}" ${s===currentSupplier?'selected':''}>${s}</option>`).join("");
 
   renderOrders();
   renderPagination(data.page, data.totalPages);
@@ -1712,13 +1735,24 @@ function renderOrders() {
       <td>${o.sku}</td>
       <td>${o.quantity}</td>
       <td>${o.assembly === '是' ? '<span class="badge badge-instock">是</span>' : o.assembly === '否' ? '<span class="badge badge-done">否</span>' : '-'}</td>
+      <td><select class="inline-select" data-field="交期类型" data-record="${o.orderNo}|${jsAttr(o.customerName)}|${o.pairIndex||1}" onchange="inlineFieldUpdate(this)">
+        <option value="">-</option>
+        <option value="有货1-2天" ${o.deliveryType==='有货1-2天'?'selected':''}>有库存</option>
+        <option value="排产5-7天" ${o.deliveryType==='排产5-7天'?'selected':''}>无库存</option>
+      </select></td>
+      <td><select class="inline-select" data-field="供应商厂家" data-record="${o.orderNo}|${jsAttr(o.customerName)}|${o.pairIndex||1}" onchange="inlineFieldUpdate(this)">
+        <option value="">-</option>
+        <option value="九次方" ${o.supplier==='九次方'?'selected':''}>九次方</option>
+        <option value="圣谱" ${o.supplier==='圣谱'?'selected':''}>圣谱</option>
+        <option value="欧陆" ${o.supplier==='欧陆'?'selected':''}>欧陆</option>
+      </select></td>
       <td>${statusBadge(o.status)}</td>
       <td>${fmtDate(o.date)}</td>
       <td>${daysBadge(o.status, o.date)}</td>
       <td class="remark-cell" title="${escapeHtml(o.remark || '')}">${o.remark ? `<span style="display:inline-block;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(o.remark)}</span>` : '-'}</td>
       <td>${quickAction}</td>
     </tr>
-    <tr class="detail-row" id="detail-${i}" style="display:none"><td colspan="12"><div class="detail-panel" id="detail-panel-${i}"></div></td></tr>
+    <tr class="detail-row" id="detail-${i}" style="display:none"><td colspan="13"><div class="detail-panel" id="detail-panel-${i}"></div></td></tr>
     `;
   }).join("");
   updateSelectedCount();
@@ -1729,9 +1763,9 @@ function getQuickAction(o) {
   const cn = jsAttr(o.customerName);
   const pi = o.pairIndex || 1;
   if (o.status === "待处理") return `<button class="row-action-btn act-confirm" onclick="quickConfirm('${o.orderNo}','${cn}',${pi})">确认</button>`;
-  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}','${cn}',${pi})" title="导出拣货Excel">拣货单</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}',${pi})" title="入队等待本地打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickPack('${o.orderNo}','${cn}',${pi})" title="打包">打包</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}',${pi})">发货</button>`;
-  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}',${pi})" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}',${pi})">待签收</button>`;
-  if (o.status === "待签收") return `<button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}',${pi})" title="重新打印标签" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
+  if (o.status === "生产中") return `<button class="row-action-btn act-zip" onclick="quickZip('${o.orderNo}','${cn}',${pi})" title="导出拣货Excel">拣货单</button> <button class="row-action-btn" onclick="quickLabelPrint('${o.orderNo}','${cn}',${pi})" title="浏览器打印标签" style="color:#722ed1">&#128438;</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}',${pi})" title="斑马打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickPack('${o.orderNo}','${cn}',${pi})" title="打包">打包</button> <button class="row-action-btn act-ship" onclick="quickShip('${o.orderNo}','${cn}',${pi})">发货</button>`;
+  if (o.status === "已发货") return `<button class="row-action-btn" onclick="quickLabelPrint('${o.orderNo}','${cn}',${pi})" title="浏览器打印标签" style="color:#722ed1">&#128438;</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}',${pi})" title="斑马打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button> <button class="row-action-btn act-deliver" onclick="quickDeliver('${o.orderNo}','${cn}',${pi})">待签收</button>`;
+  if (o.status === "待签收") return `<button class="row-action-btn" onclick="quickLabelPrint('${o.orderNo}','${cn}',${pi})" title="浏览器打印标签" style="color:#722ed1">&#128438;</button> <button class="row-action-btn" onclick="quickZplPrint('${o.orderNo}','${cn}',${pi})" title="斑马打印" style="color:#eb2f96">&#128424;</button> <button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
   if (o.status === "已签收") return `<button class="row-action-btn" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单" style="color:#c0392b">&#128196;</button>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
 }
@@ -1756,6 +1790,8 @@ async function toggleRowExpand(idx, orderNo, customerName, pairIndex) {
 
   const cacheKey = orderNo + '|' + customerName + '|' + (pairIndex || 1);
   if (detailCache[cacheKey]) {
+    const orderInfo = allOrders.find(o => o.orderNo === orderNo && o.customerName === customerName && (o.pairIndex || 1) === (pairIndex || 1));
+    detailCache[cacheKey].order = orderInfo || { orderNo, customerName, pairIndex: pairIndex || 1 };
     renderDetail(panel, detailCache[cacheKey]);
     return;
   }
@@ -1778,6 +1814,9 @@ async function toggleRowExpand(idx, orderNo, customerName, pairIndex) {
         return (a.eye?.includes('右') ? 0 : 1) - (b.eye?.includes('右') ? 0 : 1);
       });
     }
+    // 附加订单状态信息（用于库存/供应商字段渲染）
+    const orderInfo = allOrders.find(o => o.orderNo === orderNo && o.customerName === customerName && (o.pairIndex || 1) === (pairIndex || 1));
+    data.order = orderInfo || { orderNo, customerName, pairIndex: pairIndex || 1 };
     detailCache[cacheKey] = data;
     renderDetail(panel, data);
   } catch (e) {
@@ -1805,6 +1844,8 @@ function renderDetail(panel, data) {
     </table>
   `;
 }
+
+
 
 // ─── 选择逻辑 ───────────────────────────────────────────────────────
 
@@ -1877,6 +1918,8 @@ function resetFilter() {
   document.getElementById("filterAgent").value = "";
   if (document.getElementById("filterSku")) document.getElementById("filterSku").value = "";
   if (document.getElementById("filterAssembly")) document.getElementById("filterAssembly").value = "";
+  if (document.getElementById("filterStock")) document.getElementById("filterStock").value = "";
+  if (document.getElementById("filterSupplier")) document.getElementById("filterSupplier").value = "";
   document.getElementById("filterFrom").value = "";
   document.getElementById("filterTo").value = "";
   activeStatusFilter = "all";
@@ -2046,6 +2089,9 @@ async function packOrders() {
       if (data.results?.[0]?.ok) done++; else fail++;
     } catch { fail++; }
   }
+  showToast(`打包完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
+  loadOrders();
+}
 
 async function shipOrders() {
   const keys = getSelectedByStatus("生产中");
@@ -2247,21 +2293,46 @@ function clearPreview() {
   document.getElementById("previewGrid").innerHTML = "";
 }
 
-async function printLabels() {
-  const keys = getSelectedByStatus("生产中");
-  if (keys.length === 0) { showToast("请选择生产中的订单", "info"); return; }
-  let done = 0, fail = 0;
-  for (const key of keys) {
-    const { orderNo, customerName, pairIndex } = parseKey(key);
-    try {
-      const data = await adminApi("/api/admin/print-queue", { orderNo, customerName, pairIndex });
-      if (data.ok) done++; else fail++;
-    } catch { fail++; }
-  }
-  showToast(`批量打印：成功 ${done} 单${fail ? "，失败 " + fail + " 单" : ""}`, fail ? "error" : "success");
+async function printSelectedLabels() {
+  if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
+  const keys = [...selectedOrders];
+  const orderNos = [...new Set(keys.map(k => k.split('|')[0]))].join(",");
+  const customers = [...new Set(keys.map(k => k.split('|')[1]).filter(Boolean))].join(",");
+  let url = `/api/admin/labels/print?orderNos=${encodeURIComponent(orderNos)}&admin=${adminToken}`;
+  if (customers) url += `&customer=${encodeURIComponent(customers)}`;
+  window.open(url, "_blank");
 }
 
-function downloadZip(customer) {
+// 浏览器打印单个标签
+function quickLabelPrint(orderNo, customerName, pairIndex) {
+  let url = `/api/admin/labels/print?orderNos=${encodeURIComponent(orderNo)}&admin=${adminToken}`;
+  if (customerName) url += `&customer=${encodeURIComponent(customerName)}`;
+  if (pairIndex) url += `&pairIndex=${pairIndex}`;
+  window.open(url, "_blank");
+}
+
+async function inlineFieldUpdate(el) {
+  const field = el.dataset.field;
+  const parts = el.dataset.record.split('|');
+  const orderNo = parts[0];
+  const customerName = parts.slice(1, -1).join('|');
+  const pairIndex = Number(parts[parts.length - 1]) || 1;
+  const value = el.value;
+  try {
+    const data = await adminApi("/api/admin/update-field", { orderNo, customerName, pairIndex, field, value });
+    if (data.ok) {
+      showToast(`${field} 已更新`, "success");
+      // 更新本地数据
+      const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName && (x.pairIndex || 1) === pairIndex);
+      if (o) {
+        if (field === "交期类型") o.deliveryType = value;
+        if (field === "供应商厂家") o.supplier = value;
+      }
+    } else showToast(`更新失败: ${data.error}`, "error");
+  } catch (e) { showToast(`更新失败: ${e.message}`, "error"); }
+}
+
+function downloadExcel(customer) {
   if (selectedOrders.size === 0) { showToast("请先选择订单", "info"); return; }
   const keys = [...selectedOrders];
   const orderNos = [...new Set(keys.map(k => k.split('|')[0]))].join(",");
@@ -2427,24 +2498,11 @@ document.getElementById("scanInput").addEventListener("keydown", (e) => {
 
 async function handleScan(orderNo) {
   const status = document.getElementById("scanStatus");
-  status.textContent = `入队 ${orderNo} ...`;
+  status.textContent = `准备打印 ${orderNo} ...`;
   status.className = "scan-status";
-  try {
-    const data = await adminApi("/api/admin/print-queue", { orderNo });
-    if (data.ok) {
-      status.textContent = `✓ 已入队 ${data.lensCount} 张`;
-      status.className = "scan-status ok";
-      showToast(`${orderNo} 已入队 ${data.lensCount} 张标签，等待本地打印`, "success");
-    } else {
-      status.textContent = `✗ ${data.error}`;
-      status.className = "scan-status err";
-      showToast(`入队失败: ${data.error}`, "error");
-    }
-  } catch (e) {
-    status.textContent = `✗ ${e.message}`;
-    status.className = "scan-status err";
-    showToast(`入队错误: ${e.message}`, "error");
-  }
+  quickLabelPrint(orderNo);
+  status.textContent = `✓ 已打开 ${orderNo} 标签页`;
+  status.className = "scan-status ok";
   setTimeout(() => {
     status.textContent = "等待扫描";
     status.className = "scan-status";
@@ -2452,9 +2510,9 @@ async function handleScan(orderNo) {
   }, 3000);
 }
 
-// ─── 入队打印（Mac 拉模式）───────────────────────────────────────────────
+// ─── 斑马打印（ZPL 入队 → pull-print.js 拉取）───────────────────────────────
 
-async function printZplLabels() {
+async function zebraPrintLabels() {
   const keys = [...selectedOrders];
   if (keys.length === 0) { showToast("请先选择订单", "info"); return; }
 
@@ -2468,8 +2526,8 @@ async function printZplLabels() {
       else totalFailed++;
     } catch { totalFailed++; }
   }
-  if (totalQueued > 0) showToast(`已入队 ${totalQueued} 张标签，等待本地打印`, "success");
-  if (totalFailed > 0) showToast(`${totalFailed} 个订单打印失败`, "error");
+  if (totalQueued > 0) showToast(`已入队 ${totalQueued} 张标签，等待本地 pull-print.js 拉取打印`, "success");
+  if (totalFailed > 0) showToast(`${totalFailed} 个订单入队失败`, "error");
   loadOrders();
 }
 
@@ -2603,14 +2661,20 @@ async function savePrinterConfig() {
 }
 
 async function testPrinter() {
-  showToast("测试标签已入队...", "info");
-  try {
-    const data = await adminApi("/api/admin/print-queue", { type: "test" });
-    if (data.ok) showToast("测试标签已入队，等待本地打印", "success");
-    else showToast("入队失败: " + (data.error || "未知错误"), "error");
-  } catch (e) {
-    showToast("入队失败: " + e.message, "error");
-  }
+  // 浏览器打印测试：生成一个测试标签页
+  const testHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>测试标签</title>
+<style>@page{size:75mm 40mm;margin:0}*{margin:0;padding:0;box-sizing:border-box}
+body{width:75mm;min-height:40mm;font-family:sans-serif;display:flex;align-items:center;justify-content:center}
+.label{width:75mm;min-height:40mm;border:1px solid #ccc;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4mm}
+h1{font-size:14pt;color:#c0392b}p{font-size:9pt;color:#666}
+.barcode-area{width:50mm;height:8mm;background:#eee;display:flex;align-items:center;justify-content:center;font-size:7pt;color:#999}
+@media print{.label{border:none}}</style></head><body>
+<div class="label"><h1>GAUSH | CLEAR 测试标签</h1><div class="barcode-area">CODE128 BARCODE</div>
+<p>${new Date().toLocaleString("zh-CN")}</p><p>打印机连接正常</p></div>
+<script>setTimeout(()=>window.print(),500)<\/script></body></html>`;
+  const blob = new Blob([testHtml], { type: "text/html" });
+  window.open(URL.createObjectURL(blob), "_blank");
+  showToast("测试标签页已打开", "success");
 }
 
 async function checkPrinterStatus() {

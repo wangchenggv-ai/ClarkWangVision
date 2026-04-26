@@ -47,7 +47,7 @@ export function buildZpl(rec) {
   const sku = f["产品型号"] || "";
   const eye = f["眼别"] || "";
   const isRight = eye.includes("右");
-  const eyeLabel = isRight ? "R" : "L";
+  const eyeLabel = isRight ? "R 右眼" : "L 左眼";
   const sph = f["球镜SPH"] ?? "";
   const cyl = f["柱镜CYL"] ?? "";
   const axis = f["轴位AXIS"] ?? "";
@@ -61,24 +61,28 @@ export function buildZpl(rec) {
     "^CI28",
     "^PW600",
     "^LL320",
-    "",
-    `^FO30,10^BY2^BCN,70,Y,N,N^FD${orderNo}^FS`,
-    `^FO30,90^A0N,20,20^FD${orderNo}^FS`,
-    `^FO30,120^A0N,24,24^FD${customerName}^FS`,
-    `^FO280,120^A0N,18,18^FD${sku}^FS`,
-    `^FO30,155^A0N,30,30^FD${eyeLabel} ${eye}^FS`,
-    "^FO30,192^A0N,16,16^FDSPH^FS",
-    "^FO130,192^A0N,16,16^FDCYL^FS",
-    "^FO230,192^A0N,16,16^FDAXIS^FS",
-    `^FO30,214^A0N,24,24^FD${fmt(sph)}^FS`,
-    `^FO130,214^A0N,24,24^FD${fmt(cyl)}^FS`,
-    `^FO230,214^A0N,24,24^FD${fmtAxis(axis)}^FS`,
-    `^FO450,10^BQN,2,4^FDQA,${verifyUrl}^FS`,
-    "^FO468,135^A0N,12,12^FDQR验真^FS",
-    `^FO30,250^A0N,18,18^FD${lensCode}^FS`,
-    "^FO30,238^GB530,1,1^FS",
-    "^FO30,278^A0N,18,18^FDGAUSH | CLEAR^FS",
-    `^FO250,278^A0N,14,14^FD${agentId} ${agentName}^FS`,
+    // 条形码（订单号）— 顶部
+    `^FO30,8^BY2^BCN,60,Y,N,N^FD${orderNo}^FS`,
+    // 产品型号
+    `^FO30,78^A0N,16,16^FD${sku}^FS`,
+    // 客户名 + 眼别标签
+    `^FO30,100^A0N,22,22^FD${customerName}^FS`,
+    `^FO300,100^A0N,16,16^FD${eyeLabel}^FS`,
+    // 处方参数
+    "^FO30,132^A0N,14,14^FDSPH^FS",
+    "^FO140,132^A0N,14,14^FDCYL^FS",
+    "^FO250,132^A0N,14,14^FDAXIS^FS",
+    `^FO30,152^A0N,22,22^FD${fmt(sph)}^FS`,
+    `^FO140,152^A0N,22,22^FD${fmt(cyl)}^FS`,
+    `^FO250,152^A0N,22,22^FD${fmtAxis(axis)}^FS`,
+    // QR 验真码 — 右侧
+    `^FO440,78^BQN,2,4^FDQA,${verifyUrl}^FS`,
+    "^FO455,192^A0N,10,10^FD扫码验真^FS",
+    // 分隔线
+    "^FO30,186^GB540,1,1^FS",
+    // 底部：镜片码 + 代理商
+    `^FO30,196^A0N,14,14^FD${lensCode}^FS`,
+    `^FO350,196^A0N,12,12^FD${agentId} ${agentName}^FS`,
     "^XZ",
   ].join("\n");
 
