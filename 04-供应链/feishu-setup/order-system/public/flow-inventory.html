@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>进销存逻辑流程图</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --card: #fff;
+    --border: #e2e8f0;
+    --text: #1e293b;
+    --dim: #64748b;
+    --blue: #2563eb;
+    --blue-bg: #eff6ff;
+    --green: #16a34a;
+    --green-bg: #f0fdf4;
+    --orange: #ea580c;
+    --orange-bg: #fff7ed;
+    --red: #dc2626;
+    --red-bg: #fef2f2;
+    --purple: #7c3aed;
+    --purple-bg: #f5f3ff;
+    --cyan: #0891b2;
+    --cyan-bg: #ecfeff;
+    --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+    --shadow-hover: 0 4px 16px rgba(0,0,0,.1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font: 16px/1.7 -apple-system, "Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", "WenQuanYi Micro Hei", sans-serif; padding: 32px 40px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 28px; margin-bottom: 6px; letter-spacing: -.5px; }
+  .subtitle { color: var(--dim); font-size: 15px; margin-bottom: 28px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 32px; }
+  .tab { padding: 10px 24px; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 15px; font-weight: 600; background: var(--card); transition: .15s; user-select: none; }
+  .tab:hover { border-color: var(--blue); background: var(--blue-bg); }
+  .tab.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .flow { display: flex; flex-direction: column; gap: 16px; }
+
+  .row { display: flex; align-items: stretch; gap: 16px; justify-content: center; flex-wrap: wrap; }
+
+  .node { background: var(--card); border: 2px solid var(--border); border-radius: 12px; padding: 20px 28px; min-width: 220px; max-width: 320px; text-align: center; box-shadow: var(--shadow); transition: .2s; }
+  .node:hover { box-shadow: var(--shadow-hover); }
+  .node.start { border-color: var(--green); background: var(--green-bg); }
+  .node.end { border-color: var(--dim); background: #f1f5f9; }
+  .node.stock { border-color: var(--orange); background: var(--orange-bg); }
+  .node.db { border-color: var(--purple); background: var(--purple-bg); }
+  .node.api { border-color: var(--cyan); background: var(--cyan-bg); }
+  .node-title { font-weight: 700; font-size: 17px; margin-bottom: 6px; }
+  .node-sub { font-size: 13px; color: var(--dim); }
+  .node-fn { font-size: 12px; font-family: 'Cascadia Code', 'Consolas', 'Microsoft YaHei Mono', monospace; margin-top: 8px; padding: 5px 10px; border-radius: 5px; display: inline-block; font-weight: 600; }
+  .node-fn.green { color: var(--green); background: #dcfce7; }
+  .node-fn.orange { color: var(--orange); background: #fed7aa; }
+  .node-fn.purple { color: var(--purple); background: #e9d5ff; }
+
+  .arrow-row { display: flex; justify-content: center; }
+  .arrow-down { display: flex; flex-direction: column; align-items: center; }
+  .arrow-big { font-size: 28px; color: var(--dim); line-height: 1; }
+  .arrow-label { font-size: 13px; color: var(--dim); background: var(--bg); padding: 2px 10px; border-radius: 4px; font-weight: 500; }
+
+  .branch { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+  .branch-col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .branch-label { font-size: 14px; font-weight: 700; padding: 5px 14px; border-radius: 8px; }
+  .branch-label.green { background: #dcfce7; color: var(--green); }
+  .branch-label.orange { background: #fed7aa; color: var(--orange); }
+  .branch-label.purple { background: #e9d5ff; color: var(--purple); }
+  .branch-note { font-size: 13px; color: var(--dim); margin-top: 4px; text-align: center; }
+
+  .divider { border: none; border-top: 2px dashed var(--border); margin: 20px 0; }
+
+  .section-tag { text-align: center; margin: 10px 0; }
+  .section-tag span { padding: 8px 20px; border-radius: 8px; font-size: 15px; font-weight: 700; }
+  .tag-red { background: var(--red-bg); color: var(--red); }
+  .tag-cyan { background: var(--cyan-bg); color: var(--cyan); }
+
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 32px; padding: 16px 24px; background: var(--card); border-radius: 12px; border: 1px solid var(--border); }
+  .legend-item { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--dim); font-weight: 500; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 4px; }
+
+  .counter { font-size: 13px; color: var(--dim); margin-top: 8px; }
+  .counter span { color: var(--text); font-weight: 700; }
+
+  .module-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: var(--shadow); }
+  .module-card h3 { font-size: 18px; margin-bottom: 10px; }
+  .module-card .path { font-size: 13px; color: var(--cyan); font-family: 'Consolas', monospace; margin-bottom: 14px; font-weight: 600; }
+  .module-card .deps { font-size: 14px; color: var(--dim); line-height: 1.8; }
+  .module-card .deps span { color: var(--purple); font-weight: 600; }
+  .module-card .deps .zero { color: var(--green); }
+  .io-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 12px; }
+  .io-table th { text-align: left; color: var(--dim); font-weight: 600; padding: 7px 10px; border-bottom: 2px solid var(--border); }
+  .io-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); }
+  .io-table .in { color: var(--green); }
+  .io-table .out { color: var(--cyan); }
+
+  .connector { display: flex; align-items: center; font-size: 32px; color: var(--dim); font-weight: 300; padding: 0 12px; }
+</style>
+</head>
+<body>
+
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+<div><h1>进销存逻辑流程图</h1>
+<p class="subtitle" style="margin-bottom:0">下单预占 → 发货实扣 → 退回释放 → 采购入库 &nbsp;｜&nbsp; 模块解耦：StockResolver ⇢ StateRouter</p></div>
+<a href="/control" style="padding:8px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--dim);font-size:14px;font-weight:600;white-space:nowrap">← 控制中心</a>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('flow')">全链路流程</div>
+  <div class="tab" onclick="switchTab('modules')">模块关系</div>
+  <div class="tab" onclick="switchTab('tables')">数据表结构</div>
+</div>
+
+<!-- ═══ PANEL 1: 全链路 ═══ -->
+<div class="panel active" id="panel-flow">
+<div class="flow">
+
+  <div class="row">
+    <div class="node start">
+      <div class="node-title">代理商提交订单</div>
+      <div class="node-sub">POST /api/submit</div>
+      <div class="node-fn green">写订单主表 + 镜片明细</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><div class="arrow-down">
+    <span class="arrow-big">↓</span>
+    <span class="arrow-label">按 (sku, sph, cyl) 聚合度数</span>
+  </div></div>
+
+  <div class="row">
+    <div class="node stock">
+      <div class="node-title">预占库存</div>
+      <div class="node-sub">reserveStock(sku, sph, cyl, qty)</div>
+      <div class="node-fn green">withLock → fresh read → PATCH 预占+=qty</div>
+      <div class="counter">available = 当前库存 − 预占库存 &nbsp;|&nbsp; toReserve = min(qty, <span>available</span>)</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><div class="arrow-down">
+    <span class="arrow-big">↓</span>
+    <span class="arrow-label">订单状态 = "已下单"</span>
+  </div></div>
+
+  <div class="row">
+    <div class="node api">
+      <div class="node-title">助理确认订单</div>
+      <div class="node-sub">POST /api/admin/confirm</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><div class="arrow-down">
+    <span class="arrow-big">↓</span>
+    <span class="arrow-label">StockResolver.resolveStock(lenses) → 从缓存 getStockMap() O(1) 查 available</span>
+  </div></div>
+
+  <div class="arrow-row"><div class="arrow-down">
+    <span class="arrow-big">↓</span>
+    <span class="arrow-label">StateRouter.routeConfirm(results) → 纯函数路由</span>
+  </div></div>
+
+  <div class="branch">
+    <div class="branch-col">
+      <div class="branch-label green">可用 > 0</div>
+      <div class="node" style="border-color:var(--green);background:var(--green-bg)">
+        <div class="node-title">打标签</div>
+        <div class="node-sub">wfStep = labeled</div>
+        <div class="node-fn green">交期: 有货1-2天</div>
+      </div>
+      <div class="branch-note">有库存路径：跳过待处理+生产中</div>
+    </div>
+    <div class="branch-col">
+      <div class="branch-label orange">可用 = 0（常规范围）</div>
+      <div class="node" style="border-color:var(--orange);background:var(--orange-bg)">
+        <div class="node-title">待处理</div>
+        <div class="node-sub">wfStep = confirmed</div>
+        <div class="node-fn orange">交期: 排产5-7天</div>
+      </div>
+      <div class="branch-note">→ 导出Excel → 生产中 → 打标签</div>
+    </div>
+    <div class="branch-col">
+      <div class="branch-label purple">超范围</div>
+      <div class="node" style="border-color:var(--purple);background:var(--purple-bg)">
+        <div class="node-title">待处理</div>
+        <div class="node-sub">wfStep = confirmed</div>
+        <div class="node-fn purple">交期: 定制7-10天</div>
+      </div>
+      <div class="branch-note">SPH < −6 或 CYL < −2<br>不查库存表</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><div class="arrow-down"><span class="arrow-big">↓</span></div></div>
+
+  <div class="row">
+    <div class="node api">
+      <div class="node-title">确认发货</div>
+      <div class="node-sub">POST /api/admin/ship</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><div class="arrow-down">
+    <span class="arrow-big">↓</span>
+    <span class="arrow-label">convertReservation(sku, sph, cyl, 1)</span>
+  </div></div>
+
+  <div class="row">
+    <div class="node stock">
+      <div class="node-title">预约转实扣</div>
+      <div class="node-sub">withLock 内单次 PATCH：当前库存−1 + 预占库存−1</div>
+      <div class="node-fn green">原子写入 → clearCache → 写出库流水</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><div class="arrow-down"><span class="arrow-big">↓</span></div></div>
+
+  <div class="row">
+    <div class="node end">
+      <div class="node-title">已发货（终态）</div>
+      <div class="node-sub">飞书发货通知卡片 + 随货同行单 + stock_movement 出库记录</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-tag"><span class="tag-red">退回流程：释放预占</span></div>
+
+  <div class="row">
+    <div class="node api">
+      <div class="node-title">退回上一步</div>
+      <div class="node-sub">POST /api/admin/revert</div>
+      <div class="node-fn orange">打标签→已下单 &nbsp;|&nbsp; 待处理→已下单 &nbsp;|&nbsp; 生产中→待处理</div>
+    </div>
+  </div>
+
+  <div class="arrow-row"><div class="arrow-down">
+    <span class="arrow-big">↓</span>
+    <span class="arrow-label">releaseReservation(sku, sph, cyl, qty)</span>
+  </div></div>
+
+  <div class="row">
+    <div class="node stock">
+      <div class="node-title">释放预占</div>
+      <div class="node-sub">withLock → PATCH 预占库存 −= toRelease</div>
+      <div class="counter">toRelease = min(qty, <span>currentReserved</span>) &nbsp;|&nbsp; 已是0时 no-op（安全）</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-tag"><span class="tag-cyan">采购入库：补充库存</span></div>
+
+  <div class="row">
+    <div class="node api">
+      <div class="node-title">创建采购单</div>
+      <div class="node-sub">POST /api/admin/procurement</div>
+      <div class="node-fn">sku + sph + cyl + qty → PO编号 → procurement表 状态=已下单</div>
+    </div>
+    <div class="connector">→</div>
+    <div class="node api">
+      <div class="node-title">到货入库</div>
+      <div class="node-sub">POST .../procurement/:id/receive</div>
+      <div class="node-fn green">withLock → 当前库存+qty → 采购状态=已到货</div>
+    </div>
+    <div class="connector">→</div>
+    <div class="node db">
+      <div class="node-title">入库流水</div>
+      <div class="node-sub">stock_movement: 入库/采购到货</div>
+      <div class="counter">变动前/后库存可追溯</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> 下单/预约</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> 库存操作</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div> 数据表</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--cyan)"></div> API 端点</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> 退回释放</div>
+  </div>
+</div>
+</div>
+
+<!-- ═══ PANEL 2: 模块关系 ═══ -->
+<div class="panel" id="panel-modules">
+<div class="flow">
+
+  <div class="row">
+    <div class="module-card" style="flex:1;min-width:340px">
+      <h3>StockResolver — 库存判定</h3>
+      <div class="path">lib/stock-resolver.js</div>
+      <table class="io-table">
+        <tr><th class="in">输入</th><td>lenses: [{sku, sph, cyl}]</td></tr>
+        <tr><th class="out">输出</th><td>[{stock, reserved, available, inStock}]</td></tr>
+      </table>
+      <div class="deps" style="margin-top:12px">依赖: <span>getStockMap()</span> 缓存（2min TTL，O(1) 查找）</div>
+      <div class="deps">特点: 不关心库存结果意味着什么状态</div>
+    </div>
+
+    <div class="connector" style="font-size:40px">→</div>
+
+    <div class="module-card" style="flex:1;min-width:340px">
+      <h3>StateRouter — 状态路由</h3>
+      <div class="path">lib/state-router.js</div>
+      <table class="io-table">
+        <tr><th class="in">输入</th><td>stockResults: [{inStock, inRange}]</td></tr>
+        <tr><th class="out">输出</th><td>{targetStatus, wfStep, deliveryType}</td></tr>
+      </table>
+      <div class="deps" style="margin-top:12px">依赖: <span class="zero">无</span>（纯函数，零 I/O）</div>
+      <div class="deps">特点: 不关心库存数据怎么来的</div>
+    </div>
+  </div>
+
+  <div style="text-align:center;color:var(--dim);margin:8px 0;font-size:15px;font-weight:600">
+    两模块互不知道对方存在，仅通过 <code style="background:#e9d5ff;padding:2px 8px;border-radius:4px;color:var(--purple)">{inStock: bool}</code> 一个字段连接
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="row">
+    <div class="module-card" style="flex:1;min-width:380px">
+      <h3>lib/stock.js — 库存核心</h3>
+      <div class="path">lib/stock.js (247行)</div>
+      <table class="io-table">
+        <tr><th>getStockMap()</th><td>全表缓存（1575行, 2min TTL）— 供 StockResolver 读</td></tr>
+        <tr><th>queryStockByRx()</th><td>单记录过滤查询 — 供写操作锁内 fresh read</td></tr>
+        <tr><th style="color:var(--green)">reserveStock()</th><td style="background:#f0fdf4">下单预占: withLock + fresh read + PATCH 预占+=qty</td></tr>
+        <tr><th style="color:var(--orange)">convertReservation()</th><td style="background:#fff7ed">发货实扣: 库存−1 + 预占−1 原子写入</td></tr>
+        <tr><th style="color:var(--red)">releaseReservation()</th><td style="background:#fef2f2">退回释放: 预占 −= toRelease</td></tr>
+        <tr><th>estimateDeliveryByRx()</th><td>交期预估: 三档判定（有货/排产/定制）</td></tr>
+      </table>
+    </div>
+
+    <div class="module-card" style="flex:1;min-width:380px">
+      <h3>server.js — API 端点</h3>
+      <div class="path">server.js (4400行)</div>
+      <table class="io-table">
+        <tr><th>POST /api/submit</th><td>写订单 → reserveStock() 预占</td></tr>
+        <tr><th>POST /api/admin/confirm</th><td>resolveStock() → routeConfirm() → 写状态</td></tr>
+        <tr><th>POST /api/admin/ship</th><td>convertReservation() → 写物流 → 发通知</td></tr>
+        <tr><th>POST /api/admin/revert</th><td>退状态 → releaseReservation() 释放预占</td></tr>
+        <tr><th>POST /api/admin/procurement</th><td>创建成品采购单 → procurement 表</td></tr>
+        <tr><th>POST .../procurement/:id/receive</th><td>withLock → 库存+N → stock_movement 入库流水</td></tr>
+        <tr><th>GET /api/admin/stock-detail</th><td>库存列表 + 预占/可用 + SKU 汇总</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="module-card">
+    <h3>并发安全：withLock 每键互斥锁</h3>
+    <div class="deps">
+      key = <span>"SKU编号|SPH|CYL"</span> &nbsp;→&nbsp; Promise 链序列化同一度数的并发写<br>
+      锁内流程：<span>fresh GET 单条</span> → 计算新值 → <span>PATCH 写入</span> → clearCache<br>
+      防 lost update：两个并发请求写同一度数不会互相覆盖
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══ PANEL 3: 数据表 ═══ -->
+<div class="panel" id="panel-tables">
+<div class="flow">
+
+  <div class="module-card">
+    <h3>stock_detail — 度数级成品库存</h3>
+    <div class="path">tbl7U79QGG4JtQev &nbsp;|&nbsp; 1575 行 = 7 SKU × 225 度数组合（SPH 25档 × CYL 9档）</div>
+    <table class="io-table" style="margin-top:14px">
+      <tr><th style="width:120px">字段</th><th style="width:80px">类型</th><th>说明</th></tr>
+      <tr><td>SKU编号</td><td>TEXT</td><td>产品型号（与 SKU_CATALOG 一致）</td></tr>
+      <tr><td>SPH / CYL</td><td>NUMBER(0.00)</td><td>球镜 / 柱镜，步长 0.25</td></tr>
+      <tr><td style="color:var(--green);font-weight:700">当前库存</td><td>NUMBER</td><td>物理在库片数</td></tr>
+      <tr><td style="color:var(--orange);font-weight:700">预占库存 🆕</td><td>NUMBER</td><td>已被订单预约但未出库的片数</td></tr>
+      <tr><td style="color:var(--cyan);font-weight:700">可用库存</td><td>—（代码计算）</td><td style="color:var(--cyan)">当前库存 − 预占库存</td></tr>
+      <tr><td>安全库存</td><td>NUMBER</td><td>低于此值触发 rule12 库存预警</td></tr>
+      <tr><td>最近出库</td><td>DATE</td><td>最后一次出库时间戳</td></tr>
+    </table>
+  </div>
+
+  <div class="module-card" style="margin-top:16px">
+    <h3>stock_movement — 出入库流水</h3>
+    <div class="path">tblCoNeAbrz6tM9C</div>
+    <table class="io-table" style="margin-top:14px">
+      <tr><th style="width:160px">字段</th><th style="width:80px">类型</th><th>写入口径</th></tr>
+      <tr><td>单据号</td><td>TEXT</td><td>MOV-YYYYMMDD-XXXX</td></tr>
+      <tr><td>类型</td><td>单选</td><td>入库 / 出库</td></tr>
+      <tr><td>来源去向</td><td>单选</td><td><b>入库:</b> 采购到货、生产回补、退货退回、盘点补录<br><b>出库:</b> 订单发货、报废损耗、调拨出库、盘点差异</td></tr>
+      <tr><td>SKU编号 / SPH / CYL</td><td>TEXT/NUMBER</td><td>度数定位</td></tr>
+      <tr><td>数量</td><td>NUMBER</td><td>变动片数</td></tr>
+      <tr><td>变动前库存 / 变动后库存</td><td>NUMBER</td><td>审计追溯</td></tr>
+      <tr><td>关联单号</td><td>TEXT</td><td>订单编号 / 采购编号 / 退换单号</td></tr>
+    </table>
+  </div>
+
+  <div class="module-card" style="margin-top:16px">
+    <h3>procurement — 采购跟踪</h3>
+    <div class="path">tblZX1qW7RvcJieg</div>
+    <table class="io-table" style="margin-top:14px">
+      <tr><th style="width:160px">字段</th><th style="width:80px">类型</th><th>说明</th></tr>
+      <tr><td>采购编号</td><td>TEXT</td><td>PO-YYYYMMDD-XXXX</td></tr>
+      <tr><td>采购类型</td><td>单选</td><td>模具 / 毛坯 / <span style="color:var(--orange);font-weight:700">成品 🆕</span></td></tr>
+      <tr><td>关联SKU</td><td>TEXT</td><td>产品型号</td></tr>
+      <tr><td style="color:var(--orange);font-weight:700">SPH / CYL 🆕</td><td>NUMBER</td><td>球镜/柱镜（成品采购专用，可选字段）</td></tr>
+      <tr><td>数量</td><td>NUMBER</td><td>采购片数</td></tr>
+      <tr><td>发起日期 / 预计到货</td><td>DATE</td><td>采购时间线</td></tr>
+      <tr><td>状态</td><td>单选</td><td>待下单 → 已下单 → 已到货 → 已取消</td></tr>
+    </table>
+  </div>
+
+  <div style="font-size:14px;color:var(--dim);margin-top:20px;text-align:center">
+    🆕 = 本次新增字段或枚举值
+  </div>
+
+</div>
+</div>
+
+<script>
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('.tab[onclick="switchTab(\'' + name + '\')"]').classList.add('active');
+  document.getElementById('panel-' + name).classList.add('active');
+}
+</script>
+
+</body>
+</html>

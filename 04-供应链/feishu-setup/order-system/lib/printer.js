@@ -51,38 +51,46 @@ export function buildZpl(rec) {
   const sph = f["球镜SPH"] ?? "";
   const cyl = f["柱镜CYL"] ?? "";
   const axis = f["轴位AXIS"] ?? "";
-  const lensCode = f["镜片码"] || "";
+  const lensCode = f["镜片码（唯一）"] || "";
   const agentName = f["代理商名称"] || "";
   const agentId = f["代理商ID"] || "";
   const verifyUrl = `${getServerBaseUrl()}/verify/${lensCode}`;
 
+  // ZT410 600dpi: 75mm ≈ 1776 dots, 40mm ≈ 945 dots
+  // 1mm ≈ 23.6 dots
+  const M = 23.6;
   const zpl = [
     "^XA",
     "^CI28",
-    "^PW600",
-    "^LL320",
-    // 条形码（订单号）— 顶部
-    `^FO30,8^BY2^BCN,60,Y,N,N^FD${orderNo}^FS`,
-    // 产品型号
-    `^FO30,78^A0N,16,16^FD${sku}^FS`,
-    // 客户名 + 眼别标签
-    `^FO30,100^A0N,22,22^FD${customerName}^FS`,
-    `^FO300,100^A0N,16,16^FD${eyeLabel}^FS`,
-    // 处方参数
-    "^FO30,132^A0N,14,14^FDSPH^FS",
-    "^FO140,132^A0N,14,14^FDCYL^FS",
-    "^FO250,132^A0N,14,14^FDAXIS^FS",
-    `^FO30,152^A0N,22,22^FD${fmt(sph)}^FS`,
-    `^FO140,152^A0N,22,22^FD${fmt(cyl)}^FS`,
-    `^FO250,152^A0N,22,22^FD${fmtAxis(axis)}^FS`,
-    // QR 验真码 — 右侧
-    `^FO440,78^BQN,2,4^FDQA,${verifyUrl}^FS`,
-    "^FO455,192^A0N,10,10^FD扫码验真^FS",
-    // 分隔线
-    "^FO30,186^GB540,1,1^FS",
-    // 底部：镜片码 + 代理商
-    `^FO30,196^A0N,14,14^FD${lensCode}^FS`,
-    `^FO350,196^A0N,12,12^FD${agentId} ${agentName}^FS`,
+    "^PW1776",
+    "^LL945",
+    "^LH236,236",
+    "^MNN",
+    // 1. 姓名 (5,3,35,7) 12pt
+    `^FO${Math.round(5*M)},${Math.round(3*M)}^A0N,${Math.round(4.2*M)},${Math.round(4.2*M)}^FD${customerName}^FS`,
+    // 2. 眼别 (38,4,10,6) 12pt
+    `^FO${Math.round(38*M)},${Math.round(4*M)}^A0N,${Math.round(4.2*M)},${Math.round(4.2*M)}^FD${eyeLabel}^FS`,
+    // 3. 表格外框 (15,10,55,15)
+    `^FO${Math.round(15*M)},${Math.round(10*M)}^GB${Math.round(55*M)},${Math.round(15*M)},2^FS`,
+    // 4. 表格竖线 (33,10,0,15) (50,10,0,15)
+    `^FO${Math.round(33*M)},${Math.round(10*M)}^GB2,${Math.round(15*M)},2^FS`,
+    `^FO${Math.round(50*M)},${Math.round(10*M)}^GB2,${Math.round(15*M)},2^FS`,
+    // 5. 表格横线 (15,17,55,0)
+    `^FO${Math.round(15*M)},${Math.round(17*M)}^GB${Math.round(55*M)},2,2^FS`,
+    // 6-8. 表头 球镜(18,11) 柱镜(37,11) 轴位(55,11) 11pt
+    `^FO${Math.round(18*M)},${Math.round(11*M)}^A0N,${Math.round(3.9*M)},${Math.round(3.9*M)}^FD球镜^FS`,
+    `^FO${Math.round(37*M)},${Math.round(11*M)}^A0N,${Math.round(3.9*M)},${Math.round(3.9*M)}^FD柱镜^FS`,
+    `^FO${Math.round(55*M)},${Math.round(11*M)}^A0N,${Math.round(3.9*M)},${Math.round(3.9*M)}^FD轴位^FS`,
+    // 9-11. 数值 (19,19) (38,19) (56,19) 14pt
+    `^FO${Math.round(19*M)},${Math.round(19*M)}^A0N,${Math.round(4.9*M)},${Math.round(4.9*M)}^FD${fmt(sph)}^FS`,
+    `^FO${Math.round(38*M)},${Math.round(19*M)}^A0N,${Math.round(4.9*M)},${Math.round(4.9*M)}^FD${fmt(cyl)}^FS`,
+    `^FO${Math.round(56*M)},${Math.round(19*M)}^A0N,${Math.round(4.9*M)},${Math.round(4.9*M)}^FD${fmtAxis(axis)}^FS`,
+    // 12. 品名 (5,28,40,6) 12pt
+    `^FO${Math.round(5*M)},${Math.round(28*M)}^A0N,${Math.round(4.2*M)},${Math.round(4.2*M)}^FD高视星® ${sku}^FS`,
+    // 13. 生产日期 (5,35,38,6) 12pt
+    `^FO${Math.round(5*M)},${Math.round(35*M)}^A0N,${Math.round(4.2*M)},${Math.round(4.2*M)}^FD${new Date().toISOString().slice(0,10)}^FS`,
+    // 14. 二维码 (52,26,18,18)
+    `^FO${Math.round(52*M)},${Math.round(26*M)}^BQN,2,6^FDQA,${verifyUrl}^FS`,
     "^XZ",
   ].join("\n");
 
@@ -91,13 +99,13 @@ export function buildZpl(rec) {
 
 export function buildTestZpl() {
   return [
-    "^XA", "^CI28", "^PW600", "^LL320",
-    "^FO170,20^A0N,36,36^FDGAUSH TEST^FS",
-    "^FO30,70^BY2^BCN,70,Y,N,N^FDTEST-PRINT^FS",
-    "^FO30,155^A0N,22,22^FD测试标签 / Test Label^FS",
-    "^FO30,185^A0N,18,18^FD" + new Date().toLocaleString("zh-CN") + "^FS",
-    "^FO30,215^A0N,16,16^FD打印机: " + loadPrinterConfig().printer_model + "^FS",
-    "^FO450,70^BQN,2,3^FDQA,https://gaushclear.com^FS",
+    "^XA", "^CI28", "^PW1776", "^LL945",
+    "^FO500,50^A0N,80,80^FDGAUSH TEST^FS",
+    "^FO90,180^BY4^BCN,180,Y,N,N^FDTEST-PRINT^FS",
+    "^FO90,420^A0N,55,55^FD测试标签 / Test Label^FS",
+    "^FO90,500^A0N,45,45^FD" + new Date().toLocaleString("zh-CN") + "^FS",
+    "^FO90,560^A0N,40,40^FD打印机: " + loadPrinterConfig().printer_model + "^FS",
+    "^FO1330,180^BQN,2,5^FDQA,https://gaushclear.com^FS",
     "^XZ",
   ].join("\n");
 }

@@ -17,6 +17,8 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { slipHTML, init as initTemplates } from "./lib/templates.js";
+import { rawVal } from "./lib/helpers.js";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { createServer } from "http";
@@ -28,6 +30,7 @@ const ORDER_TBL = "tblk9Ch4gk2uQ1zG";
 const LENS_TBL  = "tblC7pve7ObFgIOl";
 const ENV       = loadEnv();
 const SERVER_BASE = ENV.SERVER_BASE_URL || "http://localhost:3210";
+initTemplates({ getServerBaseUrl: () => SERVER_BASE });
 const ARGS      = process.argv.slice(2);
 const CMD       = ARGS[0] || "help";
 const ORDER_NO  = ARGS[ARGS.indexOf("--order") + 1] || null;
@@ -48,7 +51,6 @@ function loadEnv() {
     return env;
   } catch { return {}; }
 }
-const ENV = loadEnv();
 
 // ─── 快递公司配置 ──────────────────────────────────────────────────────────
 
@@ -312,7 +314,7 @@ async function ship() {
   console.log("\n📦 生成快递单并标记发货...\n");
 
   // 查找"生产中"且无快递单号的记录
-  let filter = `CurrentValue.[订单状态]="生产中"`;
+  let filter = `CurrentValue.[订单状态]="生产中" OR CurrentValue.[订单状态]="打标签"`;
   if (ORDER_NO) filter += `&&CurrentValue.[订单编号]="${ORDER_NO}"`;
 
   const records = await listRecords(filter);
@@ -322,7 +324,6 @@ async function ship() {
   const orderMap = {};
   for (const r of records) {
     const f = r.fields;
-    const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
     const no = rawVal(f["订单编号"]);
     if (!no) continue;
     if (!orderMap[no]) orderMap[no] = { records: [], fields: f };
@@ -332,7 +333,6 @@ async function ship() {
   console.log(`  共 ${Object.keys(orderMap).length} 个订单待发货\n`);
 
   for (const [orderNo, { records: recs, fields: f }] of Object.entries(orderMap)) {
-    const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
 
     // 若已有快递单号，跳过
     const existing = rawVal(f["快递单号"]);
@@ -425,8 +425,6 @@ async function shipBatch() {
 
   const records = await listRecords(`CurrentValue.[订单状态]="生产中"`);
   if (!records.length) { console.log("  没有待发货订单。"); return; }
-
-  const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
 
   // 按代理商ID分组，每组内再按订单号聚合
   const agentMap = {};
@@ -682,8 +680,6 @@ async function slipBatch() {
   const records = await listRecords(filter);
   if (!records.length) { console.log("  无已发货记录，请先运行 ship-batch。"); return; }
 
-  const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
-
   // 按代理商 + 快递单号分组（一个代理商可能在不同批次有不同快递单）
   const agentMap = {};
   for (const r of records) {
@@ -723,7 +719,7 @@ async function slipBatch() {
           sph:      f["球镜SPH"] ?? "",
           cyl:      f["柱镜CYL"] ?? "",
           axis:     f["轴位AXIS"] ?? "",
-          lensCode: rawVal(f["镜片码"]),
+          lensCode: rawVal(f["镜片码（唯一）"]),
           pairIndex: f["序号"] || 1,
         });
       }
@@ -762,26 +758,12 @@ async function simulateDelivery() {
   if (!records.length) { console.log("  未找到订单。"); return; }
 
   const now = Date.now();
-  const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
   const f = records[0].fields;
 
-  for (const rec of records) {
-    await updateRecord(rec.record_id, {
-      "物流状态": "已签收",
-      "订单状态": "已签收",
-      "签收时间": now,
-    });
-  }
-
-  // 同步镜片明细表状态
-  const lensDetails = await getLensDetailsByOrder(ORDER_NO);
-  for (const rec of lensDetails) {
-    await updateLensRecord(rec.record_id, { "订单状态": "已签收" });
-  }
-
+  // 已签收状态已废弃，已发货为终态，此命令仅作记录用途
   const signedAt = new Date(now).toLocaleString("zh-CN");
-  console.log(`  ✅ 状态已更新 → 已签收`);
-  console.log(`  签收时间: ${signedAt}`);
+  console.log(`  ℹ️  deliver 命令已废弃：已发货为终态，无需签收确认`);
+  console.log(`  时间: ${signedAt}`);
 
   await notify(deliveredCard({
     orderNo:      ORDER_NO,
@@ -801,8 +783,6 @@ async function simulateDelivery() {
 async function showStatus() {
   console.log("\n📊 物流状态汇总\n");
   const records = await listRecords(`CurrentValue.[快递单号]!=""`);
-
-  const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
   const orderMap = {};
   for (const r of records) {
     const no = rawVal(r.fields["订单编号"]);
@@ -848,23 +828,9 @@ async function startWebhookServer() {
         if (!records.length) { res.writeHead(404); res.end('{"error":"not found"}'); return; }
 
         const now = Date.now();
-        const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
         const f = records[0].fields;
 
-        for (const rec of records) {
-          await updateRecord(rec.record_id, {
-            "物流状态": "已签收",
-            "订单状态": "已签收",
-            "签收时间": now,
-          });
-        }
-
-        // 同步镜片明细表状态
-        const lensDetails = await getLensDetailsByOrder(orderNo);
-        for (const rec of lensDetails) {
-          await updateLensRecord(rec.record_id, { "订单状态": "已签收" });
-        }
-
+        // 已签收状态已废弃，已发货为终态，仅发送飞书通知，不更新订单状态
         const signedAt = new Date(now).toLocaleString("zh-CN");
         await notify(deliveredCard({
           orderNo,
@@ -900,227 +866,7 @@ async function startWebhookServer() {
   });
 }
 
-// ─── 随货同行单 ────────────────────────────────────────────────────────────
-
-function slipHTML(order) {
-  const { orderNo, customerName, agentName, agentId, shipDate, promiseDate,
-          courierName, trackingNo, rows } = order;
-
-  // 左眼/右眼行
-  const eyeRow = (r) => {
-    const lc = r.lensCode || "—";
-    const qr = `https://api.qrserver.com/v1/create-qr-code/?size=64x64&ecc=M&data=${encodeURIComponent(SERVER_BASE + "/verify/" + lc)}`;
-    return `
-    <tr>
-      <td class="eye ${r.eye === "左眼" ? "eye-l" : "eye-r"}">${r.eye === "左眼" ? "L<br><span>左眼</span>" : "R<br><span>右眼</span>"}</td>
-      <td class="sku">${r.sku || "—"}</td>
-      <td class="rx">${r.sph || "—"}</td>
-      <td class="rx">${r.cyl || "—"}</td>
-      <td class="rx">${r.axis || "—"}</td>
-      <td class="lc"><span class="lc-code">${lc}</span></td>
-      <td class="qr-cell"><img src="${qr}" alt="QR" width="52" height="52"></td>
-    </tr>`;
-  };
-
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<title>随货同行单 ${orderNo}</title>
-<style>
-  @page { size: A4; margin: 12mm 14mm; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; font-size: 10pt; color: #1a1a2e; background: #fff; }
-
-  /* ── 页眉 ── */
-  .header { display: flex; align-items: flex-end; justify-content: space-between;
-            border-bottom: 1.5pt solid #c0392b; padding-bottom: 4mm; margin-bottom: 5mm; }
-  .brand { display: flex; flex-direction: column; gap: 1mm; }
-  .brand-name { font-size: 18pt; font-weight: 900; letter-spacing: 3px; color: #c0392b; }
-  .brand-sub  { font-size: 7.5pt; color: #888; letter-spacing: 1.5px; }
-  .doc-title  { text-align: right; }
-  .doc-title h1 { font-size: 16pt; font-weight: 800; letter-spacing: 4px; color: #1a1a2e; }
-  .doc-title p  { font-size: 7pt; color: #aaa; margin-top: 1mm; letter-spacing: 1px; }
-
-  /* ── 信息栏 ── */
-  .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3mm;
-          background: #fdf5f5; border: 0.5pt solid #f0d0d0; border-radius: 2mm;
-          padding: 4mm 5mm; margin-bottom: 5mm; }
-  .meta-item { display: flex; flex-direction: column; gap: 0.8mm; }
-  .meta-label { font-size: 6pt; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
-  .meta-value { font-size: 10pt; font-weight: 700; color: #1a1a2e; }
-  .meta-value.mono { font-family: "Courier New", monospace; font-size: 9pt; }
-  .meta-value.red  { color: #c0392b; }
-
-  /* ── 处方表 ── */
-  .rx-title { font-size: 8pt; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
-              color: #c0392b; margin-bottom: 2.5mm; padding-left: 2mm;
-              border-left: 2pt solid #c0392b; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 6mm; }
-  thead th { background: #1a1a2e; color: white; font-size: 7pt; font-weight: 600;
-             letter-spacing: 0.5px; padding: 2.5mm 3mm; text-align: center; }
-  thead th:first-child { text-align: left; padding-left: 4mm; }
-  tbody tr { border-bottom: 0.4pt solid #eee; }
-  tbody tr:nth-child(even) { background: #fafafa; }
-
-  td.eye { width: 14mm; font-size: 16pt; font-weight: 900; text-align: center;
-           padding: 3mm 0; line-height: 1; }
-  td.eye span { font-size: 6pt; font-weight: 400; display: block; margin-top: 0.5mm; }
-  td.eye-r { color: #c0392b; }
-  td.eye-l { color: #2980b9; }
-  td.sku  { padding: 3mm; font-size: 8pt; font-weight: 600; }
-  td.rx   { padding: 3mm; text-align: center; font-family: "Courier New",monospace;
-            font-size: 11pt; font-weight: 700; color: #c0392b; }
-  td.lc   { padding: 3mm; }
-  .lc-code { font-family: "Courier New",monospace; font-size: 7.5pt; font-weight: 700;
-             background: #1a1a2e; color: #fff; padding: 1mm 2mm; border-radius: 1mm; letter-spacing: 1px; }
-  td.qr-cell { padding: 2mm; text-align: center; width: 18mm; }
-
-  /* ── 物流栏 ── */
-  .logistics { display: flex; gap: 5mm; margin-bottom: 6mm; }
-  .logistics-box { flex: 1; border: 0.5pt solid #ddd; border-radius: 2mm; padding: 4mm; }
-  .logistics-box h3 { font-size: 7pt; font-weight: 700; letter-spacing: 1.5px;
-                       text-transform: uppercase; color: #888; margin-bottom: 3mm; }
-  .tracking-no { font-family: "Courier New",monospace; font-size: 14pt; font-weight: 900;
-                 color: #1a1a2e; letter-spacing: 2px; }
-  .courier-name { font-size: 9pt; color: #555; margin-top: 1mm; }
-
-  /* ── 签收栏 ── */
-  .sign-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5mm; margin-bottom: 6mm; }
-  .sign-box { border: 0.5pt solid #ddd; border-radius: 2mm; padding: 4mm; min-height: 22mm; }
-  .sign-box h3 { font-size: 7pt; color: #aaa; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2mm; }
-  .sign-box .sign-line { border-bottom: 0.5pt solid #ccc; margin: 10mm 2mm 2mm; }
-  .sign-box .sign-hint { font-size: 6pt; color: #ccc; text-align: center; }
-
-  /* ── 页脚 ── */
-  .footer { border-top: 0.5pt solid #eee; padding-top: 3mm; display: flex;
-            justify-content: space-between; align-items: center; }
-  .footer-left { font-size: 6.5pt; color: #bbb; }
-  .footer-right { font-size: 6pt; color: #ccc; font-family: "Courier New",monospace; }
-
-  /* ── 打印优化 ── */
-  @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .no-print { display: none; }
-  }
-  .print-btn { position: fixed; bottom: 20px; right: 20px; padding: 10px 20px;
-               background: #c0392b; color: white; border: none; border-radius: 6px;
-               font-size: 13px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
-</style>
-</head>
-<body>
-
-<!-- 打印按钮（屏幕预览用） -->
-<button class="print-btn no-print" onclick="window.print()">打印 / 导出 PDF</button>
-
-<!-- ── 页眉 ── -->
-<div class="header">
-  <div class="brand">
-    <div class="brand-name">GAUSH | CLEAR</div>
-    <div class="brand-sub">高视星 · 镜片溯源系统</div>
-  </div>
-  <div class="doc-title">
-    <h1>随货同行单</h1>
-    <p>PACKING SLIP / DELIVERY NOTE</p>
-  </div>
-</div>
-
-<!-- ── 基本信息 ── -->
-<div class="meta">
-  <div class="meta-item">
-    <div class="meta-label">订单号 Order No.</div>
-    <div class="meta-value mono red">${orderNo}</div>
-  </div>
-  <div class="meta-item">
-    <div class="meta-label">顾客 Customer</div>
-    <div class="meta-value">${customerName}</div>
-  </div>
-  <div class="meta-item">
-    <div class="meta-label">代理商 Agent</div>
-    <div class="meta-value">${agentName} <span style="font-size:7pt;color:#aaa">${agentId}</span></div>
-  </div>
-  <div class="meta-item">
-    <div class="meta-label">发货日期 Ship Date</div>
-    <div class="meta-value">${shipDate}</div>
-  </div>
-  <div class="meta-item">
-    <div class="meta-label">承诺交期 Promise Date</div>
-    <div class="meta-value">${promiseDate || "—"}</div>
-  </div>
-  <div class="meta-item">
-    <div class="meta-label">镜片数量 Qty</div>
-    <div class="meta-value red">${rows.length} 片</div>
-  </div>
-</div>
-
-<!-- ── 处方参数 ── -->
-<div class="rx-title">处方参数 Prescription</div>
-<table>
-  <thead>
-    <tr>
-      <th>眼别</th>
-      <th>SKU / 型号</th>
-      <th>SPH 球镜</th>
-      <th>CYL 柱镜</th>
-      <th>AXIS 轴位</th>
-      <th>镜片码 Lens Code</th>
-      <th>溯源</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${rows.map(eyeRow).join("\n")}
-  </tbody>
-</table>
-
-<!-- ── 物流信息 ── -->
-<div class="logistics">
-  <div class="logistics-box">
-    <h3>物流信息 Shipping</h3>
-    <div class="tracking-no">${trackingNo || "—"}</div>
-    <div class="courier-name">${courierName || "—"}</div>
-  </div>
-  <div class="logistics-box" style="flex:2">
-    <h3>温馨提示 Notes</h3>
-    <p style="font-size:8pt;color:#555;line-height:1.8">
-      1. 请在签收前检查包装完好性，如有破损请拒收并联系代理商。<br>
-      2. 扫描各镜片上的二维码可查询溯源信息及真伪验证。<br>
-      3. 如有疑问请联系：<strong>${agentName}</strong>
-    </p>
-  </div>
-</div>
-
-<!-- ── 签收确认 ── -->
-<div class="sign-section">
-  <div class="sign-box">
-    <h3>发货方签章 Shipper</h3>
-    <div class="sign-line"></div>
-    <div class="sign-hint">高视星 / GAUSH CLEAR</div>
-  </div>
-  <div class="sign-box">
-    <h3>代理商签章 Agent</h3>
-    <div class="sign-line"></div>
-    <div class="sign-hint">${agentName}</div>
-  </div>
-  <div class="sign-box">
-    <h3>顾客签收 Customer Sign</h3>
-    <div class="sign-line"></div>
-    <div class="sign-hint">签收日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;月&nbsp;&nbsp;日</div>
-  </div>
-</div>
-
-<!-- ── 页脚 ── -->
-<div class="footer">
-  <div class="footer-left">
-    高视星镜片溯源系统 GAUSH CLEAR Supply Chain v1.0 &nbsp;|&nbsp; 本单据随货附带，请妥善保存
-  </div>
-  <div class="footer-right">
-    打印时间 ${new Date().toLocaleString("zh-CN")} &nbsp;|&nbsp; ${orderNo}
-  </div>
-</div>
-
-</body>
-</html>`;
-}
+// ─── 随货同行单（模板已统一到 lib/templates.js::slipHTML）────────────────
 
 async function generateSlip() {
   if (!ORDER_NO) { console.error("  请指定 --order ORD-xxx"); process.exit(1); }
@@ -1128,8 +874,6 @@ async function generateSlip() {
 
   const records = await listRecords(`CurrentValue.[订单编号]="${ORDER_NO}"`);
   if (!records.length) { console.log("  未找到订单，请确认订单号。"); return; }
-
-  const rawVal = (v) => Array.isArray(v) ? (v[0]?.text ?? v[0] ?? "") : (v ?? "");
   const f0 = records[0].fields;
 
   // 从镜片明细表获取处方数据
@@ -1143,7 +887,7 @@ async function generateSlip() {
       sph:      f["球镜SPH"] ?? "",
       cyl:      f["柱镜CYL"] ?? "",
       axis:     f["轴位AXIS"] ?? "",
-      lensCode: rawVal(f["镜片码"]),
+      lensCode: rawVal(f["镜片码（唯一）"]),
       pairIndex: f["序号"] || 1,
     };
   });

@@ -58,7 +58,7 @@ export async function feishuApi(method, path, body) {
 export async function listRecords(tableId, fieldNames) {
   const records = [];
   let pageToken = "";
-  const fnParam = fieldNames ? `&field_names=${fieldNames.map(encodeURIComponent).join(",")}` : "";
+  const fnParam = fieldNames ? `&field_names=${encodeURIComponent(JSON.stringify(fieldNames))}` : "";
   while (true) {
     const qs = pageToken ? `?page_size=100&page_token=${pageToken}${fnParam}` : `?page_size=100${fnParam}`;
     const data = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records${qs}`);
@@ -85,4 +85,22 @@ export async function batchCreateRecords(tableId, records) {
 
 export async function updateRecord(tableId, recordId, fields) {
   return feishuApi("PUT", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records/${recordId}`, { fields });
+}
+
+export async function batchUpdateRecords(tableId, records) {
+  for (let i = 0; i < records.length; i += 500) {
+    const batch = records.slice(i, i + 500);
+    const res = await feishuApi("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records/batch_update`, { records: batch });
+    if (!res) return false;
+  }
+  return true;
+}
+
+// 单条/少量记录查询（飞书 search API，~200ms，替代全表扫描）
+export async function filterRecords(tableId, filter, fieldNames) {
+  const body = { page_size: 100 };
+  if (filter) body.filter = filter;
+  if (fieldNames) body.field_names = fieldNames;
+  const data = await feishuApi("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records/search`, body);
+  return data?.items || [];
 }

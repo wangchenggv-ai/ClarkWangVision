@@ -38,7 +38,7 @@ const TABLES = {
   ai_analysis: "tbl8W9F9K2RbaL0k",
   blank_inventory: "tbladv6bQTXlNOlM",
   factory: "tblJ6RXFENJFQe9A",      // fill after migration
-  procurement: "tblZX1qW7RvcJieg",  // fill after migration
+  procurement: "",  // Bitable表尚未创建
   after_sales: "tblzr1b8kH9yERZt",  // fill after migration
   forecast: "tblFLAHOXLSgWS6Q",
 };
@@ -151,11 +151,12 @@ async function main() {
   });
 
   // Orders by delivery type
-  const orderStats = { pending: 0 };
+  const orderStats = { ordered: 0, pending: 0 };
   const orderBySku = {};
   for (const r of orders) {
     const f = r.fields;
     const status = f["订单状态"] || "";
+    if (status === "已下单") orderStats.ordered++;
     if (status === "待处理") orderStats.pending++;
     const sku = f["产品型号"];
     orderBySku[sku] = (orderBySku[sku] || 0) + (Number(f["\u6570\u91CF"]) || 0);
@@ -199,7 +200,7 @@ async function main() {
 
   // Overdue order rate
   const now = Date.now();
-  const completedStatuses = ["完成", "已发货", "已签收"];
+  const completedStatuses = ["完成", "已发货"];
   const activeOrders = orders.filter(r => !completedStatuses.includes(r.fields["订单状态"]));
   const overdueOrders = activeOrders.filter(r => {
     const due = r.fields["承诺交货日"];
@@ -257,7 +258,7 @@ async function main() {
     const promiseDate = f["承诺交货日"];
     if (promiseDate) {
       const pTs = typeof promiseDate === "number" ? promiseDate : new Date(promiseDate).getTime();
-      if (["已发货","完成","已签收"].includes(status)) delivOnTime++;
+      if (["已发货","完成"].includes(status)) delivOnTime++;
       else if (pTs < now) { delivOverdue++; delivSkuStats[sku].overdue++; }
       else delivPending++;
     }
@@ -393,7 +394,7 @@ async function main() {
   <div class="kpi blue">
     <div class="label">总订单数</div>
     <div class="num">${orders.length}</div>
-    <div class="label">待处理${orderStats.pending}</div>
+    <div class="label">已下单${orderStats.ordered} / 待处理${orderStats.pending}</div>
   </div>
   <div class="kpi green">
     <div class="label">库存正常 SKU</div>

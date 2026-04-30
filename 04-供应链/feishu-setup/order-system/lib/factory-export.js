@@ -12,16 +12,20 @@ export function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
     const nameKey = `${recOrderNo}|${recCustomer}`;
     return orderInfoMap[fullKey] || orderInfoMap[nameKey] || orderInfoMap[recOrderNo] || {};
   };
-  const sorted = [...records].sort((a, b) => {
-    const nameCmp = String(a.fields["顾客姓名"] || "").localeCompare(String(b.fields["顾客姓名"] || ""), "zh-CN");
+  const indexed = records.map((r, i) => ({ r, i }));
+  indexed.sort((a, b) => {
+    const nameCmp = String(a.r.fields["顾客姓名"] || "").localeCompare(String(b.r.fields["顾客姓名"] || ""), "zh-CN");
     if (nameCmp !== 0) return nameCmp;
-    const pa = a.fields["序号"] || 1, pb = b.fields["序号"] || 1;
+    const pa = Number(a.r.fields["序号"] || 1), pb = Number(b.r.fields["序号"] || 1);
     if (pa !== pb) return pa - pb;
-    const ea = a.fields["眼别"] || "", eb = b.fields["眼别"] || "";
+    const sa = String(a.r.fields["产品型号"] || ""), sb = String(b.r.fields["产品型号"] || "");
+    if (sa !== sb) return sa.localeCompare(sb, "zh-CN");
+    const ea = a.r.fields["眼别"] || "", eb = b.r.fields["眼别"] || "";
     if (ea.includes("右") && !eb.includes("右")) return -1;
     if (!ea.includes("右") && eb.includes("右")) return 1;
-    return 0;
+    return a.i - b.i; // 稳定排序：保持原始配对顺序
   });
+  const sorted = indexed.map(x => x.r);
   const rows = sorted.map(rec => {
     const f = rec.fields;
     const info = getInfo(f["订单编号"] || "", f["顾客姓名"] || "", f["序号"] || 1);
@@ -29,12 +33,12 @@ export function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
       "订单号": f["订单编号"] || "",
       "顾客": f["顾客姓名"] || "",
       "产品型号": f["产品型号"] || "",
-      "数量": info.quantity || 1,
+      "数量": 1,
       "眼别": f["眼别"] || "",
       "球镜SPH": f["球镜SPH"] != null && isFinite(Number(f["球镜SPH"])) ? Number(f["球镜SPH"]).toFixed(2) : "",
       "柱镜CYL": f["柱镜CYL"] != null && isFinite(Number(f["柱镜CYL"])) ? Number(f["柱镜CYL"]).toFixed(2) : "",
       "轴位AXIS": f["轴位AXIS"] != null && isFinite(Number(f["轴位AXIS"])) ? Number(f["轴位AXIS"]).toFixed(0) : "",
-      "镜片码": f["镜片码"] || "",
+      "镜片码（唯一）": f["镜片码（唯一）"] || "",
       "是否装配": f["是否装配"] || "",
       "联系人": info.contact || "",
       "联系电话": info.phone || "",
@@ -51,6 +55,56 @@ export function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
     { wch: 16 }, { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`.slice(0, 31));
+  return Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
+}
+
+// ─── 标签 Excel 导出（供其他打印机识别）──────────────────────────────────────
+
+export function buildLabelExportExcel(records, dateMap = {}) {
+  const indexed = records.map((r, i) => ({ r, i }));
+  indexed.sort((a, b) => {
+    const fa = a.r.fields, fb = b.r.fields;
+    const nameCmp = String(fa["顾客姓名"] || "").localeCompare(String(fb["顾客姓名"] || ""), "zh-CN");
+    if (nameCmp !== 0) return nameCmp;
+    const pa = Number(fa["序号"] || 1), pb = Number(fb["序号"] || 1);
+    if (pa !== pb) return pa - pb;
+    const skuCmp = String(fa["产品型号"] || "").localeCompare(String(fb["产品型号"] || ""), "zh-CN");
+    if (skuCmp !== 0) return skuCmp;
+    const ea = fa["眼别"] || "", eb = fb["眼别"] || "";
+    if (ea.includes("右") && !eb.includes("右")) return -1;
+    if (!ea.includes("右") && eb.includes("右")) return 1;
+    return a.i - b.i;
+  });
+  const sorted = indexed.map(x => x.r);
+
+  const rows = sorted.map(rec => {
+    const f = rec.fields;
+    const lensCode = f["镜片码（唯一）"] || "";
+    const orderNo = f["订单编号"] || "";
+    const customerName = f["顾客姓名"] || "";
+    const pairIndex = Number(f["序号"] || 1);
+    const dateKey = `${orderNo}|${customerName}|${pairIndex}`;
+    const dateVal = dateMap[dateKey] || dateMap[orderNo] || "";
+
+    return {
+      "姓名": customerName,
+      "型号": f["产品型号"] || "",
+      "眼别": f["眼别"] || "",
+      "球镜": f["球镜SPH"] != null && isFinite(Number(f["球镜SPH"])) ? Number(f["球镜SPH"]).toFixed(2) : "",
+      "柱镜": f["柱镜CYL"] != null && isFinite(Number(f["柱镜CYL"])) ? Number(f["柱镜CYL"]).toFixed(2) : "",
+      "轴位": f["轴位AXIS"] != null && isFinite(Number(f["轴位AXIS"])) ? Number(f["轴位AXIS"]).toFixed(0) : "",
+      "二维码": lensCode ? `https://lab.gaushclear.com/verify/${lensCode}` : "",
+      "日期": dateVal,
+    };
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [
+    { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 8 },
+    { wch: 8 }, { wch: 6 }, { wch: 50 }, { wch: 12 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, "病人片数据_完美版");
   return Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
 }
 

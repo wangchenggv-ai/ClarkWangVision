@@ -1,0 +1,1 @@
+{"clientRequestId": "e2e-test-1777226854", "terminalCustomer": {"name": "E2E测试机构", "contact": "李测试", "phone": "13800138000"}, "address": "北京市海淀区测试路100号", "patients": [{"customerName": "E2E测试患者", "sku": "Ultra双效", "quantity": 1, "eyes": [{"side": "右眼", "sph": -2.0, "cyl": -0.75, "axis": 180}], "assembly": true, "remark": "E2E全量测试"}]}

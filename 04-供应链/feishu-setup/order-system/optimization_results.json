@@ -1,0 +1,196 @@
+{
+  "timestamp": "2026-04-25T13:35:42.196Z",
+  "bestConfiguration": {
+    "params": {
+      "safetyStockDays": 3,
+      "reorderThreshold": 0.15,
+      "productionBatchSize": 50,
+      "stockAlertThreshold": 10
+    },
+    "simulation": {
+      "stockouts": 7,
+      "avgInventoryDays": 33.258823529411764,
+      "reorderEvents": 9,
+      "productionEvents": 0,
+      "totalOrders": 85
+    },
+    "score": 103.25882352941176
+  },
+  "top10Results": [
+    {
+      "params": {
+        "safetyStockDays": 3,
+        "reorderThreshold": 0.15,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 1
+    },
+    {
+      "params": {
+        "safetyStockDays": 3,
+        "reorderThreshold": 0.2,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 2
+    },
+    {
+      "params": {
+        "safetyStockDays": 3,
+        "reorderThreshold": 0.25,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 3
+    },
+    {
+      "params": {
+        "safetyStockDays": 3,
+        "reorderThreshold": 0.3,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 4
+    },
+    {
+      "params": {
+        "safetyStockDays": 5,
+        "reorderThreshold": 0.15,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 5
+    },
+    {
+      "params": {
+        "safetyStockDays": 5,
+        "reorderThreshold": 0.2,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 6
+    },
+    {
+      "params": {
+        "safetyStockDays": 5,
+        "reorderThreshold": 0.25,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 7
+    },
+    {
+      "params": {
+        "safetyStockDays": 5,
+        "reorderThreshold": 0.3,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 8
+    },
+    {
+      "params": {
+        "safetyStockDays": 7,
+        "reorderThreshold": 0.15,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 9
+    },
+    {
+      "params": {
+        "safetyStockDays": 7,
+        "reorderThreshold": 0.2,
+        "productionBatchSize": 50,
+        "stockAlertThreshold": 10
+      },
+      "simulation": {
+        "stockouts": 7,
+        "avgInventoryDays": 33.258823529411764,
+        "reorderEvents": 9,
+        "productionEvents": 0,
+        "totalOrders": 85
+      },
+      "score": 103.25882352941176,
+      "rank": 10
+    }
+  ],
+  "summary": {
+    "totalCombinations": 192,
+    "bestScore": 103.25882352941176,
+    "improvement": "50.21"
+  }
+}

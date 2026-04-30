@@ -1,0 +1,1640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视星 2026 · 从卖产品到卖系统</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;700&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #06060c;
+  --bg-card: #0d0d18;
+  --bg-card-hover: #12122a;
+  --teal: #00e5c7;
+  --teal-dim: rgba(0,229,199,0.15);
+  --teal-glow: rgba(0,229,199,0.4);
+  --amber: #f0a030;
+  --amber-dim: rgba(240,160,48,0.15);
+  --amber-glow: rgba(240,160,48,0.35);
+  --red-accent: #ff4060;
+  --slate: #8a8fa8;
+  --slate-dim: #3a3f55;
+  --text: #e8eaf0;
+  --text-dim: #9a9eb8;
+  --border: rgba(255,255,255,0.06);
+  --font-display: 'Playfair Display', 'Noto Sans SC', serif;
+  --font-body: 'DM Sans', 'Noto Sans SC', sans-serif;
+  --font-cn: 'Noto Sans SC', sans-serif;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Grain overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+/* Grid pattern overlay for hero */
+.grid-overlay {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,199,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,199,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse at 50% 50%, black 30%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 30%, transparent 70%);
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ======================== HERO ======================== */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 60px 24px;
+}
+
+.hero-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.hero-bg::before {
+  content: '';
+  position: absolute;
+  width: 800px;
+  height: 800px;
+  top: -200px;
+  right: -200px;
+  background: radial-gradient(circle, var(--teal-dim) 0%, transparent 70%);
+  filter: blur(80px);
+  animation: float-glow 8s ease-in-out infinite alternate;
+}
+
+.hero-bg::after {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  bottom: -100px;
+  left: -150px;
+  background: radial-gradient(circle, var(--amber-dim) 0%, transparent 70%);
+  filter: blur(80px);
+  animation: float-glow 10s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes float-glow {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(30px, -20px) scale(1.1); }
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  max-width: 900px;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border: 1px solid var(--teal-glow);
+  border-radius: 100px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--teal);
+  background: rgba(0,229,199,0.05);
+  margin-bottom: 40px;
+  opacity: 0;
+  animation: fade-up 0.8s ease forwards 0.3s;
+}
+
+.hero-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.hero-title {
+  font-family: var(--font-cn);
+  font-weight: 900;
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  line-height: 1.15;
+  margin-bottom: 12px;
+  opacity: 0;
+  animation: fade-up 0.8s ease forwards 0.5s;
+}
+
+.hero-title .accent {
+  background: linear-gradient(135deg, var(--teal), #40ffc8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-sub {
+  font-family: var(--font-cn);
+  font-weight: 300;
+  font-size: clamp(1.1rem, 2.5vw, 1.6rem);
+  color: var(--text-dim);
+  margin-bottom: 48px;
+  opacity: 0;
+  animation: fade-up 0.8s ease forwards 0.7s;
+}
+
+.hero-sub em {
+  font-style: normal;
+  color: var(--amber);
+  font-weight: 500;
+}
+
+.hero-quote {
+  position: relative;
+  padding: 32px 40px;
+  margin: 0 auto 48px;
+  max-width: 700px;
+  border-left: 3px solid var(--teal);
+  background: linear-gradient(135deg, rgba(0,229,199,0.04), transparent);
+  font-family: var(--font-cn);
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.7;
+  font-style: italic;
+  opacity: 0;
+  animation: fade-up 0.8s ease forwards 0.9s;
+}
+
+.hero-meta {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+  opacity: 0;
+  animation: fade-up 0.8s ease forwards 1.1s;
+}
+
+.hero-meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.hero-meta-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--slate);
+}
+
+.hero-meta-value {
+  font-family: var(--font-cn);
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.hero-goals {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-top: 48px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  opacity: 0;
+  animation: fade-up 0.8s ease forwards 1.3s;
+}
+
+.hero-goal {
+  padding: 24px 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(255,255,255,0.02);
+  backdrop-filter: blur(10px);
+  text-align: left;
+  transition: all 0.3s ease;
+}
+
+.hero-goal:hover {
+  border-color: var(--teal-glow);
+  background: rgba(0,229,199,0.03);
+  transform: translateY(-4px);
+}
+
+.hero-goal-num {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--teal);
+  margin-bottom: 8px;
+}
+
+.hero-goal-text {
+  font-family: var(--font-cn);
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ======================== SECTION SHARED ======================== */
+.section {
+  padding: 100px 0;
+  position: relative;
+}
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: var(--teal);
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.section-title {
+  font-family: var(--font-cn);
+  font-weight: 900;
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+
+.section-desc {
+  font-size: 16px;
+  color: var(--text-dim);
+  max-width: 600px;
+  margin-bottom: 48px;
+}
+
+/* ======================== STRATEGY LAYERS ======================== */
+.strategy-section {
+  background: linear-gradient(180deg, var(--bg-deep) 0%, #08081a 100%);
+}
+
+.layers-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  position: relative;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.layer {
+  position: relative;
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr;
+  gap: 20px;
+  align-items: center;
+  padding: 28px 32px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg-card);
+  transition: all 0.4s ease;
+  cursor: default;
+}
+
+.layer:first-child { border-radius: 16px 16px 0 0; }
+.layer:last-child { border-radius: 0 0 16px 16px; }
+
+.layer:not(:last-child) {
+  border-bottom: none;
+}
+
+.layer:hover {
+  background: var(--bg-card-hover);
+  z-index: 2;
+  transform: scale(1.02);
+  border-color: var(--teal-dim);
+  box-shadow: 0 0 40px rgba(0,229,199,0.06);
+}
+
+.layer-level {
+  font-family: var(--font-cn);
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.layer-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.layer-narrative {
+  font-family: var(--font-cn);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.layer-release {
+  font-family: var(--font-cn);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--teal);
+}
+
+/* Layer colors */
+.layer-brand .layer-icon { background: rgba(0,229,199,0.15); color: var(--teal); }
+.layer-brand .layer-level { color: var(--teal); }
+.layer-tool .layer-icon { background: rgba(100,140,255,0.15); color: #648cff; }
+.layer-tool .layer-level { color: #648cff; }
+.layer-market .layer-icon { background: rgba(240,160,48,0.15); color: var(--amber); }
+.layer-market .layer-level { color: var(--amber); }
+.layer-trust .layer-icon { background: rgba(180,130,255,0.15); color: #b482ff; }
+.layer-trust .layer-level { color: #b482ff; }
+.layer-emotion .layer-icon { background: rgba(255,64,96,0.15); color: var(--red-accent); }
+.layer-emotion .layer-level { color: var(--red-accent); }
+
+/* ======================== TIMELINE ======================== */
+.timeline-section {
+  background: var(--bg-deep);
+}
+
+.timeline-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 48px;
+  flex-wrap: wrap;
+}
+
+.timeline-nav-btn {
+  padding: 10px 24px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: var(--font-cn);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.timeline-nav-btn:hover {
+  border-color: var(--teal-dim);
+  color: var(--text);
+}
+
+.timeline-nav-btn.active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: var(--bg-deep);
+  font-weight: 700;
+}
+
+.timeline-day {
+  display: none;
+}
+
+.timeline-day.active {
+  display: block;
+  animation: fade-in 0.5s ease;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.day-header {
+  margin-bottom: 40px;
+}
+
+.day-date {
+  font-family: var(--font-display);
+  font-size: 64px;
+  font-weight: 900;
+  color: var(--bg-card);
+  -webkit-text-stroke: 1px var(--slate-dim);
+  line-height: 1;
+  margin-bottom: -10px;
+  user-select: none;
+}
+
+.day-label {
+  font-family: var(--font-cn);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.day-subtitle {
+  font-family: var(--font-cn);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.timeline-items {
+  position: relative;
+  padding-left: 40px;
+}
+
+.timeline-items::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, var(--teal), var(--slate-dim), transparent);
+}
+
+.tl-item {
+  position: relative;
+  padding: 0 0 32px 0;
+  opacity: 0;
+  transform: translateX(20px);
+  animation: slide-in 0.5s ease forwards;
+}
+
+.tl-item:nth-child(1) { animation-delay: 0.1s; }
+.tl-item:nth-child(2) { animation-delay: 0.15s; }
+.tl-item:nth-child(3) { animation-delay: 0.2s; }
+.tl-item:nth-child(4) { animation-delay: 0.25s; }
+.tl-item:nth-child(5) { animation-delay: 0.3s; }
+.tl-item:nth-child(6) { animation-delay: 0.35s; }
+.tl-item:nth-child(7) { animation-delay: 0.4s; }
+.tl-item:nth-child(8) { animation-delay: 0.45s; }
+.tl-item:nth-child(9) { animation-delay: 0.5s; }
+.tl-item:nth-child(10) { animation-delay: 0.55s; }
+.tl-item:nth-child(11) { animation-delay: 0.6s; }
+.tl-item:nth-child(12) { animation-delay: 0.65s; }
+
+@keyframes slide-in {
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.tl-item::before {
+  content: '';
+  position: absolute;
+  left: -32px;
+  top: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bg-deep);
+  border: 2px solid var(--teal);
+  z-index: 1;
+}
+
+.tl-item.highlight::before {
+  background: var(--teal);
+  box-shadow: 0 0 12px var(--teal-glow);
+  width: 12px;
+  height: 12px;
+  left: -33px;
+  top: 7px;
+}
+
+.tl-item.amber::before {
+  border-color: var(--amber);
+  background: var(--amber);
+  box-shadow: 0 0 12px var(--amber-glow);
+  width: 12px;
+  height: 12px;
+  left: -33px;
+  top: 7px;
+}
+
+.tl-item.break::before {
+  border-color: var(--slate-dim);
+  background: var(--slate-dim);
+  width: 8px;
+  height: 8px;
+  left: -31px;
+  top: 9px;
+}
+
+.tl-time {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--slate);
+  font-family: var(--font-body);
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.tl-title {
+  font-family: var(--font-cn);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.tl-item.highlight .tl-title {
+  color: var(--teal);
+}
+
+.tl-item.amber .tl-title {
+  color: var(--amber);
+}
+
+.tl-desc {
+  font-family: var(--font-cn);
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* ======================== DINNER / EMOTION CURVE ======================== */
+.dinner-section {
+  background: linear-gradient(180deg, var(--bg-deep) 0%, #0c0810 50%, var(--bg-deep) 100%);
+  overflow: hidden;
+}
+
+.emotion-curve-container {
+  position: relative;
+  max-width: 900px;
+  margin: 0 auto 60px;
+  padding: 40px 0;
+}
+
+.emotion-svg {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 0 30px rgba(0,229,199,0.1));
+}
+
+.emotion-labels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.emotion-phase {
+  text-align: center;
+  padding: 20px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: all 0.3s ease;
+  cursor: default;
+}
+
+.emotion-phase:hover {
+  transform: translateY(-4px);
+  border-color: var(--teal-dim);
+}
+
+.emotion-phase.warm:hover { border-color: rgba(0,229,199,0.3); }
+.emotion-phase.peak:hover { border-color: var(--amber-glow); }
+.emotion-phase.cool:hover { border-color: rgba(180,130,255,0.3); }
+.emotion-phase.fire:hover { border-color: var(--red-accent); box-shadow: 0 0 30px rgba(255,64,96,0.1); }
+
+.emotion-time {
+  font-size: 12px;
+  color: var(--slate);
+  font-family: var(--font-body);
+  margin-bottom: 6px;
+}
+
+.emotion-name {
+  font-family: var(--font-cn);
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+
+.emotion-phase.warm .emotion-name { color: var(--teal); }
+.emotion-phase.peak .emotion-name { color: var(--amber); }
+.emotion-phase.cool .emotion-name { color: #b482ff; }
+.emotion-phase.fire .emotion-name { color: var(--red-accent); }
+
+.emotion-detail {
+  font-family: var(--font-cn);
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* Dinner details */
+.dinner-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.dinner-card {
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--bg-card);
+  transition: all 0.3s ease;
+}
+
+.dinner-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--teal-dim);
+  transform: translateY(-2px);
+}
+
+.dinner-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.dinner-card-num {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.dinner-card:nth-child(1) .dinner-card-num { background: var(--teal-dim); color: var(--teal); }
+.dinner-card:nth-child(2) .dinner-card-num { background: var(--amber-dim); color: var(--amber); }
+.dinner-card:nth-child(3) .dinner-card-num { background: rgba(180,130,255,0.15); color: #b482ff; }
+.dinner-card:nth-child(4) .dinner-card-num { background: rgba(255,64,96,0.15); color: var(--red-accent); }
+
+.dinner-card-title {
+  font-family: var(--font-cn);
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.dinner-card-time {
+  font-size: 12px;
+  color: var(--slate);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.dinner-card ul {
+  list-style: none;
+  padding: 0;
+}
+
+.dinner-card li {
+  font-family: var(--font-cn);
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.dinner-card li:last-child { border-bottom: none; }
+
+.dinner-card li::before {
+  content: '›';
+  color: var(--teal);
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: -1px;
+}
+
+/* Awards sub-section */
+.awards-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.award-item {
+  text-align: center;
+  padding: 20px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  transition: all 0.3s ease;
+}
+
+.award-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+}
+
+.award-round {
+  font-size: 11px;
+  color: var(--slate);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.award-name {
+  font-family: var(--font-cn);
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.award-item:nth-child(1) .award-name { color: var(--teal); }
+.award-item:nth-child(2) .award-name { color: var(--amber); }
+.award-item:nth-child(3) .award-name { color: #b482ff; }
+.award-item:nth-child(4) .award-name { color: var(--red-accent); }
+
+.award-count {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* Oath section */
+.oath-box {
+  margin-top: 40px;
+  padding: 36px 40px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,64,96,0.2);
+  background: linear-gradient(135deg, rgba(255,64,96,0.04), rgba(240,160,48,0.03));
+  text-align: center;
+}
+
+.oath-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  color: var(--red-accent);
+  margin-bottom: 16px;
+}
+
+.oath-text {
+  font-family: var(--font-cn);
+  font-size: clamp(1rem, 2vw, 1.3rem);
+  font-weight: 500;
+  line-height: 1.8;
+  color: var(--text);
+  font-style: italic;
+}
+
+/* ======================== ACTION ITEMS ======================== */
+.action-section {
+  background: var(--bg-deep);
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.action-col-title {
+  font-family: var(--font-cn);
+  font-weight: 700;
+  font-size: 18px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-col-title.high { color: var(--red-accent); }
+.action-col-title.mid { color: var(--amber); }
+
+.action-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  margin-bottom: 12px;
+  transition: all 0.3s ease;
+}
+
+.action-item:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--teal-dim);
+}
+
+.action-priority {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.action-priority.high {
+  background: rgba(255,64,96,0.15);
+  color: var(--red-accent);
+}
+
+.action-priority.mid {
+  background: var(--amber-dim);
+  color: var(--amber);
+}
+
+.action-text {
+  font-family: var(--font-cn);
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.action-deadline {
+  font-size: 12px;
+  color: var(--slate);
+  margin-top: 2px;
+}
+
+/* ======================== DECISIONS ======================== */
+.decisions-section {
+  background: linear-gradient(180deg, var(--bg-deep), #08081a);
+}
+
+.decisions-list {
+  display: grid;
+  gap: 12px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.decision-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  transition: all 0.3s ease;
+}
+
+.decision-item:hover {
+  border-color: var(--teal-dim);
+  background: var(--bg-card-hover);
+}
+
+.decision-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(0,229,199,0.15);
+  color: var(--teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.decision-text {
+  font-family: var(--font-cn);
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+/* ======================== FOOTER ======================== */
+.footer {
+  padding: 60px 0;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+
+.footer-slogan {
+  font-family: var(--font-cn);
+  font-weight: 900;
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--teal), var(--amber));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.footer-info {
+  font-size: 13px;
+  color: var(--slate);
+  font-family: var(--font-cn);
+}
+
+/* ======================== SCROLL ANIMATIONS ======================== */
+.reveal {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ======================== RESPONSIVE ======================== */
+@media (max-width: 768px) {
+  .hero-goals { grid-template-columns: 1fr; }
+  .hero-meta { gap: 24px; }
+  .layer { grid-template-columns: 1fr; gap: 8px; padding: 20px; }
+  .dinner-detail-grid { grid-template-columns: 1fr; }
+  .emotion-labels { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .emotion-phase { padding: 12px 6px; }
+  .emotion-name { font-size: 12px; }
+  .emotion-detail { display: none; }
+  .awards-row { grid-template-columns: repeat(2, 1fr); }
+  .action-grid { grid-template-columns: 1fr; }
+  .dinner-card-time { display: none; }
+}
+
+@media (max-width: 480px) {
+  .emotion-labels { grid-template-columns: repeat(3, 1fr); }
+  .section { padding: 60px 0; }
+  .hero { padding: 40px 16px; }
+}
+
+/* ======================== CUSTOM SCROLLBAR ======================== */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--slate-dim); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--slate); }
+</style>
+</head>
+<body>
+
+<!-- ==================== HERO ==================== -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="grid-overlay"></div>
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      <span>高视星 2026 年度代理商会议</span>
+    </div>
+    <h1 class="hero-title">从卖产品到<span class="accent">卖系统</span></h1>
+    <p class="hero-sub">暑期起跑 · <em>天目湖</em> · 6月10-12日</p>
+    <blockquote class="hero-quote">
+      2026年，高视星不只卖产品给你，<br>我们把整套系统交给你。
+    </blockquote>
+    <div class="hero-meta">
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">规模</span>
+        <span class="hero-meta-value">60-70人</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">形式</span>
+        <span class="hero-meta-value">纯线下</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">时长</span>
+        <span class="hero-meta-value">3天2夜</span>
+      </div>
+      <div class="hero-meta-item">
+        <span class="hero-meta-label">地点</span>
+        <span class="hero-meta-value">天目湖+丹阳</span>
+      </div>
+    </div>
+    <div class="hero-goals">
+      <div class="hero-goal">
+        <div class="hero-goal-num">01</div>
+        <div class="hero-goal-text">清晰的暑期作战目标<br>Q3 占全年 40%</div>
+      </div>
+      <div class="hero-goal">
+        <div class="hero-goal-num">02</div>
+        <div class="hero-goal-text">一套"系统武器"<br>官网+订单+Excel+促销+ECP100</div>
+      </div>
+      <div class="hero-goal">
+        <div class="hero-goal-num">03</div>
+        <div class="hero-goal-text">可立即执行的<br>区域行动计划</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== STRATEGY LAYERS ==================== -->
+<section class="section strategy-section">
+  <div class="container">
+    <div class="section-label reveal">Strategic Architecture</div>
+    <h2 class="section-title reveal">战略叙事架构</h2>
+    <p class="section-desc reveal">五大层级，从品牌到情感，层层递进</p>
+    <div class="layers-stack reveal">
+      <div class="layer layer-brand">
+        <div class="layer-level"><div class="layer-icon">◆</div>品牌层</div>
+        <div class="layer-narrative">高视星全新品牌形象与数字门面</div>
+        <div class="layer-release">全新官网</div>
+      </div>
+      <div class="layer layer-tool">
+        <div class="layer-level"><div class="layer-icon">⚡</div>工具层</div>
+        <div class="layer-narrative">让代理商接单更快、损耗更低</div>
+        <div class="layer-release">智能订单系统 · Excel 解析包</div>
+      </div>
+      <div class="layer layer-market">
+        <div class="layer-level"><div class="layer-icon">▲</div>市场层</div>
+        <div class="layer-narrative">暑期冲量的弹药与活动</div>
+        <div class="layer-release">暑期促销策略 · ECP100 人团</div>
+      </div>
+      <div class="layer layer-trust">
+        <div class="layer-level"><div class="layer-icon">◈</div>信任层</div>
+        <div class="layer-narrative">看得见的供应链与产品力</div>
+        <div class="layer-release">丹阳工厂参观 · 产品培训</div>
+      </div>
+      <div class="layer layer-emotion">
+        <div class="layer-level"><div class="layer-icon">★</div>情感层</div>
+        <div class="layer-narrative">与高视星的长期绑定</div>
+        <div class="layer-release">海外烧烤晚宴 · 颁奖 · 宣誓</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== TIMELINE ==================== -->
+<section class="section timeline-section">
+  <div class="container">
+    <div class="section-label reveal">Conference Agenda</div>
+    <h2 class="section-title reveal">三天完整议程</h2>
+    <p class="section-desc reveal">从报到培训到战略发布，从晚宴宣誓到天目湖游览</p>
+    <div class="timeline-nav reveal">
+      <button class="timeline-nav-btn active" data-day="day0">Day 0 · 6月10日</button>
+      <button class="timeline-nav-btn" data-day="day1">Day 1 · 6月11日</button>
+      <button class="timeline-nav-btn" data-day="day2">Day 2 · 6月12日</button>
+    </div>
+
+    <!-- Day 0 -->
+    <div class="timeline-day active" id="day0">
+      <div class="day-header">
+        <div class="day-date">06.10</div>
+        <div class="day-label">报到 + 入门培训</div>
+        <div class="day-subtitle">面向新代理商和新业务员 · 老代理商 6/11 早上直接到会场即可</div>
+      </div>
+      <div class="timeline-items">
+        <div class="tl-item highlight">
+          <div class="tl-time">14:00 - 14:30</div>
+          <div class="tl-title">签到入住</div>
+          <div class="tl-desc">酒店前台专属签到台，发放房卡+会议资料包+《暑期作战手册》空白版</div>
+        </div>
+        <div class="tl-item highlight">
+          <div class="tl-time">14:30 - 15:30</div>
+          <div class="tl-title">产品基础：离焦镜全系列概览</div>
+          <div class="tl-desc">Ultra / 时空之眼 / 小旋风定位、适应症、验配基本流程</div>
+        </div>
+        <div class="tl-item break">
+          <div class="tl-time">15:30 - 15:40</div>
+          <div class="tl-title">休息</div>
+        </div>
+        <div class="tl-item highlight">
+          <div class="tl-time">15:40 - 16:20</div>
+          <div class="tl-title">系统入门：订单系统注册+下单实操</div>
+          <div class="tl-desc">现场注册账号，完成一个模拟订单全流程</div>
+        </div>
+        <div class="tl-item highlight">
+          <div class="tl-time">16:20 - 17:00</div>
+          <div class="tl-title">市场入门：暑期促销规则+ECP100</div>
+          <div class="tl-desc">促销结构、返利计算、报名机制</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">17:00 - 17:30</div>
+          <div class="tl-title">Q&A + 自由交流</div>
+          <div class="tl-desc">产品/系统/政策问题现场解答</div>
+        </div>
+        <div class="tl-item break">
+          <div class="tl-time">18:00</div>
+          <div class="tl-title">自由晚餐</div>
+          <div class="tl-desc">酒店餐厅或周边，不组织统一活动</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Day 1 -->
+    <div class="timeline-day" id="day1">
+      <div class="day-header">
+        <div class="day-date">06.11</div>
+        <div class="day-label">战略发布 + 行动共创 + 颁奖晚宴</div>
+        <div class="day-subtitle">全天会议日，从早到晚，整场会议的核心</div>
+      </div>
+      <div class="timeline-items">
+        <div class="tl-item highlight">
+          <div class="tl-time">08:30 - 09:00</div>
+          <div class="tl-title">开场 + CEO 致辞</div>
+          <div class="tl-desc">"从卖产品到卖系统" · 暑期40%目标 · 全新官网演示</div>
+        </div>
+        <div class="tl-item highlight">
+          <div class="tl-time">09:00 - 09:30</div>
+          <div class="tl-title">发布一：端到端智能订单系统</div>
+          <div class="tl-desc">Live Demo：从下单到发货全流程 · 现场注册账号</div>
+        </div>
+        <div class="tl-item highlight">
+          <div class="tl-time">09:30 - 09:45</div>
+          <div class="tl-title">发布二：Excel 解析包赋能</div>
+          <div class="tl-desc">用Excel包做客户分析、库存预警 · 现场发放使用手册</div>
+        </div>
+        <div class="tl-item break">
+          <div class="tl-time">09:45 - 10:00</div>
+          <div class="tl-title">茶歇</div>
+          <div class="tl-desc">展示区：订单系统体验台 + 官网体验台</div>
+        </div>
+        <div class="tl-item amber">
+          <div class="tl-time">10:00 - 10:30</div>
+          <div class="tl-title">发布三：暑期促销策略 + ECP100 人团</div>
+          <div class="tl-desc">促销结构、返利、报名机制 · 现场报名二维码</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">10:30 - 11:15</div>
+          <div class="tl-title">上半年数据复盘 + 下半年节奏</div>
+          <div class="tl-desc">Q1数据、Q2准备、Q3关键节点 · 各区域历史对比 · 暑期作战日历</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">11:15 - 12:00</div>
+          <div class="tl-title">代理商经验分享 Panel</div>
+          <div class="tl-desc">4位代表（深圳/沈阳/湖南/哈尔滨）· "我踩过的坑+我的暑期打法"</div>
+        </div>
+        <div class="tl-item break">
+          <div class="tl-time">12:00 - 13:30</div>
+          <div class="tl-title">午餐</div>
+          <div class="tl-desc">自助 + 区域小组坐席，为下午Workshop预热</div>
+        </div>
+        <div class="tl-item amber">
+          <div class="tl-time">13:30 - 15:30</div>
+          <div class="tl-title">Workshop：暑期区域作战共创</div>
+          <div class="tl-desc">分6组按区域混编 · 三大必答题 · 书面行动计划+公司7天内反馈支持</div>
+        </div>
+        <div class="tl-item break">
+          <div class="tl-time">15:30 - 15:50</div>
+          <div class="tl-title">茶歇</div>
+        </div>
+        <div class="tl-item highlight">
+          <div class="tl-time">15:50 - 17:50</div>
+          <div class="tl-title">高级培训</div>
+          <div class="tl-desc">离焦镜差异化打法+竞品话术(45min) · RGP开发策略(30min) · 系统+Excel实操(45min)</div>
+        </div>
+        <div class="tl-item amber">
+          <div class="tl-time">18:30 - 21:45</div>
+          <div class="tl-title">海外主题烧烤晚宴 + 颁奖 + 暑期动员</div>
+          <div class="tl-desc">见下方晚宴详细流程</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Day 2 -->
+    <div class="timeline-day" id="day2">
+      <div class="day-header">
+        <div class="day-date">06.12</div>
+        <div class="day-label">游览 + 可选参观 + 撤离</div>
+        <div class="day-subtitle">轻松的一天 · 丹阳工厂参观为可选项</div>
+      </div>
+      <div class="timeline-items">
+        <div class="tl-item">
+          <div class="tl-time">07:30 - 08:00</div>
+          <div class="tl-title">早餐 + 退房</div>
+          <div class="tl-desc">酒店打包早餐可选</div>
+        </div>
+        <div class="tl-item highlight">
+          <div class="tl-time">08:00 - 11:30</div>
+          <div class="tl-title">天目湖半日游览</div>
+          <div class="tl-desc">安排导游/游船/茶园等，轻松休闲</div>
+        </div>
+        <div class="tl-item break">
+          <div class="tl-time">11:30 - 12:30</div>
+          <div class="tl-title">午餐</div>
+          <div class="tl-desc">天目湖附近餐厅</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">12:30</div>
+          <div class="tl-title">第一批撤离</div>
+          <div class="tl-desc">不去丹阳的代理商直接撤 · 提供天目湖→高铁站/机场交通</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">12:30 - 14:00</div>
+          <div class="tl-title">大巴：天目湖 → 丹阳工厂</div>
+          <div class="tl-desc">报名参加者 · 车上播放工厂简介视频</div>
+        </div>
+        <div class="tl-item highlight">
+          <div class="tl-time">14:00 - 16:00</div>
+          <div class="tl-title">丹阳工厂参观（可选）</div>
+          <div class="tl-desc">看产线、QC、仓储 · 重点展示Ultra产线与新产品产能 · 低于15人则取消</div>
+        </div>
+        <div class="tl-item">
+          <div class="tl-time">16:00</div>
+          <div class="tl-title">第二批撤离</div>
+          <div class="tl-desc">丹阳→丹阳站/常州站专车接送</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== DINNER ==================== -->
+<section class="section dinner-section">
+  <div class="container">
+    <div class="section-label reveal">Gala Dinner</div>
+    <h2 class="section-title reveal">海外主题烧烤晚宴</h2>
+    <p class="section-desc reveal">18:30 - 21:45 · 四段式情绪设计，从暖场到燃爆</p>
+
+    <!-- Emotion Curve SVG -->
+    <div class="emotion-curve-container reveal">
+      <svg class="emotion-svg" viewBox="0 0 900 280" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="curveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#00e5c7;stop-opacity:0.8"/>
+            <stop offset="35%" style="stop-color:#f0a030;stop-opacity:0.8"/>
+            <stop offset="55%" style="stop-color:#b482ff;stop-opacity:0.6"/>
+            <stop offset="75%" style="stop-color:#f0a030;stop-opacity:0.8"/>
+            <stop offset="100%" style="stop-color:#ff4060;stop-opacity:0.9"/>
+          </linearGradient>
+          <linearGradient id="areaGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" style="stop-color:#00e5c7;stop-opacity:0.15"/>
+            <stop offset="100%" style="stop-color:#00e5c7;stop-opacity:0"/>
+          </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="4" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+
+        <!-- Grid lines -->
+        <line x1="80" y1="40" x2="860" y2="40" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="80" y1="100" x2="860" y2="100" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="80" y1="160" x2="860" y2="160" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+        <line x1="80" y1="220" x2="860" y2="220" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+
+        <!-- Time axis labels -->
+        <text x="80" y="250" fill="#8a8fa8" font-size="11" font-family="DM Sans">18:30</text>
+        <text x="268" y="250" fill="#8a8fa8" font-size="11" font-family="DM Sans">19:15</text>
+        <text x="456" y="250" fill="#8a8fa8" font-size="11" font-family="DM Sans">19:45</text>
+        <text x="644" y="250" fill="#8a8fa8" font-size="11" font-family="DM Sans">20:15</text>
+        <text x="832" y="250" fill="#8a8fa8" font-size="11" font-family="DM Sans">21:30</text>
+
+        <!-- Y axis labels -->
+        <text x="60" y="48" fill="#8a8fa8" font-size="9" font-family="DM Sans" text-anchor="end">燃</text>
+        <text x="60" y="168" fill="#8a8fa8" font-size="9" font-family="DM Sans" text-anchor="end">平</text>
+        <text x="60" y="225" fill="#8a8fa8" font-size="9" font-family="DM Sans" text-anchor="end">静</text>
+
+        <!-- Area fill -->
+        <path d="M80,200 C150,190 200,170 268,140 C320,115 380,80 456,55 C510,42 560,52 644,160 C700,210 760,130 860,30 L860,220 L80,220 Z"
+              fill="url(#areaGrad)" opacity="0.6">
+          <animate attributeName="opacity" values="0.3;0.6;0.3" dur="4s" repeatCount="indefinite"/>
+        </path>
+
+        <!-- Main curve -->
+        <path d="M80,200 C150,190 200,170 268,140 C320,115 380,80 456,55 C510,42 560,52 644,160 C700,210 760,130 860,30"
+              fill="none" stroke="url(#curveGrad)" stroke-width="3" stroke-linecap="round" filter="url(#glow)">
+          <animate attributeName="stroke-dashoffset" from="1200" to="0" dur="2s" fill="freeze"/>
+          <animate attributeName="stroke-dasharray" from="1200" to="1200" dur="0.01s" fill="freeze"/>
+        </path>
+
+        <!-- Data points -->
+        <circle cx="80" cy="200" r="5" fill="#00e5c7" opacity="0.9">
+          <animate attributeName="r" values="5;7;5" dur="2s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="268" cy="140" r="5" fill="#00e5c7" opacity="0.9">
+          <animate attributeName="r" values="5;7;5" dur="2s" repeatCount="indefinite" begin="0.3s"/>
+        </circle>
+        <circle cx="456" cy="55" r="6" fill="#f0a030" opacity="0.9">
+          <animate attributeName="r" values="6;9;6" dur="2s" repeatCount="indefinite" begin="0.6s"/>
+        </circle>
+        <circle cx="644" cy="160" r="5" fill="#b482ff" opacity="0.9">
+          <animate attributeName="r" values="5;7;5" dur="2s" repeatCount="indefinite" begin="0.9s"/>
+        </circle>
+        <circle cx="860" cy="30" r="7" fill="#ff4060" opacity="0.9">
+          <animate attributeName="r" values="7;11;7" dur="2s" repeatCount="indefinite" begin="1.2s"/>
+        </circle>
+
+        <!-- Labels on curve -->
+        <text x="80" y="185" fill="#00e5c7" font-size="10" font-family="Noto Sans SC" text-anchor="middle">暖场</text>
+        <text x="268" y="125" fill="#00e5c7" font-size="10" font-family="Noto Sans SC" text-anchor="middle">感动</text>
+        <text x="456" y="42" fill="#f0a030" font-size="10" font-family="Noto Sans SC" text-anchor="middle">颁奖 ▲</text>
+        <text x="644" y="175" fill="#b482ff" font-size="10" font-family="Noto Sans SC" text-anchor="middle">缓冲</text>
+        <text x="850" y="22" fill="#ff4060" font-size="11" font-family="Noto Sans SC" text-anchor="middle" font-weight="700">宣誓 ▲▲</text>
+      </svg>
+    </div>
+
+    <!-- Emotion phase cards -->
+    <div class="emotion-labels reveal">
+      <div class="emotion-phase warm">
+        <div class="emotion-time">18:30-19:15</div>
+        <div class="emotion-name">暖场社交</div>
+        <div class="emotion-detail">吃喝社交，轻松入场</div>
+      </div>
+      <div class="emotion-phase warm">
+        <div class="emotion-time">19:15-19:45</div>
+        <div class="emotion-name">感动回顾</div>
+        <div class="emotion-detail">短片+CEO致辞</div>
+      </div>
+      <div class="emotion-phase peak">
+        <div class="emotion-time">19:45-20:15</div>
+        <div class="emotion-name">颁奖荣誉</div>
+        <div class="emotion-detail">四轮颁奖+互动</div>
+      </div>
+      <div class="emotion-phase cool">
+        <div class="emotion-time">20:15-20:45</div>
+        <div class="emotion-name">自由交流</div>
+        <div class="emotion-detail">情绪缓冲区</div>
+      </div>
+      <div class="emotion-phase fire">
+        <div class="emotion-time">20:45-21:30</div>
+        <div class="emotion-name">揭榜宣誓</div>
+        <div class="emotion-detail">燃爆收尾</div>
+      </div>
+    </div>
+
+    <!-- Dinner detail cards -->
+    <div class="dinner-detail-grid reveal" style="margin-top: 48px;">
+      <div class="dinner-card">
+        <div class="dinner-card-header">
+          <div class="dinner-card-num">1</div>
+          <div class="dinner-card-title">暖场社交</div>
+          <div class="dinner-card-time">18:30 - 19:15</div>
+        </div>
+        <ul>
+          <li>红毯+签到墙：写"我的暑期目标：____台"</li>
+          <li>每人拍立得，贴到签到墙上成目标墙</li>
+          <li>海外风道具（草帽/墨镜/花环）</li>
+          <li>每桌5张"社交破冰卡"引发业务话题</li>
+          <li>大屏滚动上半年精彩瞬间照片墙</li>
+        </ul>
+      </div>
+      <div class="dinner-card">
+        <div class="dinner-card-header">
+          <div class="dinner-card-num">2</div>
+          <div class="dinner-card-title">感动回顾+颁奖</div>
+          <div class="dinner-card-time">19:15 - 20:15</div>
+        </div>
+        <ul>
+          <li>开场短片《2026上半年·我们的故事》</li>
+          <li>CEO致辞：感谢+承诺，讲具体的人和事</li>
+          <li>4轮颁奖，每轮之间插互动小游戏</li>
+          <li>奖杯要有质感——代理商会摆办公室</li>
+          <li>颁奖词提前写好，主持人照念</li>
+        </ul>
+      </div>
+      <div class="dinner-card">
+        <div class="dinner-card-header">
+          <div class="dinner-card-num">3</div>
+          <div class="dinner-card-title">烧烤+自由交流</div>
+          <div class="dinner-card-time">20:15 - 20:45</div>
+        </div>
+        <ul>
+          <li>刻意安排的情绪缓冲区</li>
+          <li>补充食材上桌，音乐调回轻松</li>
+          <li>Clark和团队主动找还没聊到的代理商</li>
+          <li>大屏放暑期促销政策简洁海报</li>
+          <li>整个晚宴最值钱的30分钟</li>
+        </ul>
+      </div>
+      <div class="dinner-card">
+        <div class="dinner-card-header">
+          <div class="dinner-card-num">4</div>
+          <div class="dinner-card-title">暑期揭榜+集体宣誓</div>
+          <div class="dinner-card-time">20:45 - 21:30</div>
+        </div>
+        <ul>
+          <li>各区域组长上台亮出暑期目标</li>
+          <li>全场目标加总，宣布共同目标</li>
+          <li>CEO现场签"承诺书"——双向承诺墙</li>
+          <li>全体起立举杯宣誓，摔杯象征全力以赴</li>
+          <li>无人机俯拍合影+发放《暑期作战手册》</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Awards -->
+    <div class="awards-row reveal">
+      <div class="award-item">
+        <div class="award-round">第1轮</div>
+        <div class="award-name">增长之星奖</div>
+        <div class="award-count">3-5名 · 上半年增速最快</div>
+      </div>
+      <div class="award-item">
+        <div class="award-round">第2轮</div>
+        <div class="award-name">深耕奖</div>
+        <div class="award-count">3名 · 合作最久/最稳定</div>
+      </div>
+      <div class="award-item">
+        <div class="award-round">第3轮</div>
+        <div class="award-name">最佳协作奖</div>
+        <div class="award-count">3名 · 配合度最高</div>
+      </div>
+      <div class="award-item">
+        <div class="award-round">第4轮</div>
+        <div class="award-name">上半年总冠军</div>
+        <div class="award-count">1名 · 全场最高潮</div>
+      </div>
+    </div>
+
+    <!-- Oath -->
+    <div class="oath-box reveal">
+      <div class="oath-label">集体宣誓词</div>
+      <div class="oath-text">
+        "这个夏天，我承诺——全力以赴，使命必达！<br>与高视星一起，从卖产品到卖系统，赢战暑期！"
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== DECISIONS ==================== -->
+<section class="section decisions-section">
+  <div class="container">
+    <div class="section-label reveal">Confirmed Decisions</div>
+    <h2 class="section-title reveal">已确认决策</h2>
+    <p class="section-desc reveal">7项关键决策已对齐落地</p>
+    <div class="decisions-list reveal">
+      <div class="decision-item">
+        <div class="decision-check">✓</div>
+        <div class="decision-text">外部嘉宾凡总——砍掉，黄金时段全部留给公司发布</div>
+      </div>
+      <div class="decision-item">
+        <div class="decision-check">✓</div>
+        <div class="decision-text">会议地点——天目湖（主会场+晚宴+游览）+ 丹阳（可选工厂参观）</div>
+      </div>
+      <div class="decision-item">
+        <div class="decision-check">✓</div>
+        <div class="decision-text">五大发布系统开发——已在开发中，距会议还有约2个月</div>
+      </div>
+      <div class="decision-item">
+        <div class="decision-check">✓</div>
+        <div class="decision-text">Workshop 7天反馈承诺——已对齐内部响应机制</div>
+      </div>
+      <div class="decision-item">
+        <div class="decision-check">✓</div>
+        <div class="decision-text">ECP100人团与暑期促销——参与路径独立，资源不冲突</div>
+      </div>
+      <div class="decision-item">
+        <div class="decision-check">✓</div>
+        <div class="decision-text">报到日入门培训——6/10下午，面向新代理商</div>
+      </div>
+      <div class="decision-item">
+        <div class="decision-check">✓</div>
+        <div class="decision-text">丹阳参观改为可选——按报名人数决定是否成行</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== ACTION ITEMS ==================== -->
+<section class="section action-section">
+  <div class="container">
+    <div class="section-label reveal">Action Items</div>
+    <h2 class="section-title reveal">待推进事项</h2>
+    <p class="section-desc reveal">按优先级排列，确保6月会议前全部落地</p>
+    <div class="action-grid reveal">
+      <div>
+        <div class="action-col-title high">● 高优先级</div>
+        <div class="action-item">
+          <div class="action-priority high">高</div>
+          <div>
+            <div class="action-text">落实五大发布内部责任人+Demo讲者，倒排6月前完成内部彩排</div>
+            <div class="action-deadline">本周</div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-priority high">高</div>
+          <div>
+            <div class="action-text">指定Workshop 7天反馈总协调人（建议市场总监）</div>
+            <div class="action-deadline">本周</div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-priority high">高</div>
+          <div>
+            <div class="action-text">天目湖场地踩点：70人主会场+晚宴户外烧烤区+房间预留</div>
+            <div class="action-deadline">4月底前</div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="action-col-title mid">● 中优先级</div>
+        <div class="action-item">
+          <div class="action-priority mid">中</div>
+          <div>
+            <div class="action-text">采访3-4位代理商，拍摄上半年故事短片</div>
+            <div class="action-deadline">5月底前</div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-priority mid">中</div>
+          <div>
+            <div class="action-text">颁奖奖项+获奖名单确认</div>
+            <div class="action-deadline">5月中</div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-priority mid">中</div>
+          <div>
+            <div class="action-text">主持人选定（建议外部专业主持人）</div>
+            <div class="action-deadline">5月中</div>
+          </div>
+        </div>
+        <div class="action-item">
+          <div class="action-priority mid">中</div>
+          <div>
+            <div class="action-text">纪念品+奖杯定制</div>
+            <div class="action-deadline">5月底前</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-slogan">从卖产品到卖系统</div>
+    <div class="footer-info">高视星 2026 年度代理商会议 · 天目湖 · 6月10-12日 · V3 完整议程版</div>
+  </div>
+</footer>
+
+<script>
+// Timeline tab switching
+document.querySelectorAll('.timeline-nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.timeline-nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.timeline-day').forEach(d => d.classList.remove('active'));
+    btn.classList.add('active');
+    const dayId = btn.dataset.day;
+    document.getElementById(dayId).classList.add('active');
+  });
+});
+
+// Scroll reveal
+const reveals = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+reveals.forEach(el => observer.observe(el));
+
+// Parallax hero glow
+const hero = document.querySelector('.hero');
+const heroBg = document.querySelector('.hero-bg');
+if (hero && heroBg) {
+  window.addEventListener('mousemove', (e) => {
+    const x = (e.clientX / window.innerWidth - 0.5) * 30;
+    const y = (e.clientY / window.innerHeight - 0.5) * 30;
+    heroBg.style.transform = `translate(${x}px, ${y}px)`;
+  });
+}
+</script>
+
+</body>
+</html>

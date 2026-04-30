@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>近视发展风险评估工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Use Inter font */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom styles for traffic light display */
+        .traffic-light {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .bg-green-500 { background-color: #22c55e; }
+        .bg-yellow-500 { background-color: #eab308; }
+        .bg-red-500 { background-color: #ef4444; }
+
+        /* Style radio buttons for better visibility */
+        input[type="radio"] {
+            margin-right: 0.3rem;
+            accent-color: #3b82f6; /* Blue accent */
+        }
+        label {
+            margin-right: 1rem; /* Space between radio options */
+        }
+        .factor-group {
+            margin-bottom: 1.5rem; /* Space between factor groups */
+            padding: 1rem;
+            border: 1px solid #e5e7eb; /* Light gray border */
+            border-radius: 0.5rem; /* Rounded corners */
+            background-color: #f9fafb; /* Very light gray background */
+        }
+        .factor-title {
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: #1f2937; /* Dark gray text */
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+    <div class="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-lg shadow-md">
+
+        <h1 class="text-2xl md:text-3xl font-bold text-center mb-4 text-blue-600">近视发展风险评估工具</h1>
+        <p class="text-sm text-gray-600 text-center mb-6">
+            **重要提示:** 本工具基于当前科学共识提供风险评估参考，结果仅供教育和意识提升目的，<strong class="text-red-600">不能替代</strong>专业的眼科检查和医生诊断。请定期进行眼科检查。
+        </p>
+
+        <form id="riskForm">
+
+            <div class="factor-group">
+                <p class="factor-title">1. 年龄 (首次诊断近视或评估时)</p>
+                <div>
+                    <input type="radio" id="age_low" name="age" value="0" required>
+                    <label for="age_low"> > 10-12岁 发病/评估 (低风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="age_medium" name="age" value="1">
+                    <label for="age_medium"> 8 - 10岁 发病/评估 (中风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="age_high" name="age" value="2">
+                    <label for="age_high"> &lt; 8岁 发病/评估 (高风险)</label>
+                </div>
+            </div>
+
+            <div class="factor-group">
+                <p class="factor-title">2. 父母近视情况</p>
+                <div>
+                    <input type="radio" id="parental_low" name="parental" value="0" required>
+                    <label for="parental_low"> 父母均无近视 (低风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="parental_medium" name="parental" value="1">
+                    <label for="parental_medium"> 父母一方近视 (&lt; 6.00D) (中风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="parental_high" name="parental" value="2">
+                    <label for="parental_high"> 父母双方近视 或 一方/双方为高度近视 (≥ 6.00D) (高风险)</label>
+                </div>
+            </div>
+
+            <div class="factor-group">
+                <p class="factor-title">3. 屈光状态 / 远视储备 (根据年龄)</p>
+                <div>
+                    <input type="radio" id="refractive_low" name="refractive" value="0" required>
+                    <label for="refractive_low"> 远视储备充足 (如6岁 > +0.75D) (低风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="refractive_medium" name="refractive" value="1">
+                    <label for="refractive_medium"> 远视储备偏低 (如6岁 +0.25~+0.75D) 或 低度近视 (&lt; -1.50D) (中风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="refractive_high" name="refractive" value="2">
+                    <label for="refractive_high"> 远视储备不足 (&lt;+0.25D) 或 近视度数较高 (>-1.50D, 年龄越小风险越高) (高风险)</label>
+                </div>
+            </div>
+
+            <div class="factor-group">
+                <p class="factor-title">4. 近视年进展速度 (屈光度)</p>
+                <div>
+                    <input type="radio" id="progression_low" name="progression" value="0" required>
+                    <label for="progression_low"> &lt; 0.50D/年 (低风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="progression_medium" name="progression" value="1">
+                    <label for="progression_medium"> 0.50D ~ &lt; 1.00D/年 (中风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="progression_high" name="progression" value="2">
+                    <label for="progression_high"> ≥ 1.00D/年 (或特定年龄段 ≥0.75D/年) (高风险)</label>
+                </div>
+            </div>
+
+            <div class="factor-group">
+                <p class="factor-title">5. 眼轴长度 (Axial Length)</p>
+                 <div>
+                    <input type="radio" id="axial_na" name="axial" value="0" required>
+                    <label for="axial_na"> 未测量 / 不适用</label>
+                </div>
+                <div>
+                    <input type="radio" id="axial_low" name="axial" value="0">
+                    <label for="axial_low"> 处于同龄正常范围，年增长 &lt; 0.2mm (低风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="axial_medium" name="axial" value="1">
+                    <label for="axial_medium"> 接近或略超同龄上限，年增长 0.2mm ~ &lt;0.3mm (中风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="axial_high" name="axial" value="2">
+                    <label for="axial_high"> 显著超过同龄上限，或年增长 ≥ 0.3mm (高风险)</label>
+                </div>
+            </div>
+
+            <div class="factor-group">
+                <p class="factor-title">6. 每日户外活动时间</p>
+                <div>
+                    <input type="radio" id="outdoor_low" name="outdoor" value="0" required>
+                    <label for="outdoor_low"> ≥ 2小时/天 (有效光照下) (低风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="outdoor_medium" name="outdoor" value="1">
+                    <label for="outdoor_medium"> 1 - 2小时/天 (中风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="outdoor_high" name="outdoor" value="2">
+                    <label for="outdoor_high"> &lt; 1小时/天 (高风险)</label>
+                </div>
+            </div>
+
+            <div class="factor-group">
+                <p class="factor-title">7. 近距离工作负荷与习惯 (课业外)</p>
+                <div>
+                    <input type="radio" id="nearwork_low" name="nearwork" value="0" required>
+                    <label for="nearwork_low"> &lt; 2小时/天，习惯良好 (距离>30cm, 常中断) (低风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="nearwork_medium" name="nearwork" value="1">
+                    <label for="nearwork_medium"> 2 - 4小时/天，或偶尔习惯不良 (中风险)</label>
+                </div>
+                <div>
+                    <input type="radio" id="nearwork_high" name="nearwork" value="2">
+                    <label for="nearwork_high"> > 4小时/天，或长时间连续/距离近/姿势差 (高风险)</label>
+                </div>
+            </div>
+
+            <div class="text-center mt-8">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105">
+                    计算风险等级
+                </button>
+            </div>
+        </form>
+
+        <div id="resultArea" class="mt-8 p-6 rounded-lg bg-gray-50 hidden">
+             <h2 class="text-xl font-semibold text-center mb-4">评估结果</h2>
+             <div class="flex flex-col items-center">
+                <div id="trafficLight" class="traffic-light mb-3"></div>
+                <p class="text-lg font-medium mb-1">总加权分数: <span id="score" class="font-bold"></span></p>
+                <p id="riskLevel" class="text-xl font-bold mb-3"></p>
+                <p id="riskDescription" class="text-center text-gray-700"></p>
+                <p id="axialNote" class="text-xs text-gray-500 mt-2"></p>
+             </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Define weights based on the adjusted consensus
+        const weights = {
+            age: 2.0,
+            parental: 2.0,
+            refractive: 2.5,
+            progression: 2.5,
+            axial: 2.5, // Weight for axial length
+            outdoor: 1.5,
+            nearwork: 1.0
+        };
+
+        // Get form and result elements
+        const form = document.getElementById('riskForm');
+        const resultArea = document.getElementById('resultArea');
+        const scoreElement = document.getElementById('score');
+        const riskLevelElement = document.getElementById('riskLevel');
+        const riskDescriptionElement = document.getElementById('riskDescription');
+        const trafficLightElement = document.getElementById('trafficLight');
+        const axialNoteElement = document.getElementById('axialNote');
+
+
+        // Add event listener for form submission
+        form.addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent default form submission
+
+            let totalScore = 0;
+            let axialNotMeasured = false;
+
+            // Loop through each factor/weight
+            for (const factor in weights) {
+                // Find the selected radio button for the current factor
+                const selectedOption = form.querySelector(`input[name="${factor}"]:checked`);
+
+                if (selectedOption) {
+                    const score = parseInt(selectedOption.value); // Get the base score (0, 1, or 2)
+                    const weight = weights[factor];
+
+                    // Special handling for Axial Length 'Not Measured' option
+                    if (factor === 'axial' && selectedOption.id === 'axial_na') {
+                         axialNotMeasured = true;
+                         // Assign 0 points if not measured, weight is effectively ignored
+                         totalScore += 0;
+                    } else {
+                        totalScore += score * weight; // Add weighted score
+                    }
+                } else {
+                    // Handle case where a factor might not be selected (though 'required' attribute should prevent this)
+                    console.warn(`Factor "${factor}" not selected.`);
+                    // Optionally alert the user or handle appropriately
+                    alert(`请为 "${factor}" 因素选择一个选项。`);
+                    return; // Stop calculation if any factor is missing
+                }
+            }
+
+            // Round the score to one decimal place for cleaner display
+            totalScore = Math.round(totalScore * 10) / 10;
+
+            // Determine risk level based on score thresholds
+            let riskLevel = '';
+            let riskDescription = '';
+            let lightColorClass = '';
+            let lightText = '';
+
+            // Thresholds (Illustrative): Green ≤ 7, Yellow 8-15, Red ≥ 16
+            if (totalScore <= 7) {
+                riskLevel = '低风险 (Low Risk)';
+                riskDescription = '目前近视发展风险较低。请继续保持良好的用眼习惯和充足的户外活动。';
+                lightColorClass = 'bg-green-500';
+                lightText = '低';
+            } else if (totalScore <= 15) {
+                riskLevel = '中风险 (Medium Risk)';
+                riskDescription = '存在一定的近视发展风险因素。建议关注用眼习惯，增加户外时间，并定期进行眼科检查。';
+                lightColorClass = 'bg-yellow-500';
+                 lightText = '中';
+            } else { // totalScore >= 16
+                riskLevel = '高风险 (High Risk)';
+                riskDescription = '近视发生或快速进展的风险较高。强烈建议尽快咨询眼科医生，进行全面检查并讨论近视控制方案。';
+                lightColorClass = 'bg-red-500';
+                 lightText = '高';
+            }
+
+            // Update the result display area
+            scoreElement.textContent = totalScore;
+            riskLevelElement.textContent = riskLevel;
+            riskDescriptionElement.textContent = riskDescription;
+
+             // Update traffic light display
+            trafficLightElement.className = 'traffic-light ' + lightColorClass; // Reset classes and add new color
+            trafficLightElement.textContent = lightText;
+
+
+            // Add note if axial length was not measured
+            if (axialNotMeasured) {
+                 axialNoteElement.textContent = '(眼轴长度未纳入计算)';
+            } else {
+                 axialNoteElement.textContent = ''; // Clear the note if measured
+            }
+
+            // Show the result area
+            resultArea.classList.remove('hidden');
+
+            // Scroll to the result area for better visibility on small screens
+            resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+
+    </script>
+
+</body>
+</html>

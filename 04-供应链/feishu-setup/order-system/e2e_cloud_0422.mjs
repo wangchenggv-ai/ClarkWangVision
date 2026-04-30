@@ -5,8 +5,8 @@
  *   1. 健康检查
  *   2. 管理后台登录页安全（不自动跳转）
  *   3. 查询已有订单 + 镜片明细
- *   4. 单订单导出 ZIP（含 Excel）
- *   5. 多订单导出 ZIP（含 Excel + 各订单联系信息独立）
+ *   4. 单订单导出 Excel
+ *   5. 多订单导出 Excel
  *   6. 同订单选 1 人导出（备注过滤不混）
  *   7. 验真页面（时间 = 订单创建时间）
  */
@@ -131,52 +131,47 @@ if (lensCodes.length > 0) {
   record("镜片明细查询", false);
 }
 
-// ── Step 4: 单订单导出 ZIP ────────────────────────────────────────
-step(4, "单订单导出 ZIP — GET /api/admin/batch-zip");
+// ── Step 4: 单订单导出 Excel ──────────────────────────────────────
+step(4, "单订单导出 Excel — GET /api/admin/batch-zip");
 if (testOrderNos[0]) {
-  const zipRes = await fetch(`${BASE}/api/admin/batch-zip?admin=${ADMIN}&orderNos=${encodeURIComponent(testOrderNos[0])}`);
-  if (zipRes.ok) {
-    const zipBuf = Buffer.from(await zipRes.arrayBuffer());
-    if (zipBuf.length > 100) {
-      const zipContent = zipBuf.toString("latin1");
-      const hasXlsx = zipContent.includes(".xlsx");
-      const hasQr = zipContent.includes("qrcodes/") || zipContent.includes("label");
-      const hasTxt = zipContent.includes(".txt");
-      pass(`ZIP ${(zipBuf.length / 1024).toFixed(1)} KB | Excel: ${hasXlsx} | QR/Label: ${hasQr} | 说明: ${hasTxt}`);
-      record("单订单ZIP含Excel", hasXlsx, `${(zipBuf.length / 1024).toFixed(1)}KB`);
-      record("单订单ZIP含QR标签", hasQr);
+  const xlsRes = await fetch(`${BASE}/api/admin/batch-zip?admin=${ADMIN}&orderNos=${encodeURIComponent(testOrderNos[0])}`);
+  if (xlsRes.ok) {
+    const ct = xlsRes.headers.get("content-type") || "";
+    const xlsBuf = Buffer.from(await xlsRes.arrayBuffer());
+    const isExcel = ct.includes("spreadsheetml") || ct.includes("excel");
+    if (xlsBuf.length > 100) {
+      pass(`Excel ${(xlsBuf.length / 1024).toFixed(1)} KB | Content-Type: ${isExcel ? "Excel" : ct}`);
+      record("单订单导出含Excel", isExcel, `${(xlsBuf.length / 1024).toFixed(1)}KB`);
     } else {
-      fail(`ZIP 太小: ${zipBuf.length} bytes`);
-      record("单订单ZIP", false, `${zipBuf.length}B`);
+      fail(`Excel 太小: ${xlsBuf.length} bytes`);
+      record("单订单导出", false, `${xlsBuf.length}B`);
     }
   } else {
-    fail(`ZIP HTTP ${zipRes.status}: ${await zipRes.text()}`);
-    record("单订单ZIP", false, `HTTP ${zipRes.status}`);
+    fail(`Excel HTTP ${xlsRes.status}: ${await xlsRes.text()}`);
+    record("单订单导出", false, `HTTP ${xlsRes.status}`);
   }
 }
 
-// ── Step 5: 多订单导出 ZIP ────────────────────────────────────────
-step(5, "多订单导出 ZIP — GET /api/admin/batch-zip");
+// ── Step 5: 多订单导出 Excel ──────────────────────────────────────
+step(5, "多订单导出 Excel — GET /api/admin/batch-zip");
 if (testOrderNos.length >= 2) {
   const multiUrl = `${BASE}/api/admin/batch-zip?admin=${ADMIN}&orderNos=${encodeURIComponent(testOrderNos.join(","))}`;
-  const multiZipRes = await fetch(multiUrl);
-  if (multiZipRes.ok) {
-    const zipBuf = Buffer.from(await multiZipRes.arrayBuffer());
-    if (zipBuf.length > 100) {
-      const zipContent = zipBuf.toString("latin1");
-      const hasXlsx = zipContent.includes(".xlsx");
-      // 检查是否有子目录（多订单时每个订单一个子目录）
-      const hasSubdir = zipContent.includes(`${testOrderNos[0]}/`) || zipContent.includes(`${testOrderNos[1]}/`);
-      pass(`ZIP ${(zipBuf.length / 1024).toFixed(1)} KB | Excel: ${hasXlsx} | 子目录: ${hasSubdir}`);
-      record("多订单ZIP含Excel", hasXlsx);
+  const multiRes = await fetch(multiUrl);
+  if (multiRes.ok) {
+    const ct = multiRes.headers.get("content-type") || "";
+    const xlsBuf = Buffer.from(await multiRes.arrayBuffer());
+    const isExcel = ct.includes("spreadsheetml") || ct.includes("excel");
+    if (xlsBuf.length > 100) {
+      pass(`Excel ${(xlsBuf.length / 1024).toFixed(1)} KB | Content-Type: ${isExcel ? "Excel" : ct}`);
+      record("多订单导出含Excel", isExcel);
     } else {
-      fail(`ZIP 太小: ${zipBuf.length} bytes`);
-      record("多订单ZIP", false, `${zipBuf.length}B`);
+      fail(`Excel 太小: ${xlsBuf.length} bytes`);
+      record("多订单导出", false, `${xlsBuf.length}B`);
     }
   } else {
-    const errText = await multiZipRes.text();
-    fail(`ZIP HTTP ${multiZipRes.status}: ${errText}`);
-    record("多订单ZIP", false, `HTTP ${multiZipRes.status}`);
+    const errText = await multiRes.text();
+    fail(`Excel HTTP ${multiRes.status}: ${errText}`);
+    record("多订单导出", false, `HTTP ${multiRes.status}`);
   }
 }
 
@@ -185,35 +180,31 @@ step(6, "同订单选 1 人导出");
 if (multiPatientOrders.length > 0) {
   const [mpOrderNo, mpPatients] = multiPatientOrders[0];
   const targetCustomer = mpPatients[0].customerName;
-  const otherCustomer = mpPatients[1]?.customerName || "";
   const custUrl = `${BASE}/api/admin/batch-zip?admin=${ADMIN}&orderNos=${mpOrderNo}&customer=${encodeURIComponent(targetCustomer)}`;
-  const custZipRes = await fetch(custUrl);
-  if (custZipRes.ok) {
-    const zipBuf = Buffer.from(await custZipRes.arrayBuffer());
-    const zipContent = zipBuf.toString("latin1");
-    const hasXlsx = zipContent.includes(".xlsx");
-    // 检查是否有另一个客户的备注泄漏（只能看文件名，备注在 Excel 内部）
-    // 至少验证 ZIP 不为空且含 Excel
-    pass(`ZIP ${(zipBuf.length / 1024).toFixed(1)} KB | Excel: ${hasXlsx} | 客户: ${targetCustomer}`);
-    record("同订单选人导出含Excel", hasXlsx);
+  const custRes = await fetch(custUrl);
+  if (custRes.ok) {
+    const ct = custRes.headers.get("content-type") || "";
+    const xlsBuf = Buffer.from(await custRes.arrayBuffer());
+    const isExcel = ct.includes("spreadsheetml") || ct.includes("excel");
+    pass(`Excel ${(xlsBuf.length / 1024).toFixed(1)} KB | Excel: ${isExcel} | 客户: ${targetCustomer}`);
+    record("同订单选人导出含Excel", isExcel);
   } else {
-    fail(`ZIP HTTP ${custZipRes.status}`);
+    fail(`Excel HTTP ${custRes.status}`);
     record("同订单选人导出", false);
   }
 } else {
-  // 没有多患者订单，用普通订单测试
   if (testOrderNos[0]) {
     const oneCustomer = orderGroups[testOrderNos[0]][0]?.customerName || "";
     if (oneCustomer) {
       const custUrl = `${BASE}/api/admin/batch-zip?admin=${ADMIN}&orderNos=${testOrderNos[0]}&customer=${encodeURIComponent(oneCustomer)}`;
-      const custZipRes = await fetch(custUrl);
-      if (custZipRes.ok) {
-        const zipBuf = Buffer.from(await custZipRes.arrayBuffer());
-        const hasXlsx = zipBuf.toString("latin1").includes(".xlsx");
-        pass(`单客户导出 ${(zipBuf.length / 1024).toFixed(1)} KB | Excel: ${hasXlsx}`);
-        record("单客户导出", hasXlsx);
+      const custRes = await fetch(custUrl);
+      if (custRes.ok) {
+        const ct = custRes.headers.get("content-type") || "";
+        const isExcel = ct.includes("spreadsheetml") || ct.includes("excel");
+        pass(`单客户导出 ${(Buffer.from(await custRes.arrayBuffer()).length / 1024).toFixed(1)} KB | Excel: ${isExcel}`);
+        record("单客户导出", isExcel);
       } else {
-        fail(`ZIP HTTP ${custZipRes.status}`);
+        fail(`Excel HTTP ${custRes.status}`);
         record("单客户导出", false);
       }
     }

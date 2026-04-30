@@ -21,7 +21,7 @@
   --radius: 16px;
   --radius-sm: 10px;
   --radius-xs: 8px;
-  --font: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+  --font: -apple-system, "Helvetica Neue", "Arial", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-num: "Montserrat", "SF Pro Display", var(--font);
   --font-mono: "SF Mono", "Menlo", "Consolas", monospace;
 }
@@ -251,9 +251,11 @@ select.error + .error-tip { display: block; }
 .badge-produce { background: var(--brand-light); color: var(--brand); }
 
 /* 订单状态 */
+.badge-ordered { background: #fff7e6; color: #fa8c16; }
 .badge-pending { background: var(--gold-light); color: #B8860B; }
 .badge-review { background: var(--error-light); color: var(--error); }
 .badge-producing { background: var(--brand-light); color: var(--brand); }
+.badge-labeled { background: #f9f0ff; color: #531dab; }
 .badge-shipped { background: var(--success-light); color: var(--success); }
 .badge-received { background: #E0F7EA; color: #00875A; }
 .badge-done { background: #F0F0F0; color: #8C8C8C; }

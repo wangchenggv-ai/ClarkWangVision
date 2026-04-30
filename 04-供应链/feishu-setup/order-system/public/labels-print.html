@@ -30,9 +30,41 @@ body { background: var(--bg); margin: 0; font-family: var(--font); }
   border-radius: 6px; font-size: 15px; outline: none;
 }
 .scan-bar input:focus { border-color: var(--brand); }
-.scan-status { font-size: 13px; color: #888; min-width: 100px; }
+.scan-mode { display: flex; gap: 0; border-radius: 6px; overflow: hidden; border: 1px solid #d9d9d9; }
+.scan-mode button {
+  padding: 6px 14px; border: none; background: #fff; font-size: 12px; cursor: pointer; transition: all 0.2s;
+}
+.scan-mode button.active { background: var(--brand); color: #fff; }
+.scan-status { font-size: 13px; color: #888; min-width: 120px; }
 .scan-status.ok { color: #52c41a; font-weight: 600; }
 .scan-status.err { color: #cf1322; font-weight: 600; }
+
+/* 仓位面板 */
+.bin-panel {
+  background: #fff; border-radius: 10px; padding: 0; margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; display: none;
+}
+.bin-panel.show { display: block; }
+.bin-panel-header {
+  padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+  background: #fafafa; border-bottom: 1px solid #f0f0f0; font-size: 13px; font-weight: 600;
+}
+.bin-panel-header .bin-count { color: #531dab; font-size: 14px; }
+.bin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; padding: 14px; }
+.bin-card {
+  border: 1px solid #f0f0f0; border-radius: 8px; overflow: hidden;
+  border-left: 4px solid #531dab;
+}
+.bin-card-header {
+  padding: 8px 12px; background: #f9f0ff; font-size: 12px; font-weight: 600;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.bin-num { font-family: "Georgia", serif; font-size: 18px; color: #531dab; }
+.bin-card-body { padding: 8px 12px; font-size: 11px; }
+.bin-address { color: #666; margin-bottom: 6px; font-weight: 500; }
+.bin-order { padding: 3px 0; border-bottom: 1px dashed #f5f5f5; display: flex; justify-content: space-between; }
+.bin-order:last-child { border-bottom: none; }
+.bin-empty { text-align: center; padding: 30px; color: #ccc; }
 
 /* 筛选栏 */
 .filter-bar {
@@ -80,9 +112,8 @@ td .mono { font-family: "SF Mono","Consolas","Courier New",monospace; font-size:
 }
 .status-待处理 .status-dot { background: #d46b08; }
 .status-生产中 .status-dot { background: #0958d9; }
+.status-打标签 .status-dot { background: #531dab; }
 .status-已发货 .status-dot { background: #389e0d; }
-.status-待签收 .status-dot { background: #13c2c2; }
-.status-已签收 .status-dot { background: #237804; }
 .eye-r { color: #c0392b; font-weight: 700; }
 .eye-l { color: #1a6fb5; font-weight: 700; }
 
@@ -163,6 +194,8 @@ td .mono { font-family: "SF Mono","Consolas","Courier New",monospace; font-size:
 <div class="header">
   <span class="logo">GAUSH | CLEAR</span>
   <span class="title">标签打印 & 发货中心</span>
+  <a href="/orders" style="color:#fff;text-decoration:none;font-size:12px;opacity:0.8;margin-left:auto">订单管理</a>
+  <a href="/control" style="color:#fff;text-decoration:none;font-size:12px;opacity:0.8;margin-left:10px">仪表盘</a>
   <span class="clock" id="headerClock"></span>
 </div>
 
@@ -170,8 +203,25 @@ td .mono { font-family: "SF Mono","Consolas","Courier New",monospace; font-size:
   <!-- 扫码栏 -->
   <div class="scan-bar">
     <span>&#128451;</span>
-    <input type="text" id="scanInput" placeholder="扫枪扫描条形码自动打印..." autocomplete="off" spellcheck="false">
+    <div class="scan-mode" id="scanMode">
+      <button class="active" data-mode="print" onclick="setScanMode('print')">打印标签</button>
+      <button data-mode="bin" onclick="setScanMode('bin')">分仓</button>
+    </div>
+    <input type="text" id="scanInput" placeholder="扫枪扫描镜片码条形码..." autocomplete="off" spellcheck="false">
     <span class="scan-status" id="scanStatus">等待扫描</span>
+  </div>
+
+  <!-- 仓位面板 -->
+  <div class="bin-panel" id="binPanel">
+    <div class="bin-panel-header">
+      <span>&#128230; 仓位分配</span>
+      <span class="bin-count" id="binCount"></span>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="resetBins()" style="font-size:11px;padding:4px 10px">清空仓位</button>
+      <button class="btn" onclick="loadBinSummary()" style="font-size:11px;padding:4px 10px">刷新</button>
+    </div>
+    <div class="bin-grid" id="binGrid"></div>
+    <div class="bin-empty" id="binEmpty">扫描镜片码开始分仓</div>
   </div>
 
   <!-- 筛选栏 -->
@@ -179,11 +229,11 @@ td .mono { font-family: "SF Mono","Consolas","Courier New",monospace; font-size:
     <select id="filterStatus">
       <option value="">全部状态</option>
       <option value="待处理">待处理</option>
-      <option value="生产中" selected>生产中</option>
+      <option value="生产中">生产中</option>
+      <option value="打标签">打标签</option>
       <option value="已发货">已发货</option>
-      <option value="待签收">待签收</option>
-      <option value="已签收">已签收</option>
     </select>
+    <select id="filterStock"><option value="">全部库存</option><option value="yes">有库存</option><option value="no">无库存</option></select>
     <select id="filterAgent"><option value="">全部代理商</option></select>
     <select id="filterSku"><option value="">全部型号</option></select>
     <input type="text" id="filterQ" placeholder="搜索订单号/客户名...">
@@ -240,6 +290,7 @@ td .mono { font-family: "SF Mono","Consolas","Courier New",monospace; font-size:
     <div style="width:1px;height:24px;background:#e0e0e0"></div>
     <button class="btn btn-primary" onclick="shipSelected()">&#128666; 确认发货</button>
     <button class="btn" onclick="slipSelected()">&#128196; 同行单</button>
+    <button class="btn" onclick="exportExcelSelected()">&#128228; 导出Excel</button>
     <button class="btn" onclick="clearPreview()" style="color:#999">清除预览</button>
     <span class="count" id="selectedCount">已选 0 项</span>
   </div>
@@ -329,6 +380,7 @@ function adminApi(path, body) {
 
 // ─── 加载订单 ──────────────────────────────────────────────────────
 async function loadOrders() {
+  selectedOrders.clear(); // 切换筛选条件时清空选中，防止导出混入旧数据
   const params = new URLSearchParams();
   const status = document.getElementById("filterStatus").value;
   const agent = document.getElementById("filterAgent").value;
@@ -336,12 +388,14 @@ async function loadOrders() {
   const q = document.getElementById("filterQ").value;
   const from = document.getElementById("filterFrom").value;
   const to = document.getElementById("filterTo").value;
+  const stock = document.getElementById("filterStock").value;
   if (status) params.set("status", status);
   if (agent) params.set("agent", agent);
   if (sku) params.set("sku", sku);
   if (q) params.set("q", q);
   if (from) params.set("from", from);
   if (to) params.set("to", to);
+  if (stock) params.set("stock", stock);
   params.set("page", currentPage);
   params.set("pageSize", 50);
 
@@ -384,11 +438,11 @@ function renderTable() {
     const pi = o.pairIndex || 1;
     let actions = '';
     if (o.status === "生产中") {
-      actions = `<button class="btn" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();quickPrint('${o.orderNo}','${cn}',${pi})" title="打印标签">&#128438;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#eb2f96" onclick="event.stopPropagation();quickZebra('${o.orderNo}','${cn}',${pi})" title="斑马打印">&#128424;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#52c41a" onclick="event.stopPropagation();quickShip('${o.orderNo}','${cn}',${pi})" title="发货">&#128666;</button>`;
-    } else if (o.status === "已发货" || o.status === "待签收") {
-      actions = `<button class="btn" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();quickPrint('${o.orderNo}','${cn}',${pi})" title="打印标签">&#128438;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#c0392b" onclick="event.stopPropagation();quickSlip('${o.orderNo}','${cn}',${pi})" title="同行单">&#128196;</button>`;
-    } else if (o.status === "已签收") {
-      actions = `<button class="btn" style="padding:4px 8px;font-size:11px;color:#c0392b" onclick="event.stopPropagation();quickSlip('${o.orderNo}','${cn}',${pi})" title="同行单">&#128196;</button>`;
+      actions = `<button class="btn" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();quickPrint('${o.orderNo}','${cn}',${pi})" title="打印标签">&#128438;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#eb2f96" onclick="event.stopPropagation();quickZebra('${o.orderNo}','${cn}',${pi})" title="斑马打印">&#128424;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#722ed1" onclick="event.stopPropagation();quickExportExcel('${o.orderNo}','${cn}',${pi})" title="导出Excel">&#128228;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#52c41a" onclick="event.stopPropagation();quickShip('${o.orderNo}','${cn}',${pi})" title="发货">&#128666;</button>`;
+    } else if (o.status === "打标签") {
+      actions = `<button class="btn" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();quickPrint('${o.orderNo}','${cn}',${pi})" title="打印标签">&#128438;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#eb2f96" onclick="event.stopPropagation();quickZebra('${o.orderNo}','${cn}',${pi})" title="斑马打印">&#128424;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#722ed1" onclick="event.stopPropagation();quickExportExcel('${o.orderNo}','${cn}',${pi})" title="导出Excel">&#128228;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#c0392b" onclick="event.stopPropagation();quickSlip('${o.orderNo}','${cn}',${pi})" title="同行单">&#128196;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#52c41a" onclick="event.stopPropagation();quickShip('${o.orderNo}','${cn}',${pi})" title="发货">&#128666;</button>`;
+    } else if (o.status === "已发货") {
+      actions = `<button class="btn" style="padding:4px 8px;font-size:11px" onclick="event.stopPropagation();quickPrint('${o.orderNo}','${cn}',${pi})" title="补打标签">&#128438;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#722ed1" onclick="event.stopPropagation();quickExportExcel('${o.orderNo}','${cn}',${pi})" title="导出Excel">&#128228;</button> <button class="btn" style="padding:4px 8px;font-size:11px;color:#c0392b" onclick="event.stopPropagation();quickSlip('${o.orderNo}','${cn}',${pi})" title="同行单">&#128196;</button>`;
     } else {
       actions = `<span style="color:#ccc;font-size:11px">—</span>`;
     }
@@ -500,23 +554,32 @@ function quickPrint(orderNo, customerName, pairIndex) {
 // ─── 斑马打印 ──────────────────────────────────────────────────────
 async function zebraPrintSelected() {
   if (!selectedOrders.size) { showToast("请先选择订单", "info"); return; }
-  let queued = 0, failed = 0;
+  // 检查是否有已打印过的订单
+  let alreadyCount = 0, queued = 0, failed = 0;
   for (const key of selectedOrders) {
     const { orderNo, customerName, pairIndex } = parseKey(key);
     try {
       const data = await adminApi("/api/admin/print-queue", { orderNo, customerName, pairIndex });
-      if (data.ok) queued += data.lensCount; else failed++;
+      if (data.ok) {
+        queued += data.lensCount;
+        if (data.alreadyLabeled) alreadyCount++;
+      } else { failed++; }
     } catch { failed++; }
   }
-  if (queued) showToast(`已入队 ${queued} 张标签，等待 pull-print.js 拉取`, "success");
+  let msg = `已入队 ${queued} 张标签，等待 pull-print.js 拉取`;
+  if (alreadyCount) msg += `（其中 ${alreadyCount} 个订单已打印过，已重新入队）`;
+  if (queued) showToast(msg, "success");
   if (failed) showToast(`${failed} 个订单入队失败`, "error");
 }
 
 async function quickZebra(orderNo, customerName, pairIndex) {
   try {
     const data = await adminApi("/api/admin/print-queue", { orderNo, customerName, pairIndex });
-    if (data.ok) showToast(`${orderNo} 已入队 ${data.lensCount} 张`, "success");
-    else showToast(`入队失败: ${data.error}`, "error");
+    if (data.ok) {
+      let msg = `${orderNo} 已入队 ${data.lensCount} 张`;
+      if (data.alreadyLabeled) msg += `（已在"${data.currentStatus}"状态，已重新入队）`;
+      showToast(msg, data.alreadyLabeled ? "info" : "success");
+    } else { showToast(`入队失败: ${data.error}`, "error"); }
   } catch (e) { showToast(`入队失败: ${e.message}`, "error"); }
 }
 
@@ -569,9 +632,9 @@ async function shipSelected() {
   if (!selectedOrders.size) { showToast("请先选择订单", "info"); return; }
   const keys = [...selectedOrders].filter(k => {
     const o = allOrders.find(x => `${x.orderNo}|${x.customerName}|${x.pairIndex||1}` === k);
-    return o && o.status === "生产中";
+    return o && (o.status === "生产中" || o.status === "打标签");
   });
-  if (!keys.length) { showToast("所选订单中没有\"生产中\"的订单", "info"); return; }
+  if (!keys.length) { showToast("所选订单中没有\"生产中\"或\"打标签\"的订单", "info"); return; }
 
   if (!confirm(`确认发货 ${keys.length} 个订单？将自动生成快递单号。`)) return;
 
@@ -601,14 +664,47 @@ async function quickShip(orderNo, customerName, pairIndex) {
 // ─── 同行单 ────────────────────────────────────────────────────────
 function slipSelected() {
   if (!selectedOrders.size) { showToast("请先选择订单", "info"); return; }
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-  window.open(`/api/admin/slip-batch?date=${today}&admin=${adminToken}`, "_blank");
+  const keys = [...selectedOrders].filter(k => {
+    const o = allOrders.find(x => `${x.orderNo}|${x.customerName}|${x.pairIndex||1}` === k);
+    return o && (o.status === "打标签" || o.status === "已发货");
+  });
+  if (!keys.length) { showToast("所选订单中没有\"打标签\"或\"已发货\"的订单", "info"); return; }
+  const orderNos = [...new Set(keys.map(k => k.split("|")[0]))].join(",");
+  window.open(`/api/admin/slip-batch?orderNos=${encodeURIComponent(orderNos)}&admin=${adminToken}`, "_blank");
 }
 
 function quickSlip(orderNo, customerName, pairIndex) {
   const q = customerName ? `&customer=${encodeURIComponent(customerName)}` : "";
   const pi = pairIndex ? `&pairIndex=${pairIndex}` : "";
   window.open(`/api/admin/slip/${orderNo}?admin=${adminToken}${q}${pi}`, "_blank");
+}
+
+// ─── 导出 Excel ─────────────────────────────────────────────────────
+function exportExcelSelected() {
+  if (!selectedOrders.size) { showToast("请先选择订单", "info"); return; }
+  const keys = [...selectedOrders];
+  // 按订单号分组客户名，避免跨订单客户过滤错乱
+  const orderCustomerMap = {};
+  keys.forEach(k => {
+    const [orderNo, customerName] = k.split("|");
+    if (!orderCustomerMap[orderNo]) orderCustomerMap[orderNo] = new Set();
+    if (customerName) orderCustomerMap[orderNo].add(customerName);
+  });
+  const orderNos = Object.keys(orderCustomerMap);
+  const orderCustomers = orderNos.map(no => {
+    const customers = [...orderCustomerMap[no]];
+    return `${no}:${customers.join(",")}`;
+  }).join("|");
+  let url = `/api/admin/labels/export-excel?orderNos=${encodeURIComponent(orderNos.join(","))}&admin=${adminToken}&orderCustomers=${encodeURIComponent(orderCustomers)}`;
+  window.open(url, "_blank");
+  showToast("正在导出 Excel...", "info");
+}
+
+function quickExportExcel(orderNo, customerName, pairIndex) {
+  let url = `/api/admin/labels/export-excel?orderNos=${encodeURIComponent(orderNo)}&admin=${adminToken}`;
+  if (customerName) url += `&customer=${encodeURIComponent(customerName)}`;
+  if (pairIndex) url += `&pairIndex=${pairIndex}`;
+  window.open(url, "_blank");
 }
 
 // ─── 测试打印 ──────────────────────────────────────────────────────
@@ -630,12 +726,24 @@ h1{font-size:14pt;color:#c0392b}p{font-size:9pt;color:#666}
 // ─── 扫码 ──────────────────────────────────────────────────────────
 let scanBuffer = "";
 let scanTimer = null;
+let scanMode = "print";
+
+function setScanMode(mode) {
+  scanMode = mode;
+  document.querySelectorAll(".scan-mode button").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+  const input = document.getElementById("scanInput");
+  input.placeholder = mode === "bin" ? "扫枪扫描镜片码条形码自动分仓..." : "扫枪扫描镜片码条形码自动打印...";
+  document.getElementById("binPanel").classList.toggle("show", mode === "bin");
+  if (mode === "bin") loadBinSummary();
+  input.focus();
+}
 
 document.getElementById("scanInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    const code = scanBuffer.trim();
+    const code = (scanBuffer || document.getElementById("scanInput").value).trim();
     scanBuffer = "";
+    document.getElementById("scanInput").value = "";
     if (code) handleScan(code);
     return;
   }
@@ -646,18 +754,100 @@ document.getElementById("scanInput").addEventListener("keydown", (e) => {
   }
 });
 
-function handleScan(orderNo) {
+async function handleScan(lensCode) {
   const status = document.getElementById("scanStatus");
-  status.textContent = `准备打印 ${orderNo} ...`;
+  status.textContent = `识别: ${lensCode} ...`;
   status.className = "scan-status";
-  quickPrint(orderNo, "", 0);
-  status.textContent = `✓ 已打开 ${orderNo}`;
-  status.className = "scan-status ok";
+
+  try {
+    if (scanMode === "bin") {
+      // 分仓模式
+      const data = await adminApi("/api/admin/scan-bin", { lensCode });
+      if (!data.ok) {
+        status.textContent = `✗ ${data.error || "扫描失败"}`;
+        status.className = "scan-status err";
+      } else if (data.alreadyInBin) {
+        status.textContent = `⚠ ${lensCode} 已在仓位 ${data.bin}`;
+        status.className = "scan-status err";
+        showToast(`${data.orderNo} 已在仓位 ${data.bin}，跳过`, "info");
+      } else {
+        status.textContent = `✓ ${data.bin}号仓 · ${data.orderNo}`;
+        status.className = "scan-status ok";
+        showToast(`${data.orderNo} → ${data.bin}号仓（${data.address}）`, "success");
+      }
+      loadBinSummary();
+    } else {
+      // 打印模式
+      const data = await adminApi("/api/admin/scan-print", { lensCode });
+      if (!data.ok) {
+        status.textContent = `✗ ${data.error || "扫描失败"}`;
+        status.className = "scan-status err";
+      } else if (data.alreadyLabeled) {
+        status.textContent = `⚠ ${lensCode} 已打印过，已重新入队`;
+        status.className = "scan-status err";
+        showToast(`${data.orderNo} 已在"${data.currentStatus || '打标签/已发货'}"状态，已重新入队打印`, "info");
+      } else {
+        status.textContent = `✓ ${lensCode} → ${data.orderNo} 打标签`;
+        status.className = "scan-status ok";
+        showToast(`${data.orderNo} 已更新为"打标签"，标签已入队`, "success");
+      }
+      // 自动筛选到打标签状态，让刚操作的订单可见
+      document.getElementById("filterStatus").value = "打标签";
+      currentPage = 1;
+      loadOrders();
+      refreshQueueStatus();
+    }
+  } catch (e) {
+    status.textContent = `✗ 请求失败: ${e.message}`;
+    status.className = "scan-status err";
+  }
+
   setTimeout(() => {
     status.textContent = "等待扫描";
     status.className = "scan-status";
     document.getElementById("scanInput").focus();
   }, 3000);
+}
+
+// ─── 仓位面板 ──────────────────────────────────────────────────────
+async function loadBinSummary() {
+  try {
+    const data = await api("/api/admin/bin-summary");
+    const panel = document.getElementById("binPanel");
+    if (!panel.classList.contains("show")) return;
+    document.getElementById("binCount").textContent = `共 ${data.totalBins || 0} 个仓位 · ${data.totalOrders || 0} 副`;
+    const grid = document.getElementById("binGrid");
+    const empty = document.getElementById("binEmpty");
+    if (!data.bins || !data.bins.length) {
+      grid.innerHTML = "";
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+    grid.innerHTML = data.bins.map(b => `
+      <div class="bin-card">
+        <div class="bin-card-header">
+          <span class="bin-num">${b.bin} 号仓</span>
+          <span style="font-size:11px;color:#888">${b.lensCount} 片</span>
+        </div>
+        <div class="bin-card-body">
+          <div class="bin-address">&#128205; ${b.address}</div>
+          ${b.orders.map(o => `<div class="bin-order"><span>${o.customerName}</span><span style="color:#aaa">${o.eye} · ${o.orderNo}</span></div>`).join("")}
+        </div>
+      </div>
+    `).join("");
+  } catch (e) { console.error("仓位加载失败:", e); }
+}
+
+async function resetBins() {
+  if (!confirm("确定清空所有仓位？")) return;
+  try {
+    await adminApi("/api/admin/bin-reset", {});
+    document.getElementById("binGrid").innerHTML = "";
+    document.getElementById("binEmpty").style.display = "block";
+    document.getElementById("binCount").textContent = "";
+    showToast("仓位已清空", "info");
+  } catch (e) { showToast("清空失败: " + e.message, "error"); }
 }
 
 // ─── 键盘快捷键 ────────────────────────────────────────────────────

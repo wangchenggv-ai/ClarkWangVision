@@ -301,7 +301,7 @@ def query_orders_for_agent(order_id: str = "", phone: str = "") -> list[dict]:
             "product":    _text(f.get("产品型号", "")),
             "order_date": order_date,
             "lens_code":  lens,
-            "status":     "已处理 · 生产中" if lens else "待处理",
+            "status":     "已处理 · 生产中" if lens else "已下单",
         })
     return results
 

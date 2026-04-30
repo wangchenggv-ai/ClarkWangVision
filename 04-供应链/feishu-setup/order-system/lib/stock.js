@@ -35,8 +35,9 @@ export async function getStockMap(fresh = false) {
     const sph = Number(f["SPH"]);
     const cyl = Number(f["CYL"]);
     const stock = Number(f["当前库存"]) || 0;
+    const reserved = Number(f["预占库存"]) || 0;
     if (!sku || !Number.isFinite(sph) || !Number.isFinite(cyl)) continue;
-    map.set(`${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`, { stock, recordId: r.record_id });
+    map.set(`${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`, { stock, reserved, available: stock - reserved, recordId: r.record_id });
   }
   _stockCache = { map, time: Date.now() };
   return map;
@@ -63,8 +64,12 @@ export async function queryStockByRx(sku, sph, cyl) {
   const items = await filterRecords(TABLES.stock_detail, filter);
   if (!items.length) return null;
   const f = items[0].fields || {};
+  const stock = Number(f["当前库存"]) || 0;
+  const reserved = Number(f["预占库存"]) || 0;
   return {
-    stock: Number(f["当前库存"]) || 0,
+    stock,
+    reserved,
+    available: stock - reserved,
     safetyStock: Number(f["安全库存"]) || 0,
     recordId: items[0].record_id,
     key,
@@ -106,6 +111,67 @@ export async function deductStockDetail(sku, sph, cyl, qty) {
     clearStockCache();
     console.log(`  📉 度数扣减: ${key} -${deductQty} → ${newStock}`);
     return { success: true, newStock, deducted: deductQty };
+  });
+}
+
+// ─── 库存预占（下单时调用） ─────────────────────────────────────────────
+
+export async function reserveStock(sku, sph, cyl, qty) {
+  const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
+  return withLock(key, async () => {
+    const info = await queryStockByRx(sku, sph, cyl);
+    if (!info) return { success: false, reason: "not_found", reserved: 0 };
+    const available = Math.max(0, info.stock - info.reserved);
+    const toReserve = Math.min(qty, available);
+    if (toReserve <= 0) return { success: true, reserved: 0, available };
+    const newReserved = info.reserved + toReserve;
+    const patchRes = await feishuApi("PUT",
+      `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`,
+      { fields: { "预占库存": newReserved } }
+    );
+    if (!patchRes) { console.error(`  ⚠️ 预占库存写入失败: ${key}`); return { success: false, reason: "write_failed", reserved: 0 }; }
+    clearStockCache();
+    console.log(`  📌 库存预占: ${key} +${toReserve} → 预占${newReserved} 可用${info.stock - newReserved}`);
+    return { success: true, reserved: toReserve, available: info.stock - newReserved };
+  });
+}
+
+export async function releaseReservation(sku, sph, cyl, qty) {
+  const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
+  return withLock(key, async () => {
+    const info = await queryStockByRx(sku, sph, cyl);
+    if (!info || info.reserved <= 0) return { success: true, released: 0 };
+    const toRelease = Math.min(qty, info.reserved);
+    const newReserved = info.reserved - toRelease;
+    await feishuApi("PUT",
+      `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`,
+      { fields: { "预占库存": newReserved } }
+    );
+    clearStockCache();
+    console.log(`  🔓 释放预占: ${key} -${toRelease} → 预占${newReserved}`);
+    return { success: true, released: toRelease, newReserved };
+  });
+}
+
+export async function convertReservation(sku, sph, cyl, qty) {
+  const key = `${sku}|${Number(sph).toFixed(2)}|${Number(cyl).toFixed(2)}`;
+  return withLock(key, async () => {
+    const info = await queryStockByRx(sku, sph, cyl);
+    if (!info) return { success: false, deducted: 0 };
+    const deductQty = Math.min(qty, info.stock);
+    const releaseQty = info.reserved > 0 ? Math.min(deductQty, info.reserved) : 0;
+    if (deductQty <= 0) return { success: true, newStock: info.stock, deducted: 0, released: 0 };
+    const newStock = info.stock - deductQty;
+    const newReserved = info.reserved - releaseQty;
+    const now = Date.now();
+    const patchRes = await feishuApi("PUT",
+      `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records/${info.recordId}`,
+      { fields: { "当前库存": newStock, "预占库存": newReserved, "最近出库": now } }
+    );
+    if (!patchRes) { console.error(`  ⚠️ 发货扣减写入失败: ${key}`); return { success: false, deducted: 0 }; }
+    clearStockCache();
+    console.log(`  📉 发货扣减: ${key} 库存-${deductQty} 预占-${releaseQty} → ${newStock}`);
+    return { success: true, newStock, deducted: deductQty, released: releaseQty };
   });
 }
 

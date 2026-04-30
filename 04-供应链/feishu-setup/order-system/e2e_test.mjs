@@ -91,7 +91,7 @@ for (const o of orders) {
       "产品型号": o.sku, "数量": o.eyes.length, "是否装配": "是",
       "代理商名称": o.agent, "代理商ID": o.agentId,
       "收货地址": o.address, "联系人": o.contact, "联系电话": o.phone,
-      "订单状态": "待处理", "订单来源": "代理商门户", "下单日期": now,
+      "订单状态": "已下单", "订单来源": "代理商门户", "下单日期": now,
     },
   });
   if (orderRes.code !== 0) { console.log("主表写入失败:", JSON.stringify(orderRes)); process.exit(1); }
@@ -101,11 +101,11 @@ for (const o of orders) {
   const lensRecords = o.eyes.map(eye => ({
     fields: {
       "订单编号": o.orderNo,
-      "镜片码": randomBytes(8).toString("hex").toUpperCase(),
+      "镜片码（唯一）": randomBytes(8).toString("hex").toUpperCase(),
       "镜片码（唯一）": randomBytes(8).toString("hex").toUpperCase(),
       "顾客姓名": o.customer, "产品型号": o.sku, "眼别": eye.side,
       "球镜SPH": eye.sph, "柱镜CYL": eye.cyl, "轴位AXIS": eye.axis,
-      "是否装配": "是", "代理商名称": o.agent, "代理商ID": o.agentId, "订单状态": "待处理",
+      "是否装配": "是", "代理商名称": o.agent, "代理商ID": o.agentId, "订单状态": "已下单",
     },
   }));
   const lensRes = await api("POST", "/bitable/v1/apps/" + APP + "/tables/" + LENS_TBL + "/records/batch_create", { records: lensRecords });

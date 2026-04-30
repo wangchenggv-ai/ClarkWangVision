@@ -33,7 +33,7 @@ export async function sendNotify(agentName, summary, orderNo) {
       body: JSON.stringify({
         msg_type: "interactive",
         card: {
-          header: { title: { tag: "plain_text", content: "📋 新订单待处理" }, template: "blue" },
+          header: { title: { tag: "plain_text", content: "📋 新订单待确认" }, template: "blue" },
           elements: [{
             tag: "markdown",
             content: `**代理商：** ${agentName}\n**订单号：** ${orderNo}\n**摘要：** ${summary}\n\n请登录飞书多维表查看。`,

@@ -1,5 +1,5 @@
 /**
- * run_logistics_14.js — 把14笔测试订单走完物流全链路：待处理→生产中→已发货→已签收
+ * run_logistics_14.js — 把14笔测试订单走完物流全链路：已下单→待处理→生产中→已发货→已签收
  */
 import { readFileSync } from "fs";
 
@@ -79,15 +79,15 @@ const todayOrders = allOrders.filter(r => {
   const agentId = val(r.fields["代理商ID"]);
   const status = val(r.fields["订单状态"]);
   const orderNo = val(r.fields["订单编号"]);
-  return testAgents.includes(agentId) && status === "待处理" && orderNo.includes("20260414");
+  return testAgents.includes(agentId) && status === "已下单" && orderNo.includes("20260414");
 });
 
 // 按订单号分组
 const orderNos = [...new Set(testAgents.flatMap(() => todayOrders.map(r => val(r.fields["订单编号"]))))];
 console.log(`找到 ${orderNos.length} 个订单号，共 ${todayOrders.length} 条记录\n`);
 
-// ─── Step 2: 待处理 → 生产中 ─────────────────────────────────────────────────
-console.log("=== Step 2: 待处理 → 生产中 ===\n");
+// ─── Step 2: 已下单 → 待处理 ─────────────────────────────────────────────────
+console.log("=== Step 2: 已下单 → 待处理 ===\n");
 
 for (const rec of todayOrders) {
   await updateRecord(ORDER_TBL, rec.record_id, { "订单状态": "生产中" });

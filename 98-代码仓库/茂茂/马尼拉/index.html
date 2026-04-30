@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>马尼拉 · 实战辅助器</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  height: 100%; overflow: hidden;
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #060e18;
+  color: #e8ecf1;
+  font-size: 13px;
+}
+
+/* ── 四分区网格 ────────────────────────────────── */
+#app {
+  display: grid;
+  grid-template-columns: 3fr 1.25fr;
+  grid-template-rows: 61vh 39vh;
+  gap: 3px;
+  height: 100vh;
+  background: #060e18;
+  padding: 3px;
+}
+
+.panel {
+  background: #111c2c;
+  border-radius: 7px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #1c2c42;
+}
+
+.panel-hdr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px;
+  background: #090f1c;
+  border-bottom: 1px solid #1c2c42;
+  font-size: 11px;
+  color: #7a94b0;
+  flex-shrink: 0;
+  min-height: 30px;
+}
+.panel-hdr b { color: #f0d870; }
+.panel-hdr .ptitle {
+  color: #c0a850;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+}
+.panel-body { flex: 1; overflow: hidden; position: relative; }
+
+/* ── 左上：地图面板 ────────────────────────────── */
+#map-panel { grid-column: 1; grid-row: 1; }
+#map-body { width: 100%; height: 100%; }
+#map-body svg { display: block; width: 100%; height: 100%; }
+
+.turn-tag { font-weight: 700; font-size: 12px; }
+.hdr-btn {
+  padding: 2px 9px;
+  background: #182840;
+  color: #b0c8e0;
+  border: 1px solid #2a3c58;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.hdr-btn:hover { background: #223650; }
+.hdr-sep { color: #2c3c50; }
+
+/* Ship position mini-inputs in map header */
+.ship-pos-ctl { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+.ship-pos-ctl span { font-weight: 700; }
+.ship-pos-in {
+  width: 34px; padding: 1px 3px; text-align: center;
+  background: #0c1826; color: #e0e8f0;
+  border: 1px solid #2a3a52; border-radius: 3px;
+  font-size: 11px;
+}
+.alive-chk { margin: 0; cursor: pointer; }
+
+/* ── 右上：收益分析面板 ────────────────────────── */
+#profit-panel { grid-column: 2; grid-row: 1; }
+#profit-body { padding: 6px 8px; overflow-y: auto; height: 100%; }
+
+.profit-current {
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 700; font-size: 12px;
+  margin-bottom: 5px; padding-bottom: 4px;
+  border-bottom: 1px solid #1c2c42;
+}
+.profit-sub { color: #607080; font-size: 10px; font-weight: 400; }
+
+.profit-row {
+  display: grid;
+  grid-template-columns: 2.6rem 1.4rem 2rem 3rem 3.2rem;
+  gap: 2px;
+  align-items: center;
+  padding: 2px 3px;
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.profit-row.placed {
+  background: rgba(240, 210, 80, 0.09);
+  border-left: 2px solid #f0d050;
+  padding-left: 2px;
+}
+.prf-ship { font-weight: 700; }
+.prf-pos  { color: #708090; text-align: center; font-size: 10px; }
+.prf-pay  { color: #70ba70; font-size: 9px; text-align: right; }
+.prf-pct  { color: #8090a0; font-size: 10px; text-align: right; }
+.prf-ev   { color: #f0d060; font-weight: 700; text-align: right; }
+
+/* ── 左下：玩家资产面板 ────────────────────────── */
+#players-panel { grid-column: 1; grid-row: 2; }
+#players-body { padding: 5px 10px; overflow: auto; height: 100%; }
+
+.ptable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ptable th {
+  text-align: left; padding: 3px 6px;
+  color: #607080; font-weight: 500;
+  border-bottom: 1px solid #1c2c42;
+  font-size: 11px; white-space: nowrap;
+}
+.ptable td { padding: 3px 5px; border-bottom: 1px solid #0e1824; vertical-align: middle; }
+.ptable tr.active-tr td { background: rgba(90, 150, 230, 0.06); }
+.ptable tr.me-tr td { background: rgba(240, 200, 60, 0.04); }
+.act-dot { color: #50a0e0; margin-right: 3px; font-size: 12px; }
+.pname-cell { white-space: nowrap; color: #d0dcea; }
+.ev-td  { color: #f0d060; font-weight: 600; }
+.rnk-td { color: #708090; text-align: center; }
+.ci, .si {
+  width: 48px; padding: 1px 3px;
+  background: #0a1420; color: #d8e4f0;
+  border: 1px solid #1c2c42; border-radius: 3px;
+  font-size: 12px;
+}
+
+/* ── 右下：骰子面板 ────────────────────────────── */
+#dice-panel { grid-column: 2; grid-row: 2; }
+#dice-body {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px; height: 100%; padding: 8px 10px;
+}
+
+.dice-row { display: flex; gap: 8px; align-items: center; }
+.die-svg  { display: block; cursor: pointer; }
+.dice-btns { display: flex; gap: 7px; flex-wrap: wrap; justify-content: center; }
+
+.cbtn {
+  padding: 4px 12px;
+  background: #182840; color: #c0d8f0;
+  border: 1px solid #2a3c58; border-radius: 5px;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  white-space: nowrap;
+}
+.cbtn:hover { background: #223650; }
+.cbtn.secondary { background: #141e2e; color: #809090; border-color: #1e2e3e; }
+.cbtn.secondary:hover { background: #182435; color: #a0b8c0; }
+.dice-sum { font-size: 11px; color: #708090; }
+.dice-sum b { color: #f0d060; }
+
+/* ── 初始化弹窗 ────────────────────────────────── */
+#setup {
+  position: fixed; inset: 0;
+  background: rgba(4, 10, 20, 0.97);
+  display: none; align-items: center; justify-content: center;
+  z-index: 200;
+}
+.setup-box {
+  background: #111c2c; padding: 30px 38px;
+  border-radius: 10px; border: 1px solid #2a3c54;
+  min-width: 390px;
+}
+.setup-box h2 { font-size: 18px; margin-bottom: 20px; color: #f0d870; }
+.srow {
+  margin-bottom: 14px; font-size: 13px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.srow label { color: #809ab0; font-size: 12px; }
+.srow input, .srow select {
+  background: #090f1c; color: #e0ecf8;
+  border: 1px solid #2a3a54; border-radius: 5px;
+  padding: 7px 10px; font-size: 13px;
+}
+.setup-go {
+  width: 100%; padding: 11px;
+  background: #1a3252; color: #f0d870;
+  border: 1px solid #2a4a72; border-radius: 7px;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  margin-top: 8px;
+}
+.setup-go:hover { background: #264468; }
+
+input[type=number]::-webkit-inner-spin-button { opacity: 1; }
+</style>
+</head>
+<body>
+  <div id="setup" style="display:flex;"></div>
+
+  <div id="app">
+
+    <!-- 左上：地图（最大）-->
+    <section class="panel" id="map-panel">
+      <div class="panel-hdr" id="map-hdr">
+        <span class="ptitle">⚓ 航海地图</span>
+      </div>
+      <div class="panel-body" id="map-body"></div>
+    </section>
+
+    <!-- 右上：收益分析 -->
+    <section class="panel" id="profit-panel">
+      <div class="panel-hdr">
+        <span class="ptitle">📊 收益分析</span>
+        <span style="color:#506070;font-size:10px;margin-left:auto">EV 降序</span>
+      </div>
+      <div class="panel-body" id="profit-body"></div>
+    </section>
+
+    <!-- 左下：玩家资产 -->
+    <section class="panel" id="players-panel">
+      <div class="panel-hdr">
+        <span class="ptitle">👤 玩家资产</span>
+        <span id="rank-bar" style="margin-left:auto;font-size:11px;color:#607080"></span>
+      </div>
+      <div class="panel-body" id="players-body"></div>
+    </section>
+
+    <!-- 右下：骰子（最小）-->
+    <section class="panel" id="dice-panel">
+      <div class="panel-hdr">
+        <span class="ptitle">🎲 骰子</span>
+        <span id="dice-phase-info" style="margin-left:auto;font-size:10px;color:#506070"></span>
+      </div>
+      <div class="panel-body" id="dice-body"></div>
+    </section>
+
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

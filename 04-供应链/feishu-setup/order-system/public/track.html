@@ -37,10 +37,11 @@
 <!-- 统计栏 -->
 <div class="stats-bar" id="statsBar">
   <div class="stat-item"><div class="stat-value" id="statTotal">-</div><div class="stat-label">总订单</div></div>
+  <div class="stat-item"><div class="stat-value" id="statOrdered">-</div><div class="stat-label">已下单</div></div>
   <div class="stat-item"><div class="stat-value" id="statPending">-</div><div class="stat-label">待处理</div></div>
   <div class="stat-item"><div class="stat-value" id="statProducing">-</div><div class="stat-label">生产中</div></div>
+  <div class="stat-item"><div class="stat-value" id="statLabeled">-</div><div class="stat-label">打标签</div></div>
   <div class="stat-item"><div class="stat-value" id="statShipped">-</div><div class="stat-label">已发货</div></div>
-  <div class="stat-item"><div class="stat-value" id="statReceived">-</div><div class="stat-label">已签收</div></div>
 </div>
 
 <!-- 筛选栏 -->
@@ -48,10 +49,11 @@
   <input type="text" class="search-input" id="searchInput" placeholder="搜订单号或顾客姓名" oninput="filterLocal()">
   <select id="filterStatus" onchange="filterLocal()">
     <option value="">全部状态</option>
+    <option value="已下单">已下单</option>
     <option value="待处理">待处理</option>
     <option value="生产中">生产中</option>
+    <option value="打标签">打标签</option>
     <option value="已发货">已发货</option>
-    <option value="已签收">已签收</option>
   </select>
   <select id="filterSku">
     <option value="">全部SKU</option>
@@ -95,12 +97,11 @@ let allOrdersData = []; // 缓存当前页数据用于本地搜索
 // ─── 状态 Badge 映射 ────────────────────────────────────────────────────────
 function statusBadge(status) {
   const map = {
+    "已下单": "badge-ordered",
     "待处理": "badge-pending",
-    "待人工审核": "badge-review",
     "生产中": "badge-producing",
+    "打标签": "badge-labeled",
     "已发货": "badge-shipped",
-    "已签收": "badge-received",
-    "完成": "badge-done",
   };
   return `<span class="badge ${map[status] || 'badge-pending'}">${status || '未知'}</span>`;
 }
@@ -188,10 +189,11 @@ async function loadOrders() {
 
     // 更新统计（修复：生产中+已签收）
     document.getElementById("statTotal").textContent = data.stats.total;
+    document.getElementById("statOrdered").textContent = data.stats.ordered || 0;
     document.getElementById("statPending").textContent = data.stats.pending;
     document.getElementById("statProducing").textContent = data.stats.producing;
+    document.getElementById("statLabeled").textContent = data.stats.labeled || 0;
     document.getElementById("statShipped").textContent = data.stats.shipped;
-    document.getElementById("statReceived").textContent = data.stats.received;
 
     allOrdersData = data.orders || [];
 

@@ -145,7 +145,7 @@ const testOrders = allOrders.filter(o => orderNumbers.includes(o.orderNo));
 if (testOrders.length === 0) fail(`未找到本次测试订单（共 ${allOrders.length} 条记录中）`);
 
 for (const o of testOrders) {
-  if (o.status !== "已签收") fail(`${o.orderNo} 状态为 "${o.status}"，期望 "已签收"`);
+  if (o.status !== "已发货") fail(`${o.orderNo} 状态为 "${o.status}"，期望 "已发货"`);
   pass(`${o.orderNo} — ${o.customerName} — ${o.status}`);
 }
 

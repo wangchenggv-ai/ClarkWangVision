@@ -73,7 +73,7 @@ async function fetchLensRecords(filterOrderNo) {
   // 过滤：镜片码不为空（已确认的订单）
   const filterParam = filterOrderNo
     ? `&filter=CurrentValue.[订单编号]="${filterOrderNo}"`
-    : `&filter=CurrentValue.[镜片码]!=""`;
+    : `&filter=CurrentValue.[镜片码（唯一）]!=""`;
 
   while (true) {
     const qs = `?page_size=100${filterParam}${pageToken ? "&page_token=" + pageToken : ""}`;
@@ -101,7 +101,7 @@ async function fetchLensRecords(filterOrderNo) {
       promiseDate:  f["预计交期"] ? new Date(f["预计交期"]).toLocaleDateString("zh-CN") : "",
       agentName:    rawVal(f["代理商名称"]) || "",
       agentId:      rawVal(f["代理商ID"])   || "",
-      lensCode:     rawVal(f["镜片码"])     || "",
+      lensCode:     rawVal(f["镜片码（唯一）"])     || "",
       orderDate:    f["下单日期"] ? new Date(f["下单日期"]).toLocaleDateString("zh-CN") : "",
       address:      rawVal(f["收货地址"])   || "",
       remark:       rawVal(f["备注"])       || "",

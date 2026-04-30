@@ -245,8 +245,8 @@ async function rule1() {
   const processedItems = [];
   for (const order of orders) {
     const f = order.fields;
-    // 跳过已处理的订单（非待处理状态）
-    if (f["订单状态"] && f["订单状态"] !== "待处理") {
+    // 跳过已处理的订单（非已下单状态）
+    if (f["订单状态"] && f["订单状态"] !== "已下单") {
       log(`  ⏭️  ${f["订单编号"]} 已处理，跳过`);
       continue;
     }

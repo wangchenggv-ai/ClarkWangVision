@@ -25,7 +25,7 @@ export const TABLES = {
   mold: "tblfnVzOA2yFzbjs",
   production: "tblWu5QwGPK1zYMl",
   forecast: "tblK2YNUZ3RM3Zta",
-  procurement: "tblZX1qW7RvcJieg",
+  procurement: "tblOfnWZAMxvjZCQ",
   factory: "tblJ6RXFENJFQe9A",
   rule_config: "tbl78V8wgziRs0pt",
 

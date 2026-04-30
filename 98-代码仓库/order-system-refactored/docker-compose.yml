@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  order-system:
+    build: .
+    ports:
+      - "3210:3210"
+    environment:
+      - NODE_ENV=development
+      - PORT=3210
+      # 请在 .env 文件中填写真实值
+      - FEISHU_APP_ID=your_app_id
+      - FEISHU_APP_SECRET=your_app_secret
+      - JWT_SECRET=your_super_long_jwt_secret_here_min_32_chars
+      - REDIS_URL=redis://redis:6379
+      - COZE_PAT=your_coze_pat
+      - ADMIN_TOKEN=your_admin_token
+    depends_on:
+      - redis
+    volumes:
+      - ./logs:/app/logs
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

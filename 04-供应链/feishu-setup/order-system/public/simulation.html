@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>打标签 + 随货同行单 — 完整模拟</title>
+<style>
+  body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; background: #f0f2f5; padding: 20px; color: #1a1a2e; }
+  .container { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 20px; margin-bottom: 8px; }
+  .sub { color: #888; font-size: 13px; margin-bottom: 24px; }
+
+  .step { background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .step-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .step-num { width: 28px; height: 28px; border-radius: 50%; background: #1677ff; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; }
+  .step-title { font-weight: 700; font-size: 15px; }
+  .step-body { font-size: 13px; line-height: 1.8; }
+
+  .label-preview { border: 2px dashed #531dab; border-radius: 8px; padding: 2px; background: #f9f0ff; display: inline-block; }
+  .label-preview iframe { border: none; width: 300px; height: 170px; }
+
+  .slip-btn { display: inline-block; padding: 10px 24px; background: #c0392b; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; margin-top: 8px; }
+  .slip-btn:hover { opacity: .9; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>高视星® 订单系统 — 打标签 + 随货同行单 模拟</h1>
+  <div class="sub">订单 ORD-20260428-TEST01 | 顾客：王小明 | 产品：时空之眼MAX</div>
+
+  <!-- Step 1: 订单已提交 -->
+  <div class="step">
+    <div class="step-header"><span class="step-num">1</span><span class="step-title">代理商提交订单 → 已下单</span></div>
+    <div class="step-body">
+      订单编号：<b>ORD-20260428-TEST01</b><br>
+      顾客：王小明 | 电话：138****1111 | 地址：北京市朝阳区建国路88号<br>
+      库存状态：无库存（外发加工） | 供应商：高清
+    </div>
+  </div>
+
+  <!-- Step 2: 助理确认 -->
+  <div class="step">
+    <div class="step-header"><span class="step-num">2</span><span class="step-title">助理点击「待确认」→ 库存=无库存 → 待处理</span></div>
+    <div class="step-body">
+      系统生成镜片码：<br>
+      右眼：<b style="color:#c0392b">A3F8C2D91E7B4506</b><br>
+      左眼：<b style="color:#1a6fb5">B7E219C04F83A6D1</b><br>
+      订单状态：<b>待处理</b>（等待导出Excel给工厂）
+    </div>
+  </div>
+
+  <!-- Step 3: 导出Excel → 生产中 → 加工回来扫码 → 打标签 -->
+  <div class="step">
+    <div class="step-header"><span class="step-num">3</span><span class="step-title">导出Excel → 生产中 → 加工回来扫码 → 打标签</span></div>
+    <div class="step-body">
+      助理导出Excel给工厂 → 状态变<b>生产中</b><br>
+      工厂加工完成回来 → 扫镜片码 <b>A3F8C2D91E7B4506</b> → <b style="color:#531dab">打标签</b><br>
+      扫镜片码 <b>B7E219C04F83A6D1</b> → <b style="color:#531dab">打标签</b><br><br>
+
+      <b>标签预览（ZPL → 斑马打印机）：</b><br>
+      <div class="label-preview">
+        <iframe src="sample-label.html"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: 随货同行单 -->
+  <div class="step">
+    <div class="step-header"><span class="step-num">4</span><span class="step-title">打印随货同行单 → 打包 → 输入快递单号 → 已发货</span></div>
+    <div class="step-body">
+      点击「同行单」→ 按地址生成（北京市朝阳区建国路88号 → 一张单）<br><br>
+      <a class="slip-btn" href="simulation-slip.html" target="_blank">打印随货同行单</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

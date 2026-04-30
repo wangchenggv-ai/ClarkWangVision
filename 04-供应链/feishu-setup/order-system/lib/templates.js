@@ -191,41 +191,31 @@ export function slipHTML(order) {
 
 const LABEL_CSS = `@page{size:75mm 40mm;margin:0}
 *{margin:0;padding:0;box-sizing:border-box}
-.label{width:75mm;min-height:40mm;border:.3mm solid #ccc;display:flex;flex-direction:column;overflow:hidden}
-.bc-section{padding:1mm 2mm 0;display:flex;justify-content:center;border-bottom:.2mm solid #eee}
-.bc-section svg{max-width:65mm;height:8mm}
-.content{display:flex;flex:1;padding:1.5mm 2mm;gap:2mm}
-.left{flex:1;display:flex;flex-direction:column;gap:.8mm;min-width:0}
-.right{display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0}
-.qr-img{width:13mm;height:13mm;display:block}
-.qr-hint{font-size:4.5pt;color:#aaa;text-align:center;margin-top:.3mm}
-.sku-row{font-size:6pt;color:#666;font-weight:600;letter-spacing:.5px}
-.name-row{display:flex;align-items:baseline;gap:2mm}
-.customer-name{font-size:9pt;font-weight:800;color:#1a1a2e}
-.eye-tag{font-size:8pt;font-weight:900;letter-spacing:.5px}
-.rx-section{margin-top:.5mm}
-.rx-grid{display:grid;grid-template-columns:1fr 1fr 1fr;column-gap:3mm;row-gap:.2mm}
-.rx-label{font-size:5pt;color:#999;text-transform:uppercase;letter-spacing:.5px}
-.rx-value{font-size:9pt;font-weight:700;color:#1a1a2e;font-family:"SF Mono","Consolas","Courier New",monospace}
-.bottom-bar{display:flex;justify-content:space-between;align-items:center;background:#f8f9fa;border-top:.2mm solid #eee;padding:.8mm 2mm;font-size:5.5pt}
-.lens-code{font-family:"Courier New",monospace;font-weight:700;color:#495057;letter-spacing:1px}
-.agent-info{color:#aaa}`;
+.label{width:75mm;height:40mm;position:relative;overflow:hidden;font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-size:12pt}
+.lbl-name{position:absolute;left:5mm;top:3mm;width:35mm;height:7mm;font-size:12pt;font-weight:700;line-height:7mm;overflow:hidden;white-space:nowrap}
+.lbl-eye{position:absolute;left:38mm;top:4mm;width:10mm;height:6mm;font-size:12pt;font-weight:700;line-height:6mm}
+.lbl-tbl{position:absolute;left:15mm;top:10mm}
+.lbl-tbl table{border-collapse:collapse;width:55mm;height:15mm}
+.lbl-tbl th{font-size:11pt;font-weight:600;text-align:center;padding:1mm 0;border:1px solid #000}
+.lbl-tbl td{font-size:14pt;font-weight:700;text-align:center;padding:1mm 0;border:1px solid #000;font-family:"SF Mono","Consolas","Courier New",monospace}
+.lbl-sku{position:absolute;left:5mm;top:28mm;width:40mm;height:6mm;font-size:12pt;line-height:6mm;overflow:hidden;white-space:nowrap}
+.lbl-date{position:absolute;left:5mm;top:35mm;width:38mm;height:6mm;font-size:12pt;line-height:6mm}
+.lbl-qr{position:absolute;left:52mm;top:26mm;width:18mm;height:18mm}
+.lbl-qr img{width:18mm;height:18mm;display:block}`;
 
 async function _buildLabelFragment(f, orderNo) {
-  const lensCode = f["镜片码"];
+  const lensCode = f["镜片码（唯一）"];
   if (!lensCode) return null;
 
   const customer = (f["顾客姓名"] || "unknown").replace(/[\/\\:*?"<>|]/g, "_");
   const eye = f["眼别"] || "";
   const isRight = eye.includes("右");
-  const eyeColor = isRight ? "#c0392b" : "#1a6fb5";
-  const eyeTag = isRight ? "R 右眼" : "L 左眼";
+  const eyeTag = isRight ? "右眼" : "左眼";
   const sku = f["产品型号"] || "";
-  const sph = f["球镜SPH"] ?? "";
-  const cyl = f["柱镜CYL"] ?? "";
-  const axis = f["轴位AXIS"] ?? "";
-  const agentName = f["代理商名称"] || "";
-  const agentId = f["代理商ID"] || "";
+  const sph = fmt(f["球镜SPH"] ?? "");
+  const cyl = fmt(f["柱镜CYL"] ?? "");
+  const axis = fmtAxis(f["轴位AXIS"] ?? "");
+  const today = new Date().toISOString().slice(0, 10);
 
   const qrDataUrl = await QRCode.toDataURL(
     `${getServerBaseUrl()}/verify/${lensCode}`,
@@ -233,27 +223,15 @@ async function _buildLabelFragment(f, orderNo) {
   );
 
   const html = `<div class="label">
-<div class="bc-section"><svg class="barcode" data-value="${orderNo}" data-options='{"format":"CODE128","width":1.2,"height":30,"displayValue":true,"fontSize":10,"margin":0}'></svg></div>
-<div class="content">
-  <div class="left">
-    <div class="sku-row">${sku}</div>
-    <div class="name-row"><span class="customer-name">${f["顾客姓名"]||""}</span><span class="eye-tag" style="color:${eyeColor}">${eyeTag}</span></div>
-    <div class="rx-section">
-      <div class="rx-grid">
-        <div class="rx-label">SPH</div><div class="rx-label">CYL</div><div class="rx-label">AXIS</div>
-        <div class="rx-value">${fmt(sph)}</div><div class="rx-value">${fmt(cyl)}</div><div class="rx-value">${fmtAxis(axis)}</div>
-      </div>
-    </div>
-  </div>
-  <div class="right">
-    <img class="qr-img" src="${qrDataUrl}" alt="QR">
-    <div class="qr-hint">扫码验真</div>
-  </div>
-</div>
-<div class="bottom-bar">
-  <span class="lens-code">${lensCode}</span>
-  <span class="agent-info">${agentId} ${agentName}</span>
-</div>
+<div class="lbl-name">${f["顾客姓名"]||""}</div>
+<div class="lbl-eye">${eyeTag}</div>
+<div class="lbl-tbl"><table>
+  <tr><th>球镜</th><th>柱镜</th><th>轴位</th></tr>
+  <tr><td>${sph}</td><td>${cyl}</td><td>${axis}</td></tr>
+</table></div>
+<div class="lbl-sku">高视星® ${sku}</div>
+<div class="lbl-date">${today}</div>
+<div class="lbl-qr"><img src="${qrDataUrl}" alt="QR"></div>
 </div>`;
 
   return { html, customer, eye, lensCode };

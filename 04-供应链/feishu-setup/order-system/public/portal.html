@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视星 · 供应链系统</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background: #f0f2f5; min-height: 100vh; }
+  .header { background: linear-gradient(135deg, #1B3A5C, #0066CC); color: #fff; padding: 24px 32px; text-align: center; }
+  .header h1 { font-size: 22px; font-weight: 700; letter-spacing: 2px; }
+  .header p { font-size: 13px; opacity: 0.7; margin-top: 4px; }
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+  .section { margin-bottom: 20px; }
+  .section-title { font-size: 13px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; padding-left: 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .card {
+    background: #fff; border-radius: 10px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    text-decoration: none; color: #1a1a2e; transition: all .2s; display: flex; align-items: center; gap: 12px;
+    border: 1px solid transparent;
+  }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,.1); border-color: #0066CC; }
+  .card .icon { font-size: 24px; width: 40px; text-align: center; flex-shrink: 0; }
+  .card .info { flex: 1; min-width: 0; }
+  .card .name { font-size: 14px; font-weight: 600; }
+  .card .desc { font-size: 11px; color: #999; margin-top: 2px; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 500; }
+  .tag-admin { background: #fff7e6; color: #d46b08; }
+  .tag-agent { background: #e6f4ff; color: #0958d9; }
+  .tag-public { background: #f6ffed; color: #389e0d; }
+  .footer { text-align: center; padding: 20px; color: #ccc; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>GAUSH | CLEAR 高视星</h1>
+  <p>供应链管理系统</p>
+</div>
+
+<div class="container">
+
+  <!-- 管理端 -->
+  <div class="section">
+    <div class="section-title">管理端 <span class="tag tag-admin">助理/管理员</span></div>
+    <div class="grid">
+      <a class="card" href="/orders?admin=GaushOrderMock">
+        <div class="icon">📋</div>
+        <div class="info"><div class="name">订单管理中心</div><div class="desc">确认 · 导出 · 发货 · 标签</div></div>
+      </a>
+      <a class="card" href="/labels-print?admin=GaushOrderMock">
+        <div class="icon">🖨️</div>
+        <div class="info"><div class="name">标签打印 & 发货中心</div><div class="desc">扫码打印 · 分仓 · 同行单</div></div>
+      </a>
+      <a class="card" href="/control?admin=GaushOrderMock">
+        <div class="icon">📊</div>
+        <div class="info"><div class="name">控制中心</div><div class="desc">仪表盘 · 规则引擎 · 库存</div></div>
+      </a>
+      <a class="card" href="/inventory?admin=GaushOrderMock">
+        <div class="icon">📦</div>
+        <div class="info"><div class="name">库存管理</div><div class="desc">出入库 · 排产 · 寄售</div></div>
+      </a>
+    </div>
+  </div>
+
+  <!-- 代理商端 -->
+  <div class="section">
+    <div class="section-title">代理商端 <span class="tag tag-agent">代理商</span></div>
+    <div class="grid">
+      <a class="card" href="/order">
+        <div class="icon">🛒</div>
+        <div class="info"><div class="name">下单门户</div><div class="desc">提交订单 · Excel批量导入</div></div>
+      </a>
+      <a class="card" href="/track">
+        <div class="icon">🔍</div>
+        <div class="info"><div class="name">订单追踪</div><div class="desc">查看状态 · 交期 · 物流</div></div>
+      </a>
+    </div>
+  </div>
+
+  <!-- 消费者端 -->
+  <div class="section">
+    <div class="section-title">消费者端 <span class="tag tag-public">公开</span></div>
+    <div class="grid">
+      <a class="card" href="/verify">
+        <div class="icon">✅</div>
+        <div class="info"><div class="name">扫码验真</div><div class="desc">镜片码验证 · 处方查询</div></div>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">GAUSH | CLEAR · 高视星镜片溯源系统</div>
+
+</body>
+</html>

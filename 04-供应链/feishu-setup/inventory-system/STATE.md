@@ -1,7 +1,75 @@
 # STATE.md — 库存系统进度快照
 
-> 本文件是**当前状态快照**（易变），记录"现在走到哪了"。长期规则请看 [CLAUDE.md](CLAUDE.md)。
-> 最后更新：**2026-04-22（v10 — 库存不足不拦截下单 + 并发安全测试17/17）**
+> 本文件是**当前状态快照**（易变），记录"现在走到哪了"。长期规则请看 [CLAUDE.md](04-供应链/feishu-setup/inventory-system/CLAUDE.md)。
+> 最后更新：**2026-04-28（v11 — 进销存闭环：预占→实扣→释放 + 采购入库）**
+
+---
+
+## 一、当前阶段
+
+**第二阶段：进销存闭环** — ✅ 已完成
+
+目标：下单即预占库存，发货转实际扣减，退回释放预占，采购到货入库。补全进→销→存全链路。
+
+---
+
+## 二、本次完成（2026-04-28）
+
+### 库存预占/实扣/释放
+
+- [x] `lib/stock.js` 新增 `reserveStock` / `releaseReservation` / `convertReservation` 三函数
+- [x] `getStockMap` / `queryStockByRx` 新增 `reserved`、`available` 字段
+- [x] stock_detail 新增 `预占库存` 字段（通过 ensureField 幂等创建）
+- [x] `POST /api/submit` → 聚合度数调 `reserveStock` 预占
+- [x] `POST /api/admin/ship` → 调 `convertReservation` 库存-1 预占-1 原子写入
+- [x] `POST /api/admin/revert` → 调 `releaseReservation` 释放预占
+
+### 模块解耦
+
+- [x] `lib/stock-resolver.js` — 库存判定（查缓存，O(1)，输出 `inStock: available>0`）
+- [x] `lib/state-router.js` — 状态路由（纯函数，零 I/O，输出 `{targetStatus, wfStep, deliveryType}`）
+- [x] confirm 端点重构：StockResolver → StateRouter → 执行
+- [x] order-stock-check 端点重构：不再逐眼 `queryStockByRx`，一次 `resolveStock`
+
+### 采购入库
+
+- [x] `POST /api/admin/procurement` — 创建成品采购单
+- [x] `POST /api/admin/procurement/:id/receive` — 到货入库（withLock + stock+N + 流水）
+- [x] `GET /api/admin/procurements` — 采购单列表（筛选+分页）
+- [x] procurement 表新建（Bitable `tblOfnWZAMxvjZCQ`，SPH/CYL/成品类型）
+- [x] `shared/tables.js` procurement ID 更新
+
+### 前端更新
+
+- [x] `public/flow-inventory.html` — 进销存逻辑流程图（三 Tab：全链路/模块关系/数据表）
+- [x] `control.html` — 仪表盘加预占/可用指标，SKU表加预占/可用列，数据流Tab改为进销存
+- [x] `inventory.html` — 库存明细加预占/可用列，SKU达标率加预占/可用
+- [x] 两页面互链（control ↔ flow-inventory）
+
+### API 更新
+
+- [x] `GET /api/admin/dashboard` 新增 `totalReserved`、`totalAvailable`、缺口表加 `reserved`/`available`
+- [x] `GET /api/admin/stock-detail` 新增 `reserved`、`available` 字段+汇总
+
+### 部署
+
+- [x] 华为云 ECS 部署（server.js + lib/* + public/* + shared/tables.js）
+- [x] procurement 表在飞书创建并关联
+
+---
+
+## 三、已弃用/封存
+
+- ~~`deductStockDetail`~~ — 仍保留代码，不再被任何端点调用；已由 `convertReservation` 替代
+- ~~control.html 旧数据流图~~ — 替换为新进销存流程
+
+---
+
+## 四、已知局限
+
+- 预占库存不计入安全库存判定（`belowSafety` 仍基于物理库存）
+- 采购单目前仅支持手动录入，rule7 仍只生成模具/毛坯采购
+- `deductAgentStock` 仍无并发锁（低频场景，暂不处理）
 
 ---
 

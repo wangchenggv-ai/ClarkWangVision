@@ -134,7 +134,7 @@ table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
   <div class="tab active" data-tab="dashboard" onclick="sw('dashboard')">仪表盘</div>
   <div class="tab" data-tab="rules" onclick="sw('rules')">规则管理</div>
   <div class="tab" data-tab="stock" onclick="sw('stock')">库存管理</div>
-  <div class="tab" data-tab="flow" onclick="sw('flow')">数据流</div>
+  <div class="tab" data-tab="flow" onclick="sw('flow')">进销存</div>
 </div>
 <div class="wrap">
   <!-- 仪表盘 -->
@@ -220,77 +220,68 @@ table.ft td{padding:5px 8px;border-bottom:1px solid #edf2f7}
     <div class="ast" id="astbl"></div>
   </div>
 
-  <!-- 数据流 -->
+  <!-- 进销存 -->
   <div class="pnl" id="p-flow">
+    <div class="sec">订单 → 库存联动</div>
     <div class="flow">
       <div class="frow">
-        <div class="fn hl">代理商下单<div class="fs">选SKU + 填度数</div></div>
+        <div class="fn hl">下单<div class="fs">POST /api/submit</div></div>
         <div class="fa">&rarr;</div>
-        <div class="fn">交期预估<div class="fs">estimateDeliveryByRx()</div></div>
+        <div class="fn yl">预占库存<div class="fs">reserveStock()</div></div>
         <div class="fa">&rarr;</div>
-        <div class="fn gr">库存查询<div class="fs">stock_detail (度数级)</div></div>
+        <div class="fn">已下单<div class="fs">预占库存+1</div></div>
       </div>
-      <div class="fa" style="transform:rotate(90deg)">&rarr;</div>
+      <div class="fa">&darr;</div>
       <div class="frow">
-        <div class="fn hl">提交订单<div class="fs">POST /api/submit</div></div>
+        <div class="fn hl">确认<div class="fs">resolveStock → route</div></div>
         <div class="fa">&rarr;</div>
-        <div class="fn yl">扣减库存<div class="fs">deductStockDetail()</div></div>
+        <div class="fn gr">有货?<div class="fs">available>0 → 打标签</div></div>
         <div class="fa">&rarr;</div>
-        <div class="fbr"><div style="font-size:10px;color:#718096;margin-bottom:6px;text-align:center">寄售扣减（先自有后寄售）</div>
-          <div class="frow"><div class="fn" style="font-size:11px;padding:6px 10px">自有库存</div><div class="fa">&rarr;</div><div class="fn" style="font-size:11px;padding:6px 10px">寄售库存</div><div class="fa">&rarr;</div><div class="fn" style="font-size:11px;padding:6px 10px">写流水</div></div>
-        </div>
+        <div class="fn yl">缺货?<div class="fs">available=0 → 待处理</div></div>
       </div>
-      <div class="fa" style="transform:rotate(90deg)">&rarr;</div>
+      <div class="fa">&darr;</div>
       <div class="frow">
-        <div class="fn yl">库存 &lt; 安全线?<div class="fs">当前库存 vs 安全库存</div></div>
+        <div class="fn hl">发货<div class="fs">convertReservation()</div></div>
         <div class="fa">&rarr;</div>
-        <div class="fn hl">rule13 自动排产<div class="fs">缺口→工单→分配车房</div></div>
+        <div class="fn gr">库存-1 预占-1<div class="fs">单次PATCH原子写入</div></div>
         <div class="fa">&rarr;</div>
-        <div class="fn">生产中<div class="fs">5天生产周期</div></div>
+        <div class="fn">已发货<div class="fs">终态</div></div>
       </div>
-      <div class="fa" style="transform:rotate(90deg)">&rarr;</div>
+      <div class="fa" style="color:#dc2626;font-weight:700">&darr; 退/取消</div>
       <div class="frow">
-        <div class="fn gr">rule14 自动回补<div class="fs">到期→库存+=产量</div></div>
+        <div class="fn yl" style="border-color:#dc2626">退回<div class="fs">releaseReservation()</div></div>
         <div class="fa">&rarr;</div>
-        <div class="fn">模芯累加<div class="fs">rule9</div></div>
+        <div class="fn" style="border-color:#dc2626">预占-1<div class="fs">释放预约</div></div>
+      </div>
+      <div class="fa" style="color:#0891b2;font-weight:700;margin-top:12px">&uarr; 采购入库</div>
+      <div class="frow">
+        <div class="fn" style="border-color:#0891b2">采购单<div class="fs">POST procurement</div></div>
         <div class="fa">&rarr;</div>
-        <div class="fn hl">循环↑<div class="fs">飞轮闭环</div></div>
+        <div class="fn gr" style="border-color:#0891b2">到货入库<div class="fs">库存+N + 流水</div></div>
       </div>
     </div>
-    <div style="margin-top:20px">
-      <div class="sec">CRM 同步流</div>
+    <div style="margin-top:20px;text-align:center">
+      <a href="/flow-inventory" style="display:inline-block;padding:10px 20px;background:#4f46e5;color:#fff;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600">查看完整进销存流程图 →</a>
+    </div>
+    <div style="margin-top:16px">
+      <div class="sec">数据飞轮（rule12→13→14）</div>
       <div class="flow">
         <div class="frow">
-          <div class="fn hl">CRM Bitable<div class="fs">RlfTb6g... (7表)</div></div>
+          <div class="fn yl">库存 &lt; 安全线<div class="fs">rule12 预警</div></div>
           <div class="fa">&rarr;</div>
-          <div class="fn">sync_agents.js<div class="fs">01表→代理商表</div></div>
+          <div class="fn hl">自动排产<div class="fs">rule13 缺口→工单</div></div>
           <div class="fa">&rarr;</div>
-          <div class="fn gr">代理商认证<div class="fs">AG-XXX + Token</div></div>
-        </div>
-        <div class="frow" style="margin-top:8px">
-          <div class="fn hl">CRM Bitable<div class="fs">RlfTb6g... (7表)</div></div>
+          <div class="fn">生产中<div class="fs">分配车房</div></div>
           <div class="fa">&rarr;</div>
-          <div class="fn">sync_customers.js<div class="fs">02表→终端客户表</div></div>
+          <div class="fn gr">自动回补<div class="fs">rule14 库存+=产量</div></div>
           <div class="fa">&rarr;</div>
-          <div class="fn gr">客户主数据<div class="fs">CUS-XXXX</div></div>
+          <div class="fn hl">循环↑<div class="fs">飞轮闭环</div></div>
         </div>
       </div>
     </div>
-    <div style="margin-top:20px">
-      <div class="sec">打印队列流</div>
-      <div class="flow">
-        <div class="frow">
-          <div class="fn hl">labels.html<div class="fs">扫码/手动</div></div>
-          <div class="fa">&rarr;</div>
-          <div class="fn">POST /print-queue<div class="fs">入队</div></div>
-          <div class="fa">&rarr;</div>
-          <div class="fn yl">内存队列<div class="fs">FIFO</div></div>
-          <div class="fa">&rarr;</div>
-          <div class="fn">pull-print.js<div class="fs">每2s轮询拉取</div></div>
-          <div class="fa">&rarr;</div>
-          <div class="fn gr">TCP:9100<div class="fs">斑马 ZT410</div></div>
-        </div>
-      </div>
+    <div style="margin-top:16px">
+      <div class="sec">其他流程</div>
+      <p style="font-size:12px;color:#718096;margin:6px 0">CRM 同步: sync_agents.js · sync_customers.js &nbsp;|&nbsp; 打印队列: 扫码入队 → pull-print.js 轮询 → TCP:9100</p>
     </div>
   </div>
 </div>
@@ -344,11 +335,13 @@ async function loadDash() {
 
   var om = d.orderMetrics || {};
   var omg = document.getElementById("omg");
+  var orderedCount = om.byStatus ? (om.byStatus["已下单"]||0) : 0;
   var pendCount = om.byStatus ? (om.byStatus["待处理"]||0) : 0;
   var prodCount = om.byStatus ? (om.byStatus["生产中"]||0) : 0;
   var shipCount = om.byStatus ? (om.byStatus["已发货"]||0) : 0;
   omg.innerHTML = mc([
     {v:om.total||0,l:"总订单数",c:""},
+    {v:orderedCount,l:"已下单",c:orderedCount>0?"warn":""},
     {v:pendCount,l:"待处理",c:pendCount>0?"warn":""},
     {v:(om.overdue||0),l:"超24h未处理",c:(om.overdue||0)>0?"danger":"ok"},
     {v:om.todayCount||0,l:"今日订单",c:""},
@@ -359,6 +352,8 @@ async function loadDash() {
   var pct = d.totalStockRows > 0 ? Math.round((d.totalStockRows - d.belowSafety) / d.totalStockRows * 100) : 0;
   g.innerHTML = mc([
     {v:d.totalStock,l:"总库存片数",c:"ok"},
+    {v:d.totalReserved||0,l:"预占中",c:"warn"},
+    {v:d.totalAvailable||d.totalStock,l:"可售库存",c:(d.totalAvailable||d.totalStock)>0?"ok":"danger"},
     {v:d.belowSafety,l:"低于安全库存",c:d.belowSafety>0?"danger":"ok"},
     {v:d.totalStockRows,l:"库存行数",c:""},
     {v:(d.prodStatus["生产中"]||0),l:"排产中",c:""},
@@ -371,12 +366,12 @@ async function loadDash() {
   var h2 = '<div class="sec">库存健康度 <span style="font-weight:400;color:'+rc+'">'+pct+'% 达标</span></div>';
   h2 += '<div class="rb"><div style="width:'+pct+'%;background:#16a34a;border-radius:4px"></div><div style="width:'+(100-pct)+'%;background:#dc2626;border-radius:4px"></div></div>';
   if (d.skuStats) {
-    h2 += '<table class="sk"><thead><tr><th>SKU</th><th style="text-align:right">库存</th><th style="text-align:right">达标率</th><th>健康度</th></tr></thead><tbody>';
+    h2 += '<table class="sk"><thead><tr><th>SKU</th><th style="text-align:right">库存</th><th style="text-align:right">预占</th><th style="text-align:right">可用</th><th style="text-align:right">达标率</th><th>健康度</th></tr></thead><tbody>';
     for (var k in d.skuStats) {
       var st = d.skuStats[k], ok = st.total - st.below;
       var sp = st.total > 0 ? Math.round(ok / st.total * 100) : 0;
       var sc = sp > 70 ? "#16a34a" : sp > 40 ? "#ca8a04" : "#dc2626";
-      h2 += '<tr><td style="font-weight:500">'+k+'</td><td style="text-align:right">'+st.stock+'</td><td style="text-align:right;color:'+sc+'">'+sp+'%</td><td><div class="rb" style="width:120px;display:inline-block;vertical-align:middle;margin:0"><div style="width:'+sp+'%;background:'+sc+';border-radius:4px"></div></div></td></tr>';
+      h2 += '<tr><td style="font-weight:500">'+k+'</td><td style="text-align:right">'+st.stock+'</td><td style="text-align:right;color:#ea580c">'+(st.reserved||0)+'</td><td style="text-align:right;font-weight:600">'+(st.available||0)+'</td><td style="text-align:right;color:'+sc+'">'+sp+'%</td><td><div class="rb" style="width:120px;display:inline-block;vertical-align:middle;margin:0"><div style="width:'+sp+'%;background:'+sc+';border-radius:4px"></div></div></td></tr>';
     }
     h2 += '</tbody></table>';
   }
@@ -385,11 +380,11 @@ async function loadDash() {
   var ss = document.getElementById("ss");
   if (d.topDeficits && d.topDeficits.length) {
     var ds = '<div class="sec" style="color:#dc2626">最大缺口 TOP 10</div>';
-    ds += '<table class="sk"><thead><tr><th>SKU</th><th style="text-align:right">SPH</th><th style="text-align:right">CYL</th><th style="text-align:right">库存</th><th style="text-align:right">安全线</th><th style="text-align:right">缺口</th><th></th></tr></thead><tbody>';
+    ds += '<table class="sk"><thead><tr><th>SKU</th><th style="text-align:right">SPH</th><th style="text-align:right">CYL</th><th style="text-align:right">库存</th><th style="text-align:right">预占</th><th style="text-align:right">可用</th><th style="text-align:right">安全线</th><th style="text-align:right">缺口</th><th></th></tr></thead><tbody>';
     var mx = d.topDeficits[0].gap;
     d.topDeficits.slice(0,10).forEach(function(df) {
       var w = mx > 0 ? Math.round(df.gap / mx * 100) : 0;
-      ds += '<tr><td>'+df.sku+'</td><td style="text-align:right">'+df.sph+'</td><td style="text-align:right">'+df.cyl+'</td><td style="text-align:right">'+df.stock+'</td><td style="text-align:right">'+df.safety+'</td><td style="text-align:right;color:#dc2626;font-weight:500">-'+df.gap+'</td><td><div class="db" style="width:'+Math.max(w,4)+'px"></div></td></tr>';
+      ds += '<tr><td>'+df.sku+'</td><td style="text-align:right">'+df.sph+'</td><td style="text-align:right">'+df.cyl+'</td><td style="text-align:right">'+df.stock+'</td><td style="text-align:right;color:#ea580c">'+(df.reserved||0)+'</td><td style="text-align:right">'+(df.available||0)+'</td><td style="text-align:right">'+df.safety+'</td><td style="text-align:right;color:#dc2626;font-weight:500">-'+df.gap+'</td><td><div class="db" style="width:'+Math.max(w,4)+'px"></div></td></tr>';
     });
     ds += '</tbody></table>';
     ss.innerHTML = ds;
@@ -413,7 +408,7 @@ async function loadDash() {
 // ── Rules ──
 var _cfg={}, _man={};
 var GROUPS = [
-  { name: "订单处理", rules: ["rule1","rule2","rule3","rule6"], desc: "下单→验真→签收→超期预警", icon: "📋", cls: "c-order", color: "#3b82f6" },
+  { name: "订单处理", rules: ["rule1","rule2","rule3","rule6"], desc: "下单→验真→发货→超期预警", icon: "📋", cls: "c-order", color: "#3b82f6" },
   { name: "库存管理", rules: ["rule4","rule5","rule10","rule11","rule12","rule13","rule14"], desc: "预测→备库→预警→排产→回补→寄售", icon: "📦", cls: "c-stock", color: "#16a34a" },
   { name: "生产运营", rules: ["rule7","rule8","rule9"], desc: "采购→车房分配→模芯管理", icon: "🏭", cls: "c-prod", color: "#ea580c" },
 ];

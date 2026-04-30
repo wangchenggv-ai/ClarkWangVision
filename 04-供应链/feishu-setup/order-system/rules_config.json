@@ -1,5 +1,15 @@
 {
   "_description": "Supply chain rule parameters. Business users can override any value via the Feishu '规则配置' table.",
+  "supplier_map": {
+    "_name": "供应商映射（SKU → 供应商）",
+    "Ultra双效": { "in_stock": "高清", "out_of_stock": "高清" },
+    "D8": { "in_stock": "高清", "out_of_stock": "圣普" },
+    "时空之眼A": { "in_stock": "高清", "out_of_stock": "欧陆" },
+    "时空之眼B": { "in_stock": "高清", "out_of_stock": "欧陆" },
+    "时空之眼PRO": { "in_stock": "高清", "out_of_stock": "欧陆" },
+    "时空之眼MAX": { "in_stock": "高清", "out_of_stock": "欧陆" },
+    "小旋风": { "in_stock": "高清", "out_of_stock": "九次方" }
+  },
   "rule1": {
     "_name": "订单处理",
     "instock_delivery_days": 3,

@@ -217,7 +217,7 @@ const TABLE_DEFS = [
       { field_name: "产品型号", type: T.TEXT },
       { field_name: "数量", type: T.NUMBER, property: { formatter: "0" } },
       { field_name: "承诺交货日", type: T.DATE, property: { date_formatter: "yyyy/MM/dd" } },
-      { field_name: "订单状态", type: T.SELECT, property: { options: [{ name: "待处理" }, { name: "生产中" }, { name: "已发货" }, { name: "完成" }] } },
+      { field_name: "订单状态", type: T.SELECT, property: { options: [{ name: "已下单" }, { name: "待处理" }, { name: "生产中" }, { name: "已发货" }, { name: "待签收" }, { name: "已签收" }, { name: "完成" }] } },
     ],
   },
 ];

@@ -349,6 +349,8 @@ async function loadDash() {
   const d = await api('/dashboard');
   document.getElementById('dashMetrics').innerHTML = [
     { v: d.totalStock?.toLocaleString(), l: '总库存(片)', c: 'ok' },
+    { v: (d.totalReserved||0)?.toLocaleString(), l: '预占中', c: 'warn' },
+    { v: (d.totalAvailable||d.totalStock)?.toLocaleString(), l: '可售库存', c: (d.totalAvailable||d.totalStock)>0?'ok':'danger' },
     { v: d.belowSafety, l: '低于安全线', c: d.belowSafety > 0 ? 'danger' : 'ok' },
     { v: d.totalStockRows, l: '库存行数', c: 'info' },
     { v: (d.prodStatus?.['生产中']||0), l: '排产中', c: 'warn' },
@@ -359,10 +361,10 @@ async function loadDash() {
   // SKU stats
   const skuRows = Object.entries(d.skuStats||{}).map(([sku, s]) => {
     const pct = s.total ? Math.round((s.total - s.below) / s.total * 100) : 100;
-    return `<tr><td>${h(sku)}</td><td>${s.stock?.toLocaleString()}</td><td>${s.below}</td><td>${s.total}</td>
+    return `<tr><td>${h(sku)}</td><td>${s.stock?.toLocaleString()}</td><td style="color:#ea580c">${(s.reserved||0)?.toLocaleString()}</td><td style="font-weight:600">${(s.available||0)?.toLocaleString()}</td><td>${s.below}</td><td>${s.total}</td>
       <td><div class="hbar" style="width:100px"><div class="fill" style="width:${pct}%;background:${pct>80?'var(--success)':pct>50?'var(--gold)':'var(--error)'}"></div></div> ${pct}%</td></tr>`;
   }).join('');
-  document.getElementById('skuStats').innerHTML = `<table class="tbl"><thead><tr><th>SKU</th><th>库存</th><th>低于安全线</th><th>总行数</th><th>达标率</th></tr></thead><tbody>${skuRows}</tbody></table>`;
+  document.getElementById('skuStats').innerHTML = `<table class="tbl"><thead><tr><th>SKU</th><th>库存</th><th>预占</th><th>可用</th><th>低于安全线</th><th>总行数</th><th>达标率</th></tr></thead><tbody>${skuRows}</tbody></table>`;
 
   // Top deficits
   const defRows = (d.topDeficits||[]).map(t => `<tr><td>${h(t.sku)}</td><td>${t.sph}</td><td>${t.cyl}</td><td>${t.stock}</td><td>${t.safety}</td><td style="color:var(--error);font-weight:600">${t.gap}</td></tr>`).join('');
@@ -460,6 +462,8 @@ async function loadStock() {
   const s = d.summary || {};
   document.getElementById('stockSummary').innerHTML = [
     { v: s.totalStock?.toLocaleString(), l: '查询总库存', c: 'ok' },
+    { v: s.totalReserved?.toLocaleString()||'0', l: '预占中', c: 'warn' },
+    { v: s.totalAvailable?.toLocaleString()||s.totalStock?.toLocaleString(), l: '可售库存', c: (s.totalAvailable||s.totalStock)>0?'ok':'danger' },
     { v: s.belowSafety, l: '低于安全线', c: s.belowSafety > 0 ? 'danger' : 'ok' },
     { v: d.total, l: '库存行数', c: 'info' },
   ].map(m => `<div class="metric-card ${m.c}"><div class="v">${m.v??'--'}</div><div class="l">${m.l}</div></div>`).join('');
@@ -468,9 +472,9 @@ async function loadStock() {
   const rows = _stockData.map(r => {
     const cls = r.currentStock <= 0 ? 'badge-danger' : r.currentStock < r.safetyStock ? 'badge-warn' : 'badge-ok';
     return `<tr><td>${h(r.sku)}</td><td>${r.sph}</td><td>${r.cyl}</td>
-      <td><span class="badge ${cls}">${r.currentStock}</span></td><td>${r.safetyStock}</td><td>${fmtDate(r.lastOutbound)}</td></tr>`;
+      <td><span class="badge ${cls}">${r.currentStock}</span></td><td style="color:#ea580c">${r.reserved||0}</td><td style="font-weight:600">${r.available||0}</td><td>${r.safetyStock}</td><td>${fmtDate(r.lastOutbound)}</td></tr>`;
   }).join('');
-  document.getElementById('stockTable').innerHTML = `<table class="tbl"><thead><tr><th>SKU</th><th>SPH</th><th>CYL</th><th>当前库存</th><th>安全库存</th><th>最近出库</th></tr></thead><tbody>${rows}</tbody></table>`;
+  document.getElementById('stockTable').innerHTML = `<table class="tbl"><thead><tr><th>SKU</th><th>SPH</th><th>CYL</th><th>当前库存</th><th>预占</th><th>可用</th><th>安全库存</th><th>最近出库</th></tr></thead><tbody>${rows}</tbody></table>`;
   renderHeatmap();
 }
 function renderHeatmap() {
