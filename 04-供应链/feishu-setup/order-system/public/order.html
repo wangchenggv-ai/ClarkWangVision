@@ -123,12 +123,13 @@
 
   <div class="success-page" id="successPage">
     <div class="success-icon">&#10004;&#65039;</div>
-    <h2>订单提交成功</h2>
-    <p>订单已进入处理流程，系统将自动分配交期。</p>
+    <h2 id="successTitle">已下单成功</h2>
+    <p id="successDesc">订单已提交，可在「订单追踪」中查看。</p>
+    <div style="margin:12px 0"><span class="badge badge-ordered">已下单</span></div>
     <div class="success-detail" id="successDetail"></div>
     <div class="success-actions">
-      <button class="btn btn-outline" onclick="resetForm()">再下一单</button>
-      <a class="btn btn-primary" id="viewOrderBtn" href="#">查看订单</a>
+      <button class="btn btn-outline" onclick="resetForm()" style="flex:1">继续下单</button>
+      <a class="btn btn-primary" id="viewOrderBtn" href="#" style="flex:1">查看订单</a>
     </div>
   </div>
 
@@ -208,7 +209,9 @@
 </div>
 
 <script>
-const token = new URLSearchParams(location.search).get("t") || "";
+const params = new URLSearchParams(location.search);
+const token = params.get("t") || "";
+const editOrderNo = params.get("edit") || "";
 let agentInfo = null;
 let SKU_OPTIONS = []; // 从 API 动态加载
 let customerNames = [];
@@ -375,7 +378,63 @@ async function init() {
 
   // 页面立即可交互
   addPatient();
-  checkDraft();
+  if (!editOrderNo) checkDraft(); // 编辑模式下不恢复本地草稿
+
+  // 编辑模式：从服务器加载草稿
+  if (editOrderNo) {
+    document.querySelector(".card-title")?.closest(".card")?.querySelector(".card-title")?.style ? null : null;
+    (async () => {
+      try {
+        const res = await fetch(`/api/draft/${editOrderNo}?t=${token}`);
+        if (!res.ok) throw new Error("加载草稿失败");
+        const draft = await res.json();
+        if (draft.terminalCustomer?.name) document.getElementById("terminalCustomer").value = draft.terminalCustomer.name;
+        if (draft.terminalCustomer?.contact) document.getElementById("contact").value = draft.terminalCustomer.contact;
+        if (draft.terminalCustomer?.phone) document.getElementById("phone").value = draft.terminalCustomer.phone;
+        if (draft.address) document.getElementById("address").value = draft.address;
+
+        // 清空默认患者，加载草稿患者
+        document.getElementById("patientList").innerHTML = "";
+        patientCount = 0;
+        for (const p of draft.patients || []) {
+          addPatient();
+          const id = patientCount;
+          const nameEl = document.getElementById(`name-${id}`);
+          const skuEl = document.getElementById(`sku-${id}`);
+          const qtyEl = document.getElementById(`qty-${id}`);
+          if (nameEl) nameEl.value = p.customerName || "";
+          if (skuEl) { skuEl.value = p.sku || ""; if (typeof triggerSkuChange === "function") triggerSkuChange(id); }
+          if (qtyEl) qtyEl.value = p.quantity || 1;
+
+          if (p.eyes) {
+            p.eyes.sort((a, b) => (a.side === "右眼" ? 0 : 1) - (b.side === "右眼" ? 0 : 1));
+            for (const eye of p.eyes) {
+              const side = eye.side === "右眼" ? "right" : "left";
+              const sphEl = document.getElementById(`sph-${id}-${side}`);
+              const cylEl = document.getElementById(`cyl-${id}-${side}`);
+              const axisEl = document.getElementById(`axis-${id}-${side}`);
+              const checkEl = document.getElementById(`eye-check-${id}-${side}`);
+              if (sphEl) sphEl.value = Number(eye.sph || 0).toFixed(2);
+              if (cylEl) cylEl.value = Number(eye.cyl || 0).toFixed(2);
+              if (axisEl) axisEl.value = eye.axis || "0";
+              if (checkEl && !checkEl.checked) { checkEl.checked = true; toggleEye(id, side); }
+            }
+          }
+
+          const assemblyYes = document.querySelector(`input[name="assembly-${id}"][value="yes"]`);
+          const assemblyNo = document.querySelector(`input[name="assembly-${id}"][value="no"]`);
+          if (p.assembly !== false) { if (assemblyYes) assemblyYes.checked = true; } else { if (assemblyNo) assemblyNo.checked = true; }
+          if (typeof toggleAssemblyStyle === "function") toggleAssemblyStyle(id);
+          if (p.remark) { const rEl = document.getElementById(`remark-${id}`); if (rEl) rEl.value = p.remark; }
+        }
+        updateSummary();
+        showToast("已加载草稿，请确认后提交", "info");
+      } catch (e) {
+        console.error("加载编辑草稿失败:", e);
+        showToast("加载草稿失败", "error");
+      }
+    })();
+  }
 
   // 客户数据后台并行加载，完成后更新 datalist
   Promise.all([
@@ -613,9 +672,8 @@ function collectPatients() {
     const assembly = assemblyEl?.value === "yes";
     const remark = document.getElementById(`remark-${id}`)?.value.trim() || "";
     if (eyes.length > 0) {
-      const key = `${name}|${sku}`;
-      pairCount[key] = (pairCount[key] || 0) + 1;
-      patients.push({ id, customerName: name, sku, quantity, eyes, assembly, remark, pairIndex: pairCount[key] });
+      pairCount[name] = (pairCount[name] || 0) + 1;
+      patients.push({ id, customerName: name, sku, quantity, eyes, assembly, remark, pairIndex: pairCount[name] });
     }
   }
   return patients;
@@ -713,6 +771,7 @@ async function doSubmit() {
       address,
       clientRequestId: crypto.randomUUID(),
       patients: patients.map(p => ({ customerName: p.customerName, sku: p.sku, quantity: p.quantity, eyes: p.eyes, assembly: p.assembly, remark: p.remark })),
+      ...(editOrderNo ? { orderNo: editOrderNo } : {}),
     };
     if (tcName || contact || phone) {
       body.terminalCustomer = { name: tcName, contact, phone, address };
@@ -726,30 +785,38 @@ async function doSubmit() {
     const json = await res.json();
 
     if (json.success) {
-      document.getElementById("formPage").style.display = "none";
-      let d = `<div style="text-align:left;margin-bottom:20px">
-        <div style="background:#f0f5ff;border:1px solid #d6e4ff;border-radius:8px;padding:14px 16px;margin-bottom:16px">
-          <div style="font-size:12px;color:#5b8def;margin-bottom:4px">订单编号</div>
-          <div style="font-size:18px;font-weight:700;color:#0066CC;font-family:monospace">${json.orderNo}</div>
-        </div>`;
-      let totalQty = 0;
-      for (const item of json.items) {
-        totalQty += (item.lensCount || item.quantity);
-        d += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0">
-          <div>
-            <div style="font-size:14px;font-weight:600;color:#333">${item.customerName || ''}</div>
-            <div style="font-size:13px;color:#888;margin-top:2px">${item.skuName}</div>
-          </div>
-          <span style="font-size:13px;color:#666;background:#f5f5f5;padding:3px 10px;border-radius:4px">${item.lensCount || item.quantity} 片</span>
-        </div>`;
+      try {
+        document.getElementById("formPage").style.display = "none";
+        let d = `<div style="text-align:left;margin-bottom:20px">
+          <div style="background:#f0f5ff;border:1px solid #d6e4ff;border-radius:8px;padding:14px 16px;margin-bottom:16px">
+            <div style="font-size:12px;color:#5b8def;margin-bottom:4px">订单编号</div>
+            <div style="font-size:18px;font-weight:700;color:#0066CC;font-family:monospace">${json.orderNo || ''}</div>
+          </div>`;
+        let totalQty = 0;
+        if (json.items && json.items.length) {
+          for (const item of json.items) {
+            totalQty += (item.lensCount || item.quantity || 0);
+            d += `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0">
+              <div><div style="font-size:14px;font-weight:600;color:#333">${item.customerName || ''}</div>
+              <div style="font-size:13px;color:#888;margin-top:2px">${item.skuName || ''}</div></div>
+              <span style="font-size:13px;color:#666;background:#f5f5f5;padding:3px 10px;border-radius:4px">${item.lensCount || item.quantity || 0} 片</span>
+            </div>`;
+          }
+          d += `<div style="text-align:right;padding-top:10px;font-size:13px;color:#999">共 ${json.items.length} 项，${totalQty} 片</div>`;
+        }
+        d += `</div>`;
+        document.getElementById("successDetail").innerHTML = d;
+        document.getElementById("successTitle").textContent = editOrderNo ? "已修改成功" : "已下单成功";
+        document.getElementById("successDesc").textContent = editOrderNo
+          ? "订单已更新，可在「订单追踪」中查看。"
+          : "订单已提交，可在「订单追踪」中查看。";
+        localStorage.removeItem(DRAFT_KEY);
+      } catch (e) {
+        document.getElementById("successTitle").textContent = editOrderNo ? "已修改成功" : "已下单成功";
+        document.getElementById("successDesc").textContent = `订单 ${json.orderNo} 已提交，可在「订单追踪」中查看。`;
+        document.getElementById("successDetail").innerHTML = "";
       }
-      d += `<div style="text-align:right;padding-top:10px;font-size:13px;color:#999">共 ${json.items.length} 项，${totalQty} 片</div></div>`;
-      document.getElementById("successDetail").innerHTML = d;
-
       document.getElementById("successPage").style.display = "block";
-
-      // 清除草稿
-      try { localStorage.removeItem(DRAFT_KEY); } catch {}
     } else {
       showToast(json.error || "提交失败，请重试", "error");
     }

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 · 批量导入</title>
+<link rel="stylesheet" href="/css/common.css?v=2">
+<style>
+.container { max-width: 900px; margin: 0 auto; padding: 20px; }
+.status-bar { background: var(--gold-light); border: 1px solid var(--gold); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 16px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s;
+  background: var(--card); margin-bottom: 16px;
+}
+.drop-zone:hover, .drop-zone.drag-over { border-color: var(--brand); background: var(--brand-light); }
+.drop-zone .icon { font-size: 48px; margin-bottom: 8px; }
+.drop-zone .text { font-size: 16px; color: var(--text-muted); }
+.drop-zone .sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+.file-list { margin-bottom: 16px; }
+.file-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: var(--card); border-radius: var(--radius-xs);
+  margin-bottom: 4px; font-size: 13px;
+}
+.file-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item .remove { cursor: pointer; color: var(--text-muted); padding: 2px 6px; }
+.file-item .remove:hover { color: var(--error); }
+.file-item .status-icon { font-size: 16px; width: 20px; text-align: center; }
+
+.controls { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.controls label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
+.controls select { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-xs); font-size: 14px; }
+
+.btn-primary {
+  background: var(--brand); color: #fff; border: none; padding: 10px 28px;
+  border-radius: var(--radius-xs); font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: background 0.2s;
+}
+.btn-primary:hover { background: var(--brand-dark); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.progress-wrap {
+  background: var(--card); border-radius: var(--radius); padding: 20px;
+  margin-bottom: 16px; display: none;
+}
+.progress-bar-bg { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 8px 0; }
+.progress-bar-fill { height: 100%; background: var(--brand); border-radius: 4px; transition: width 0.3s; width: 0%; }
+.progress-text { font-size: 13px; color: var(--text-muted); display: flex; justify-content: space-between; }
+.progress-log { max-height: 300px; overflow-y: auto; margin-top: 8px; font-size: 12px; line-height: 1.6; }
+.log-entry { padding: 2px 0; border-bottom: 1px solid var(--border); }
+.log-entry.ok { color: var(--success); }
+.log-entry.err { color: var(--error); }
+.log-entry.skip { color: var(--text-muted); }
+
+.result-wrap {
+  background: var(--card); border-radius: var(--radius); padding: 20px;
+  margin-bottom: 16px; display: none;
+}
+.result-stats { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+.stat-item { text-align: center; padding: 12px 20px; background: var(--bg); border-radius: var(--radius-sm); min-width: 100px; }
+.stat-item .num { font-size: 24px; font-weight: 700; font-family: var(--font-num); color: var(--brand); }
+.stat-item .label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+.result-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.result-table th { text-align: left; padding: 8px; border-bottom: 2px solid var(--border); color: var(--text-muted); font-weight: 600; }
+.result-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.result-table .ok { color: var(--success); }
+.result-table .err { color: var(--error); }
+
+.agent-auto-note { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+.logo-box {
+  background: var(--card); border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+}
+.logo-box h2 { font-size: 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+.sample-label { background: var(--bg); padding: 6px 10px; border-radius: 4px; font-family: var(--font-mono); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="brand-logo"><span class="gaush">GAUSH</span><span class="sep">·</span><span class="clear">CLEAR</span></div>
+  <h1>批量导入</h1>
+  <span class="agent-name" id="agentName"></span>
+</div>
+
+<div class="container">
+  <div class="status-bar">&#9432; 选择 Excel 文件后，系统自动从文件名识别代理商（如 <span class="sample-label">AG028_客户名.xlsx</span>），确认后开始批量导入。</div>
+
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">&#128196;</div>
+    <div class="text">拖拽 Excel 文件到此处，或点击选择</div>
+    <div class="sub">支持 .xlsx / .xls 格式，单次最多 200 个文件</div>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls" multiple style="display:none">
+
+  <div class="file-list" id="fileList"></div>
+
+  <div class="controls">
+    <label>代理商：</label>
+    <select id="agentSelect"><option value="">从文件名自动识别</option></select>
+    <div class="agent-auto-note" id="agentNote"></div>
+    <button class="btn-primary" id="btnImport" disabled onclick="startImport()">开始导入</button>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-text"><span id="progressLabel">准备中...</span><span id="progressCount">0/0</span></div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-log" id="progressLog"></div>
+  </div>
+
+  <div class="result-wrap" id="resultWrap">
+    <div class="result-stats" id="resultStats"></div>
+    <table class="result-table" id="resultTable"><thead><tr><th>文件</th><th>代理商</th><th>状态</th><th>订单数</th><th>镜片数</th><th>说明</th></tr></thead><tbody id="resultBody"></tbody></table>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn-primary" onclick="location.reload()">继续导入下一批</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedFiles = [];
+let agentMap = {};
+
+async function loadAgents() {
+  try {
+    const r = await fetch('/api/agents');
+    const d = await r.json();
+    if (d.agents) {
+      agentMap = {};
+      const sel = document.getElementById('agentSelect');
+      for (const a of d.agents) {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = `${a.id} - ${a.name}`;
+        sel.appendChild(opt);
+        agentMap[a.id] = a;
+      }
+    }
+  } catch {}
+}
+loadAgents();
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  addFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', () => {
+  addFiles(Array.from(fileInput.files));
+  fileInput.value = '';
+});
+
+function addFiles(files) {
+  const xlsxFiles = files.filter(f => /\.xlsx?$/i.test(f.name));
+  selectedFiles = [...selectedFiles, ...xlsxFiles].slice(0, 200);
+  renderFileList();
+  detectAgent();
+}
+
+function removeFile(idx) {
+  selectedFiles.splice(idx, 1);
+  renderFileList();
+  detectAgent();
+}
+
+function renderFileList() {
+  const el = document.getElementById('fileList');
+  if (!selectedFiles.length) { el.innerHTML = ''; document.getElementById('btnImport').disabled = true; return; }
+  el.innerHTML = selectedFiles.map((f, i) => `<div class="file-item"><span class="name">${esc(f.name)}</span><span class="remove" onclick="removeFile(${i})">&#10005;</span></div>`).join('');
+  document.getElementById('btnImport').disabled = false;
+}
+
+function detectAgent() {
+  const matched = new Set();
+  for (const f of selectedFiles) {
+    const m = f.name.match(/AG\d{3}/i);
+    if (m) matched.add(m[0].toUpperCase());
+  }
+  const note = document.getElementById('agentNote');
+  const sel = document.getElementById('agentSelect');
+  if (matched.size === 1) {
+    const id = [...matched][0];
+    note.textContent = `自动识别：${id}`;
+    if (sel.value === '') {
+      for (const opt of sel.options) {
+        if (opt.value.toUpperCase() === id) { sel.value = opt.value; break; }
+      }
+    }
+  } else if (matched.size > 1) {
+    note.textContent = `识别到多个代理商：${[...matched].join(', ')}，请手动选择或按文件名分次导入`;
+  } else {
+    note.textContent = '文件名中未发现 AGxxx 编号，请手动选择代理商';
+  }
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function startImport() {
+  const btn = document.getElementById('btnImport');
+  btn.disabled = true;
+  btn.textContent = '导入中...';
+
+  const agentId = document.getElementById('agentSelect').value;
+  if (!agentId) {
+    alert('请选择代理商');
+    btn.disabled = false; btn.textContent = '开始导入';
+    return;
+  }
+  const agentInfo = agentMap[agentId];
+  if (!agentInfo) {
+    alert(`代理商 ${agentId} 不存在，请先同步代理商列表`);
+    btn.disabled = false; btn.textContent = '开始导入';
+    return;
+  }
+
+  document.getElementById('progressWrap').style.display = 'block';
+  document.getElementById('resultWrap').style.display = 'none';
+  document.getElementById('progressLog').innerHTML = '';
+
+  const total = selectedFiles.length;
+  updateProgress(0, total, '读取文件中...');
+
+  const filesData = [];
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const f = selectedFiles[i];
+    const data = await readFileAsBase64(f);
+    filesData.push({ name: f.name, data: data.split(',')[1] });
+  }
+
+  updateProgress(0, total, `已读取 ${total} 个文件，发送到服务器...`);
+
+  try {
+    const queryAdmin = new URLSearchParams(location.search).get('admin') || '';
+    const res = await fetch(`/api/admin/batch-import${queryAdmin ? `?admin=${queryAdmin}` : ''}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        files: filesData,
+        agentId: agentInfo.id,
+        agentName: agentInfo.name,
+      }),
+    });
+    const result = await res.json();
+    if (!result.success) {
+      throw new Error(result.error || '导入失败');
+    }
+    showResults(result);
+  } catch (e) {
+    addLog(`错误: ${e.message}`, 'err');
+    updateProgress(0, total, '导入失败');
+    btn.disabled = false; btn.textContent = '重试';
+  }
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function updateProgress(done, total, label) {
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressCount').textContent = `${done}/${total}`;
+  if (label) document.getElementById('progressLabel').textContent = label;
+}
+
+function addLog(msg, cls = '') {
+  const el = document.getElementById('progressLog');
+  const d = document.createElement('div');
+  d.className = `log-entry ${cls}`;
+  d.textContent = msg;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
+
+function showResults(result) {
+  document.getElementById('progressWrap').style.display = 'none';
+  document.getElementById('resultWrap').style.display = 'block';
+
+  const { summary, results, orderCount, lensCount } = result;
+  const okCount = results.filter(r => r.ok).length;
+  const errCount = results.filter(r => !r.ok).length;
+
+  document.getElementById('resultStats').innerHTML = `
+    <div class="stat-item"><div class="num">${summary?.total || 0}</div><div class="label">文件总数</div></div>
+    <div class="stat-item"><div class="num">${okCount}</div><div class="label">导入成功</div></div>
+    <div class="stat-item"><div class="num">${errCount}</div><div class="label">导入失败</div></div>
+    <div class="stat-item"><div class="num">${orderCount || 0}</div><div class="label">订单数</div></div>
+    <div class="stat-item"><div class="num">${lensCount || 0}</div><div class="label">镜片数</div></div>
+  `;
+
+  const tbody = document.getElementById('resultBody');
+  tbody.innerHTML = results.map(r => `<tr>
+    <td>${esc(r.file)}</td>
+    <td>${r.agentId || '-'}</td>
+    <td class="${r.ok ? 'ok' : 'err'}">${r.ok ? '✅ 成功' : '❌ 失败'}</td>
+    <td>${r.orderCount || 0}</td>
+    <td>${r.lensCount || 0}</td>
+    <td>${r.ok ? (r.skipped ? '已跳过（重复）' : (r.warnings?.length ? r.warnings.join('; ') : '')) : esc(r.error || '')}</td>
+  </tr>`).join('');
+
+  if (summary?.csv) {
+    downloadCsv(summary.csv, `batch-import-${new Date().toISOString().slice(0,10)}.csv`);
+  }
+}
+
+function downloadCsv(content, filename) {
+  const blob = new Blob(['\ufeff' + content], { type: 'text/csv; charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+</script>
+</body>
+</html>

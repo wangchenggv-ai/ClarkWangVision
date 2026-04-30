@@ -16,6 +16,7 @@ services:
     volumes:
       - ./public/qrcodes:/app/public/qrcodes
       - ./.env.production:/app/.env:ro
+      - ./drafts:/app/drafts
     depends_on:
       - mock-shuang
     restart: unless-stopped

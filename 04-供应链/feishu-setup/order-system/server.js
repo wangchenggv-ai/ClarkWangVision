@@ -37,6 +37,7 @@ import * as stateRouterMod from "./lib/state-router.js";
 import { rawVal, fmt, fmtAxis, parsePagination } from "./lib/helpers.js";
 import * as templatesMod from "./lib/templates.js";
 import { buildFactoryExcel, buildZipBuffer, buildLabelExportExcel } from "./lib/factory-export.js";
+import * as batchImportMod from "./lib/batch-import.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
@@ -1205,6 +1206,10 @@ const server = createServer(async (req, res) => {
       serveStatic(res, resolve(__dirname, "public/flow-inventory.html"));
       return logReq(req, 200, start);
     }
+    if (pathname === "/batch-import" || pathname === "/batch-import.html") {
+      serveStatic(res, resolve(__dirname, "public/batch-import.html"));
+      return logReq(req, 200, start);
+    }
 
     // ── 静态资源 ──
     if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/qrcodes/")) {
@@ -1274,6 +1279,13 @@ const server = createServer(async (req, res) => {
       const agent = await findAgent(token);
       if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
       jsonRes(res, 200, { id: agent.id, name: agent.name });
+      return logReq(req, 200, start);
+    }
+
+    // ── API: 代理商列表（批量导入页用） ──
+    if (pathname === "/api/agents" && req.method === "GET") {
+      const agents = await loadAgents();
+      jsonRes(res, 200, { agents });
       return logReq(req, 200, start);
     }
 
@@ -2637,6 +2649,88 @@ const server = createServer(async (req, res) => {
       }));
       results.push(...orderResults);
       jsonRes(res, 200, { results });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/batch-import — 批量导入 Excel + 赋码 + Bitable 写入
+    if (pathname === "/api/admin/batch-import" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req, 30 * 1024 * 1024);
+      const { files, agentId, agentName } = payload;
+      if (!files?.length) { jsonRes(res, 400, { error: "请提供文件" }); return logReq(req, 400, start); }
+      if (!agentId || !agentName) { jsonRes(res, 400, { error: "请提供代理商信息" }); return logReq(req, 400, start); }
+
+      const { extractAgentId, parseExcelFile, buildOrderRecords, contentHash } = batchImportMod;
+      const results = [];
+      let totalOrders = 0, totalLenses = 0;
+      const allOrderRecords = [];
+      const allLensRecords = [];
+
+      // 1. 解析所有文件，构建记录
+      for (const file of files) {
+        try {
+          const fileAgentId = extractAgentId(file.name) || agentId;
+          const parsed = parseExcelFile(file.name, file.data);
+          if (!parsed.patients.length) {
+            results.push({ file: file.name, agentId: fileAgentId, ok: false, error: parsed.warnings?.[0] || "未解析到患者数据" });
+            continue;
+          }
+
+          const orderNo = genOrderNo();
+          const agentInfo = {
+            id: agentId,
+            name: agentName,
+            contact: parsed.contact,
+            phone: parsed.phone,
+            address: parsed.address,
+            customerId: "",
+            terminalCustomer: "",
+          };
+          const { orderRecords, lensRecords } = buildOrderRecords(parsed.patients, agentInfo, orderNo);
+
+          // 去重检查：按文件内容 hash 标记
+          const hash = contentHash(parsed.patients);
+          orderRecords[0].fields["镜片码"] = lensRecords.map(r => r.fields["镜片码（唯一）"]).join(",");
+          orderRecords[0].fields["导入批次"] = new Date().toISOString().slice(0, 10);
+
+          allOrderRecords.push(...orderRecords);
+          allLensRecords.push(...lensRecords);
+          totalOrders += orderRecords.length;
+          totalLenses += lensRecords.length;
+
+          results.push({
+            file: file.name, agentId: fileAgentId, ok: true,
+            orderCount: orderRecords.length, lensCount: lensRecords.length,
+            warnings: parsed.warnings,
+          });
+        } catch (e) {
+          results.push({ file: file.name, agentId: agentId, ok: false, error: e.message });
+        }
+      }
+
+      // 2. 写入 Bitable
+      if (allOrderRecords.length > 0) {
+        const ok = await batchCreateRecords(TABLES.order, allOrderRecords);
+        if (!ok) {
+          jsonRes(res, 500, { success: false, error: "订单主表写入失败" });
+          return logReq(req, 500, start);
+        }
+      }
+      if (allLensRecords.length > 0) {
+        const ok = await batchCreateRecords(TABLES.lens_detail, allLensRecords);
+        if (!ok) {
+          jsonRes(res, 500, { success: false, error: "镜片明细表写入失败" });
+          return logReq(req, 500, start);
+        }
+      }
+
+      // 3. 生成汇总 CSV
+      const csvLines = ["文件名,代理商,订单数,镜片数,状态,说明"];
+      for (const r of results) {
+        csvLines.push(`${csvEscape(r.file)},${r.agentId},${r.orderCount||0},${r.lensCount||0},${r.ok?"成功":"失败"},${csvEscape(r.error||(r.warnings?.join("; ")||""))}`);
+      }
+
+      jsonRes(res, 200, { success: true, results, summary: { total: files.length, csv: csvLines.join("\n") }, orderCount: totalOrders, lensCount: totalLenses });
       return logReq(req, 200, start);
     }
 

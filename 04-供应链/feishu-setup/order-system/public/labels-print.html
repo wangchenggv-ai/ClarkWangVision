@@ -128,7 +128,8 @@ td .mono { font-family: "SF Mono","Consolas","Courier New",monospace; font-size:
   padding: 8px 12px; background: #fafafa; font-size: 12px; font-weight: 600;
   display: flex; justify-content: space-between; border-bottom: 1px solid #f0f0f0;
 }
-.preview-card iframe { width: 100%; border: none; min-height: 180px; }
+.preview-card .iframe-wrap { width: 100%; overflow: hidden; position: relative; }
+.preview-card .iframe-wrap iframe { border: none; width: 75mm; height: 40mm; transform-origin: top left; pointer-events: none; }
 
 /* 按钮 */
 .btn {
@@ -244,7 +245,7 @@ td .mono { font-family: "SF Mono","Consolas","Courier New",monospace; font-size:
       <button class="date-btn" onclick="quickDate('today')">今日</button>
       <button class="date-btn" onclick="quickDate('yesterday')">昨日</button>
       <button class="date-btn" onclick="quickDate('week')">本周</button>
-      <button class="date-btn" onclick="clearDate()">清除</button>
+      <button class="date-btn" onclick="clearDate()">重置</button>
     </div>
     <button class="btn btn-primary" onclick="loadOrders()">查询</button>
   </div>
@@ -452,7 +453,7 @@ function renderTable() {
       <td>${o.customerName||''}</td>
       <td>${o.sku||''}</td>
       <td class="status-${o.status}"><span class="status-dot"></span>${o.status}</td>
-      <td><span class="mono">${o.trackingNo||'—'}</span></td>
+      <td>${o.status==="已发货" && !o.trackingNo ? `<input type="text" class="tracking-input" placeholder="输入/扫码快递单号" data-order="${o.orderNo}" data-customer="${cn}" data-pi="${pi}" onkeydown="if(event.key==='Enter'){saveTrackingNo(this)}" onblur="saveTrackingNo(this)" onclick="event.stopPropagation()" style="width:130px;padding:2px 4px;font-size:11px;font-family:monospace;border:1px solid #d9d9d9;border-radius:3px">` : `<span class="mono">${o.trackingNo||'—'}</span>`}</td>
       <td>${actions}</td>
     </tr>`;
   }).join("");
@@ -483,7 +484,6 @@ function toggleSelectAll() {
 }
 
 function toggleRow(key, event) {
-  if (event && event.target.tagName === "INPUT") return;
   if (selectedOrders.has(key)) selectedOrders.delete(key);
   else selectedOrders.add(key);
   renderTable();
@@ -526,7 +526,14 @@ function quickDate(type) {
 function clearDate() {
   document.getElementById("filterFrom").value = "";
   document.getElementById("filterTo").value = "";
+  document.getElementById("filterStatus").value = "";
+  document.getElementById("filterStock").value = "";
+  document.getElementById("filterAgent").value = "";
+  document.getElementById("filterSku").value = "";
+  document.getElementById("filterQ").value = "";
   document.querySelectorAll(".date-btn").forEach(b => b.classList.remove("active"));
+  currentPage = 1;
+  loadOrders();
 }
 
 function fmtDate(d) {
@@ -611,13 +618,18 @@ async function previewSelected() {
         <span>${label.orderNo}</span>
         <span>${label.customer} ${label.eye}</span>
       </div>
-      <iframe id="frame-${label.lensCode}"></iframe>
+      <div class="iframe-wrap"><iframe id="frame-${label.lensCode}"></iframe></div>
     `;
     grid.appendChild(card);
+    const wrap = card.querySelector(".iframe-wrap");
     const frame = card.querySelector("iframe");
-    frame.onload = () => { frame.style.height = frame.contentDocument.body.scrollHeight + "px"; };
     const blob = new Blob([label.html], { type: "text/html" });
     frame.src = URL.createObjectURL(blob);
+    frame.onload = () => {
+      const scale = wrap.clientWidth / frame.offsetWidth;
+      wrap.style.height = (frame.offsetHeight * scale) + "px";
+      frame.style.transform = `scale(${scale})`;
+    };
   }
   section.scrollIntoView({ behavior: "smooth" });
 }
@@ -636,7 +648,7 @@ async function shipSelected() {
   });
   if (!keys.length) { showToast("所选订单中没有\"生产中\"或\"打标签\"的订单", "info"); return; }
 
-  if (!confirm(`确认发货 ${keys.length} 个订单？将自动生成快递单号。`)) return;
+  if (!confirm(`确认发货 ${keys.length} 个订单？`)) return;
 
   let ok = 0, fail = 0;
   for (const key of keys) {
@@ -656,9 +668,21 @@ async function quickShip(orderNo, customerName, pairIndex) {
   try {
     const data = await adminApi("/api/admin/ship", { orderNos: [orderNo], customerName, pairIndex });
     const r = data.results?.[0];
-    if (r?.ok) { showToast(`${orderNo} 已发货，快递单号：${r.trackingNo || "—"}`, "success"); loadOrders(); }
+    if (r?.ok) { showToast(`${orderNo} 已发货，请补录快递单号`, "success"); loadOrders(); }
     else showToast(`发货失败：${r?.error || "未知"}`, "error");
   } catch (e) { showToast(`发货失败：${e.message}`, "error"); }
+}
+
+// ─── 快递单号补录 ──────────────────────────────────────────────────
+async function saveTrackingNo(input) {
+  const val = input.value.trim();
+  if (!val) return;
+  const { order, customer, pi } = input.dataset;
+  try {
+    await adminApi("/api/admin/update-field", { orderNo: order, customerName: customer, pairIndex: Number(pi)||1, field: "快递单号", value: val });
+    showToast(`${order} 快递单号已更新：${val}`, "success");
+    loadOrders();
+  } catch (e) { showToast(`保存失败：${e.message}`, "error"); }
 }
 
 // ─── 同行单 ────────────────────────────────────────────────────────
@@ -680,7 +704,7 @@ function quickSlip(orderNo, customerName, pairIndex) {
 }
 
 // ─── 导出 Excel ─────────────────────────────────────────────────────
-function exportExcelSelected() {
+async function exportExcelSelected() {
   if (!selectedOrders.size) { showToast("请先选择订单", "info"); return; }
   const keys = [...selectedOrders];
   // 按订单号分组客户名，避免跨订单客户过滤错乱
@@ -698,13 +722,19 @@ function exportExcelSelected() {
   let url = `/api/admin/labels/export-excel?orderNos=${encodeURIComponent(orderNos.join(","))}&admin=${adminToken}&orderCustomers=${encodeURIComponent(orderCustomers)}`;
   window.open(url, "_blank");
   showToast("正在导出 Excel...", "info");
+  for (const orderNo of orderNos) {
+    try { await adminApi("/api/admin/update-field", { orderNo, field: "订单状态", value: "打标签" }); } catch {}
+  }
+  loadOrders();
 }
 
-function quickExportExcel(orderNo, customerName, pairIndex) {
+async function quickExportExcel(orderNo, customerName, pairIndex) {
   let url = `/api/admin/labels/export-excel?orderNos=${encodeURIComponent(orderNo)}&admin=${adminToken}`;
   if (customerName) url += `&customer=${encodeURIComponent(customerName)}`;
   if (pairIndex) url += `&pairIndex=${pairIndex}`;
   window.open(url, "_blank");
+  try { await adminApi("/api/admin/update-field", { orderNo, field: "订单状态", value: "打标签" }); } catch {}
+  loadOrders();
 }
 
 // ─── 测试打印 ──────────────────────────────────────────────────────
