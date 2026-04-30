@@ -1,6 +1,6 @@
 # 系统当前状态
 
-> 更新：2026-04-29 | 完整历史见 CHANGELOG.md
+> 更新：2026-04-30 | 完整历史见 CHANGELOG.md
 
 ---
 
@@ -11,8 +11,8 @@
 | 生产地址 | https://lab.gaushclear.com（华为云 ECS Docker） |
 | SSH | `ssh -i "04-供应链/feishu-setup/order-system/密钥/key-gaush-lab.pem" root@113.44.175.221` |
 | 容器 | order-app:3210（主服务）+ mock-shuang:3220 |
-| 本次待部署 | ✅ 草稿缓冲系统（本地提交+后台同步+编辑修改）— 已部署 |
-| 涉及文件 | server.js, public/order.html, public/track.html, public/css/common.css |
+| 本次待部署 | ✅ 批量导入系统（batch-import + 自动赋码 + QR 验真码）— 已部署 |
+| 涉及文件 | server.js, lib/batch-import.js, public/batch-import.html, public/qr-gallery.html |
 
 部署命令：
 ```bash
@@ -98,6 +98,7 @@ ssh -i "$KEY" root@113.44.175.221 \
 - [x] **序号全局递增**：pairIndex 从按 customerName+SKU 计数改为只按 customerName，同一客户不同SKU序号连续 ✅ 已部署
 - [x] **草稿缓冲系统**：提交订单改为存本地 JSON 草稿（~50ms），后台 2 分钟轮询，草稿满 30 分钟自动同步 Bitable。代理商可在追踪页编辑/取消草稿。涉及文件：server.js, order.html, track.html, common.css ✅ 已部署
 - [x] **确认订单并行优化**：后端 for 循环改用 Promise.all 并行处理多条订单（镜片码生成/QR写入/Bitable更新并发进行）；前端 batch confirm 改为一次性提交所有 orderNo，去掉了逐条串行调用 ✅ 已部署（2026-04-30）
+- [x] **批量导入系统**：`lib/batch-import.js` 批量解析+赋码+记录构建，`public/batch-import.html` 拖拽上传UI（自动识别代理商+进度条+CSV导出），`public/qr-gallery.html` 验真码展示页。导入即赋码（16位 HEX）+ 状态=生产中，跳过 confirm。已部署 ECS ✅
 
 ---
 
