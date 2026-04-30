@@ -170,7 +170,7 @@ export function buildOrderRecords(patients, agentInfo, orderNo) {
       "序号": p.pairIndex || 1,
       "代理商名称": agentInfo.name,
       "代理商ID": agentInfo.id,
-      "订单来源": "批量导入",
+      "订单来源": "代理商门户",
       "是否装配": "否",
     };
     if (agentInfo.customerId) orderFields["客户ID"] = agentInfo.customerId;

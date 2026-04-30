@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 · QR 验真码</title>
+<link rel="stylesheet" href="/css/common.css?v=2">
+<style>
+.container { max-width: 800px; margin: 0 auto; padding: 20px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+.qr-card { background: var(--card); border-radius: var(--radius); padding: 16px; text-align: center; box-shadow: var(--shadow-sm); }
+.qr-card img { width: 180px; height: 180px; display: block; margin: 0 auto; }
+.qr-card .code { font-family: var(--font-mono); font-size: 11px; word-break: break-all; margin: 6px 0; color: var(--text-muted); }
+.qr-card .name { font-size: 14px; font-weight: 600; }
+.qr-card .eye { font-size: 12px; color: var(--text-muted); }
+.controls { margin-bottom: 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.controls input { padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-xs); font-size: 14px; flex: 1; min-width: 200px; }
+.controls button { padding: 8px 20px; background: var(--brand); color: #fff; border: none; border-radius: var(--radius-xs); cursor: pointer; }
+.controls button:hover { background: var(--brand-dark); }
+.count { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="brand-logo"><span class="gaush">GAUSH</span><span class="sep">·</span><span class="clear">CLEAR</span></div>
+  <h1>QR 验真码</h1>
+  <span class="agent-name" id="agentName"></span>
+</div>
+<div class="container">
+  <div class="controls">
+    <input type="text" id="searchInput" placeholder="搜索顾客姓名或镜片码..." oninput="filterCards()">
+    <button onclick="loadCodes()">刷新</button>
+    <span class="count" id="countLabel">加载中...</span>
+  </div>
+  <div class="gallery" id="gallery"></div>
+</div>
+<script>
+async function loadCodes() {
+  const el = document.getElementById('gallery');
+  const count = document.getElementById('countLabel');
+  el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted)">加载中...</div>';
+  try {
+    const admin = new URLSearchParams(location.search).get('admin') || '';
+    const r = await fetch(`/api/admin/lens-codes?admin=${admin}`);
+    const d = await r.json();
+    if (!d.codes?.length) {
+      el.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted)">暂无镜片码数据</div>';
+      count.textContent = '0 条';
+      return;
+    }
+    window._codes = d.codes;
+    renderCodes(d.codes);
+    count.textContent = `${d.codes.length} 条镜片码`;
+  } catch (e) {
+    el.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--error)">加载失败: ${e.message}</div>`;
+  }
+}
+
+function renderCodes(codes) {
+  const el = document.getElementById('gallery');
+  el.innerHTML = codes.map(c => `<div class="qr-card">
+    <img src="/qrcodes/${c.code}.png" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22180%22 height=%22180%22><rect width=%22180%22 height=%22180%22 fill=%22%23f0f0f0%22/><text x=%2290%22 y=%2290%22 text-anchor=%22middle%22 fill=%22%23999%22 font-size=%2212%22>加载中</text></svg>'">
+    <div class="name">${esc(c.name)}</div>
+    <div class="eye">${esc(c.eye)} · ${esc(c.sku)}</div>
+    <div class="code">${c.code}</div>
+  </div>`).join('');
+}
+
+function filterCards() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const cards = document.querySelectorAll('.qr-card');
+  let count = 0;
+  cards.forEach(card => {
+    const match = !q || card.textContent.toLowerCase().includes(q);
+    card.style.display = match ? '' : 'none';
+    if (match) count++;
+  });
+  document.getElementById('countLabel').textContent = `${count} / ${cards.length} 条`;
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+loadCodes();
+</script>
+</body>
+</html>

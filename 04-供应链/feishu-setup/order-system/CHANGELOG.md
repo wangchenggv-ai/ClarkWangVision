@@ -1,6 +1,37 @@
 # CHANGELOG
 
-## 2026-04-30 — 镜片码字段迁移：lens_detail "镜片码" → "镜片码（唯一）"
+## 2026-04-30 — 批量导入 + 自动赋码 + QR 验真码
+
+### 新功能
+
+- **批量导入系统**（3 个新文件）：
+  - `lib/batch-import.js` — 核心引擎：Excel 解析（复用现有列名模糊匹配）、自动构建订单/镜片记录、lens code 生成、内容 hash 去重
+  - `public/batch-import.html` — 拖拽上传 UI，自动从文件名识别代理商（`AG\d{3}`），进度条，结果汇总 CSV 下载
+  - `public/qr-gallery.html` — QR 验真码展示页，搜索过滤，查看所有镜片码的 QR 图片
+
+- **新增 API 端点**：
+  - `POST /api/admin/batch-import?admin=TOKEN` — 接收多文件 base64 JSON，批量解析 → 赋码（16位 HEX lens code） → 写 Bitable → 生成 QR PNG
+  - `GET /api/agents` — 代理商列表（前端下拉框用）
+  - `GET /api/admin/lens-codes?admin=TOKEN` — 镜片码列表（QR 展示页用）
+  - `GET /qr-gallery.html` — QR 验真码页面路由
+  - `GET /batch-import.html` — 批量导入页面路由
+
+- **server.js 改造**：
+  - 批量导入端点支持 30MB body（默认 1MB）
+  - 静态资源（qrcodes/css/js）取消速率限制
+  - 通用限速从 60 提升到 120 次/分钟
+
+### 状态变更
+- 导入时订单状态直接设为「生产中」，跳过 confirm 步骤
+- 5.1 期间助理每日流程：打开页面 → 拖文件 → 选代理商 → 点导入 → 打印发货
+
+### 测试验证
+- 8 个真实订单 Excel 文件全部导入成功（13 条订单 + 26 个镜片码）
+- 54 个 QR 码 PNG 已生成并部署到 ECS
+- 扫码验真页面正常返回
+
+### 已部署 ECS ✅
+
 
 ### 变更
 - **lens_detail 表字段迁移**：将"镜片码"替换为"镜片码（唯一）"，两字段数据已合并（2条记录）

@@ -817,7 +817,7 @@ function readBody(req, limitBytes = DEFAULT_BODY_LIMIT) {
 // ─── Rate Limiting（基于 IP，内存滑动窗口）────────────────────────────────
 const _rateLimitMap = new Map(); // ip → { count, windowStart }
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 分钟
-const RATE_LIMIT_MAX = 60;              // 通用端点：60次/分钟
+const RATE_LIMIT_MAX = 120;              // 通用端点：120次/分钟
 
 // 验真端点专用：防止镜片码枚举
 const VERIFY_RATE_LIMIT_MAX = 20;       // 20次/分钟
@@ -1158,7 +1158,10 @@ const server = createServer(async (req, res) => {
     ? (req.headers["x-forwarded-for"]?.split(",")[0].trim() || directIp)
     : directIp;
   const verifyLimit = pathname.startsWith("/verify/") ? VERIFY_RATE_LIMIT_MAX : RATE_LIMIT_MAX;
-  if (!checkRateLimit(clientIp, verifyLimit)) {
+  // 静态资源不限速（QR 码图片/css/js）
+  if (pathname.startsWith("/qrcodes/") || pathname.startsWith("/css/") || pathname.startsWith("/js/")) {
+    // 跳过限速
+  } else if (!checkRateLimit(clientIp, verifyLimit)) {
     res.writeHead(429, { "Content-Type": "application/json; charset=utf-8" });
     res.end(JSON.stringify({ error: "请求过于频繁，请稍后再试" }));
     return logReq(req, 429, start);
@@ -1208,6 +1211,10 @@ const server = createServer(async (req, res) => {
     }
     if (pathname === "/batch-import" || pathname === "/batch-import.html") {
       serveStatic(res, resolve(__dirname, "public/batch-import.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/qr-gallery" || pathname === "/qr-gallery.html") {
+      serveStatic(res, resolve(__dirname, "public/qr-gallery.html"));
       return logReq(req, 200, start);
     }
 
@@ -2691,7 +2698,7 @@ const server = createServer(async (req, res) => {
           // 去重检查：按文件内容 hash 标记
           const hash = contentHash(parsed.patients);
           orderRecords[0].fields["镜片码"] = lensRecords.map(r => r.fields["镜片码（唯一）"]).join(",");
-          orderRecords[0].fields["导入批次"] = new Date().toISOString().slice(0, 10);
+
 
           allOrderRecords.push(...orderRecords);
           allLensRecords.push(...lensRecords);
@@ -2724,13 +2731,36 @@ const server = createServer(async (req, res) => {
         }
       }
 
-      // 3. 生成汇总 CSV
+      // 3. 生成 QR 码图片
+      const qrPromises = [];
+      for (const rec of allLensRecords) {
+        const code = rec.fields["镜片码（唯一）"];
+        if (code) qrPromises.push(generateQRPng(code));
+      }
+      await Promise.all(qrPromises);
+      console.log(`  生成了 ${qrPromises.length} 个 QR 码图片`);
+
+      // 4. 生成汇总 CSV
       const csvLines = ["文件名,代理商,订单数,镜片数,状态,说明"];
       for (const r of results) {
         csvLines.push(`${csvEscape(r.file)},${r.agentId},${r.orderCount||0},${r.lensCount||0},${r.ok?"成功":"失败"},${csvEscape(r.error||(r.warnings?.join("; ")||""))}`);
       }
 
       jsonRes(res, 200, { success: true, results, summary: { total: files.length, csv: csvLines.join("\n") }, orderCount: totalOrders, lensCount: totalLenses });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/lens-codes — 查询镜片码列表（QR 用）
+    if (pathname === "/api/admin/lens-codes" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const records = await listRecords(TABLES.lens_detail, ["镜片码（唯一）","顾客姓名","眼别","产品型号"]);
+      const codes = (records || []).map(r => ({
+        code: r.fields["镜片码（唯一）"] || "",
+        name: r.fields["顾客姓名"] || "",
+        eye: r.fields["眼别"] || "",
+        sku: r.fields["产品型号"] || "",
+      })).filter(c => c.code);
+      jsonRes(res, 200, { codes });
       return logReq(req, 200, start);
     }
 
