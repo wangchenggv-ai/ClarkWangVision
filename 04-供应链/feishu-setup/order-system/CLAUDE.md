@@ -1,6 +1,6 @@
 # CLAUDE.md — 订单系统项目宪法
 
-> **通用编码原则见根目录 [`CLAUDE_karpathy.md`](../../CLAUDE_karpathy.md)** — Think Before Coding / Simplicity First / Surgical Changes / Goal-Driven Execution
+> **通用编码原则见 [`CLAUDE_karpathy.md`](../../../AI配置/CLAUDE_karpathy.md)** — Think Before Coding / Simplicity First / Surgical Changes / Goal-Driven Execution
 > 
 > 本文件是 Claude Code 在本目录工作时的第一手上下文。**详细架构看 [ARCHITECTURE.md](ARCHITECTURE.md)**，本文件只写约束与关键事实。
 
@@ -220,6 +220,7 @@ CRM 系统详情见 [CRM-CLAUDE.md](04-供应链/feishu-setup/order-system/CRM-C
 ### 本地启动
 ```bash
 node server.js            # 主服务，端口 3210
+NODE_ENV=test node server.js  # 连测试 Bitable
 node logistics.js webhook # 快递回调，端口 3211（可选）
 ```
 
@@ -227,7 +228,9 @@ node logistics.js webhook # 快递回调，端口 3211（可选）
 
 - ECS IP: `113.44.175.221`，域名: `lab.gaushclear.com`
 - SSH: `ssh -i 密钥/key-gaush-lab.pem root@113.44.175.221`
-- Docker 容器: `order-app`，工作目录 `/app/`
+- **生产容器**: `order-app`(:3210) + `mock-shuang`(:3220)，工作目录 `/app/`
+- **测试容器**: `order-app-test`(:3211) + `mock-shuang-test`(:3221)，独立 Bitable
+- 测试地址: `https://lab.gaushclear.com/test/`（nginx `/test/` 代理）
 - 部署流程: SCP 文件到 ECS → `docker cp` 进容器 → `docker restart order-app`
 
 ```bash
@@ -247,6 +250,7 @@ ssh -i 密钥/key-gaush-lab.pem root@113.44.175.221 \
 | `SERVER_BASE_URL` | QR 验真链接的外网地址 |
 | `MIMO_API_URL` / `MIMO_API_KEY` | AI 功能（备用） |
 | `PORT` | 覆盖默认 3210 |
+| `NODE_ENV` | 设为 `test` 切换 `shared/tables.js` 到测试 Bitable |
 
 ### Docker
 - 根目录 `Dockerfile` + `docker-compose.yml` 部署主服务
@@ -258,6 +262,7 @@ ssh -i 密钥/key-gaush-lab.pem root@113.44.175.221 \
 
 ### 常改的
 - [server.js](04-供应链/feishu-setup/order-system/server.js) — 主后端（所有 API 端点）
+- [public/portal.html](public/portal.html) — 代理商门户首页（根路由 `/`）
 - [public/order.html](public/order.html) — 代理商下单页
 - [public/labels.html](public/labels.html) — 助理管理页（确认/发货/签收/标签）
 - [public/control.html](public/control.html) — Admin 控制中心（仪表盘/规则/库存/数据流，4 Tab）

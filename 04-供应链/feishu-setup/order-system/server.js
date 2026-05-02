@@ -45,7 +45,7 @@ const BASE = "https://open.feishu.cn/open-apis";
 const QR_DIR = resolve(__dirname, "public", "qrcodes");
 const DRAFTS_DIR = resolve(__dirname, "drafts");
 const DRAFT_SYNC_INTERVAL = 2 * 60 * 1000; // 后台轮询间隔 2 分钟
-const DRAFT_AGE_MIN = 30 * 60 * 1000;      // 草稿创建至少 30 分钟后才同步（代理商编辑窗口）
+const DRAFT_AGE_MIN = 3 * 60 * 1000;        // 草稿创建至少 3 分钟后才同步（代理商编辑窗口）
 
 // 常规备货度数范围（闭区间）
 const STD_SPH_RANGE = [-6, 0];
@@ -1217,6 +1217,10 @@ const server = createServer(async (req, res) => {
       serveStatic(res, resolve(__dirname, "public/qr-gallery.html"));
       return logReq(req, 200, start);
     }
+    if (pathname === "/verify" || pathname === "/verify.html") {
+      serveStatic(res, resolve(__dirname, "public/verify.html"));
+      return logReq(req, 200, start);
+    }
 
     // ── 静态资源 ──
     if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/qrcodes/")) {
@@ -2256,7 +2260,7 @@ const server = createServer(async (req, res) => {
 
       const allDetails = [];
       const dateMap = {};
-
+      const labelInfoMap = {};
       for (let i = 0; i < orderNos.length; i++) {
         const orderNo = orderNos[i];
         let details = lensResults[i];
@@ -2305,6 +2309,15 @@ const server = createServer(async (req, res) => {
           const cn = rec.fields["顾客姓名"] || "";
           const pi = Number(rec.fields["序号"] || 1);
           if (cn) custByPair[`${orderNo}|${pi}`] = cn;
+          const infoKey = `${orderNo}|${cn}|${pi}`;
+          if (!labelInfoMap[infoKey]) {
+            labelInfoMap[infoKey] = {
+              contact: rec.fields["联系人"] || "",
+              phone: rec.fields["联系电话"] || "",
+              address: rec.fields["收货地址"] || "",
+              remark: rec.fields["备注"] || "",
+            };
+          }
         }
         for (const d of details) {
           if (!d.fields["顾客姓名"]) {
@@ -2320,7 +2333,7 @@ const server = createServer(async (req, res) => {
 
       const excelName = orderNos.length > 1 ? `标签数据_${orderNos.length}单.xlsx` : `标签数据_${orderNos[0]}.xlsx`;
       const asciiName = orderNos.length > 1 ? `labels-${orderNos.length}.xlsx` : `${orderNos[0]}-labels.xlsx`;
-      const excelBuf = buildLabelExportExcel(allDetails, dateMap);
+      const excelBuf = buildFactoryExcel(allDetails, orderNos.join("+"), labelInfoMap, dateMap);
 
       res.writeHead(200, {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -2345,6 +2358,7 @@ const server = createServer(async (req, res) => {
       const allDetails = [];
       const skipped = [];
       const orderInfoMap = {}; // "orderNo|customerName|pairIndex" → { remark, address, contact, phone, quantity }
+      const dateMap = {};
 
       const t0 = Date.now();
 
@@ -2395,6 +2409,20 @@ const server = createServer(async (req, res) => {
             phone: of["联系电话"] || "",
             quantity: Number(of["数量"]) || 1,
           };
+          if (!dateMap[infoKey]) {
+            const rawDate = of["创建时间"] || of["发货时间"] || "";
+            if (rawDate) {
+              const d = new Date(rawDate);
+              dateMap[infoKey] = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+            }
+          }
+        }
+        if (!dateMap[orderNo] && orderCache[orderNo][0]) {
+          const rawDate = orderCache[orderNo][0].fields["创建时间"] || "";
+          if (rawDate) {
+            const d = new Date(rawDate);
+            dateMap[orderNo] = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+          }
         }
 
         allDetails.push(...details);
@@ -2406,7 +2434,7 @@ const server = createServer(async (req, res) => {
       // 生成 Excel
       const excelName = orderNos.length > 1 ? `订单_合并_${orderNos.length}单.xlsx` : `订单_${orderNos[0]}.xlsx`;
       const asciiName = orderNos.length > 1 ? `orders-${orderNos.length}.xlsx` : `${orderNos[0]}.xlsx`;
-      const excelBuf = buildFactoryExcel(allDetails, orderNos.join("+"), orderInfoMap);
+      const excelBuf = buildFactoryExcel(allDetails, orderNos.join("+"), orderInfoMap, dateMap);
       if (!excelBuf || !excelBuf.length) { jsonRes(res, 500, { error: "Excel 生成失败" }); return logReq(req, 500, start); }
       const t2 = Date.now();
 

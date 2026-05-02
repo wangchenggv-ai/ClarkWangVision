@@ -4,7 +4,7 @@ import XLSX from "xlsx";
 
 // ─── 生成工厂 Excel 文件 ─────────────────────────────────────────────────────
 
-export function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
+export function buildFactoryExcel(records, orderNo, orderInfoMap = {}, dateMap = {}) {
   const isMap = orderInfoMap && !orderInfoMap.remark && !orderInfoMap.address;
   const getInfo = (recOrderNo, recCustomer, recPairIndex) => {
     if (!isMap) return orderInfoMap; // 旧格式：单个 info
@@ -39,11 +39,13 @@ export function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
       "柱镜CYL": f["柱镜CYL"] != null && isFinite(Number(f["柱镜CYL"])) ? Number(f["柱镜CYL"]).toFixed(2) : "",
       "轴位AXIS": f["轴位AXIS"] != null && isFinite(Number(f["轴位AXIS"])) ? Number(f["轴位AXIS"]).toFixed(0) : "",
       "镜片码（唯一）": f["镜片码（唯一）"] || "",
+      "验真网址": f["镜片码（唯一）"] ? `https://lab.gaushclear.com/verify/${f["镜片码（唯一）"]}` : "",
       "是否装配": f["是否装配"] || "",
       "联系人": info.contact || "",
       "联系电话": info.phone || "",
       "收货地址": info.address || "",
       "备注": info.remark || "",
+      "日期": dateMap[`${f["订单编号"] || ""}|${f["顾客姓名"] || ""}|${f["序号"] || 1}`] || dateMap[f["订单编号"] || ""] || "",
     };
   });
 
@@ -52,7 +54,7 @@ export function buildFactoryExcel(records, orderNo, orderInfoMap = {}) {
   ws["!cols"] = [
     { wch: 20 }, { wch: 10 }, { wch: 20 }, { wch: 6 },
     { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
-    { wch: 16 }, { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
+    { wch: 16 }, { wch: 50 }, { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 30 }, { wch: 12 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`.slice(0, 31));
   return Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));

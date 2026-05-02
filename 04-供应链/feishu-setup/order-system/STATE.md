@@ -1,6 +1,6 @@
 # 系统当前状态
 
-> 更新：2026-04-30 | 完整历史见 CHANGELOG.md
+> 更新：2026-05-02 | 完整历史见 CHANGELOG.md
 
 ---
 
@@ -9,8 +9,11 @@
 | 项目 | 内容 |
 |------|------|
 | 生产地址 | https://lab.gaushclear.com（华为云 ECS Docker） |
+| 测试地址 | http://113.44.175.221:3211（同 ECS，独立 Bitable） |
 | SSH | `ssh -i "04-供应链/feishu-setup/order-system/密钥/key-gaush-lab.pem" root@113.44.175.221` |
-| 容器 | order-app:3210（主服务）+ mock-shuang:3220 |
+| 生产容器 | order-app:3210（主服务）+ mock-shuang:3220 |
+| 测试容器 | order-app-test:3211 + mock-shuang-test:3221 |
+| 测试 Bitable | APP_TOKEN: `CtXObqwAHaCXYssBBfkcXmrlnUe` |
 | 本次待部署 | ✅ 批量导入系统（batch-import + 自动赋码 + QR 验真码）— 已部署 |
 | 涉及文件 | server.js, lib/batch-import.js, public/batch-import.html, public/qr-gallery.html |
 
@@ -99,6 +102,11 @@ ssh -i "$KEY" root@113.44.175.221 \
 - [x] **草稿缓冲系统**：提交订单改为存本地 JSON 草稿（~50ms），后台 2 分钟轮询，草稿满 30 分钟自动同步 Bitable。代理商可在追踪页编辑/取消草稿。涉及文件：server.js, order.html, track.html, common.css ✅ 已部署
 - [x] **确认订单并行优化**：后端 for 循环改用 Promise.all 并行处理多条订单（镜片码生成/QR写入/Bitable更新并发进行）；前端 batch confirm 改为一次性提交所有 orderNo，去掉了逐条串行调用 ✅ 已部署（2026-04-30）
 - [x] **批量导入系统**：`lib/batch-import.js` 批量解析+赋码+记录构建，`public/batch-import.html` 拖拽上传UI（自动识别代理商+进度条+CSV导出），`public/qr-gallery.html` 验真码展示页。导入即赋码（16位 HEX）+ 状态=生产中，跳过 confirm。已部署 ECS ✅
+- [x] **测试环境搭建**：同 ECS 端口 3211，独立 Bitable `CtXObqwAHaCXYssBBfkcXmrlnUe`，`docker-compose.test.yml` + `.env.test` + `shared/tables.js` 环境切换。nginx 代理 `/test/` → 3211 ✅
+- [x] **portal.html 漏部署**：生产容器缺少 portal.html 导致根路由 404，已补部署 ✅
+- [x] **/verify 路由缺失**：server.js 缺少 `/verify` 静态路由（只有 `/verify/:lensCode`），已添加 ✅
+- [x] **草稿同步时间缩短**：DRAFT_AGE_MIN 从 15 分钟改为 3 分钟 ✅
+- [x] **端到端验真测试**：生产+测试环境全流程通过（下单→同步→确认→赋码→验真）✅
 
 ---
 
@@ -106,9 +114,11 @@ ssh -i "$KEY" root@113.44.175.221 \
 
 | 项目 | 值 |
 |------|-----|
-| Bitable App Token | B3xQbbqicaome1sKdZbcwdk8nWg |
+| 生产 Bitable App Token | B3xQbbqicaome1sKdZbcwdk8nWg |
+| 测试 Bitable App Token | CtXObqwAHaCXYssBBfkcXmrlnUe |
 | 飞书 APP_ID | cli_a958c5e372b85cb0 |
-| ADMIN_TOKEN（本地/测试） | GaushOrderMock |
+| ADMIN_TOKEN（生产） | GaushOrderMock |
+| ADMIN_TOKEN（测试） | GaushOrderTest |
 | 本地端口 | 3210（主服务）|
 
 ---

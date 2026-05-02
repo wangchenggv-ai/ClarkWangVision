@@ -1,0 +1,25 @@
+services:
+  mock-shuang-test:
+    image: swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/mock-shuang:v1
+    container_name: mock-shuang-test
+    ports:
+      - "127.0.0.1:3221:3220"
+    restart: unless-stopped
+
+  order-app-test:
+    image: swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/order-app:v1
+    container_name: order-app-test
+    ports:
+      - "0.0.0.0:3211:3211"
+    env_file:
+      - .env.test
+    environment:
+      - NODE_ENV=test
+    volumes:
+      - ./public/qrcodes-test:/app/public/qrcodes
+      - ./.env.test:/app/.env:ro
+      - ./drafts-test:/app/drafts
+      - ./shared/tables.js:/app/shared/tables.js:ro
+    depends_on:
+      - mock-shuang-test
+    restart: unless-stopped

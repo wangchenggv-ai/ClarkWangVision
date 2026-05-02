@@ -622,6 +622,8 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
     <div class="action-group">
       <button class="btn btn-outline act-confirm-btn" style="color:#1677ff;border-color:#1677ff" onclick="confirmOrders()">确认下单</button>
       <button class="btn btn-outline" style="color:#0958d9;border-color:#0958d9" onclick="downloadExcel()">导出Excel给工厂</button>
+      <button class="btn btn-outline ctx-btn act-slip-btn" style="color:#722ed1;border-color:#722ed1" onclick="slipBatchSelected()">同行单</button>
+      <button class="btn btn-outline ctx-btn act-excel-btn" style="color:#eb2f96;border-color:#eb2f96" onclick="exportExcelSelected()">导出Excel</button>
       <button class="btn btn-outline ctx-btn act-print-btn" style="color:#531dab;border-color:#531dab" onclick="batchPrintLabels()">斑马打印</button>
       <button class="btn btn-primary ctx-btn act-ship-btn" onclick="batchShip()">确认发货</button>
     </div>
@@ -884,6 +886,14 @@ function updateAvgDays(orders, s) {
   document.getElementById("avgDaysShipped").textContent = avgFor("已发货");
 }
 
+// 乐观更新统计卡片：orderedDelta=已下单变化量, pendingDelta=待处理变化量
+function updateStats(orderedDelta, pendingDelta) {
+  const el1 = document.getElementById("statOrdered");
+  const el2 = document.getElementById("statPending");
+  if (orderedDelta && el1) el1.textContent = Math.max(0, (parseInt(el1.textContent) || 0) + orderedDelta);
+  if (pendingDelta && el2) el2.textContent = Math.max(0, (parseInt(el2.textContent) || 0) + pendingDelta);
+}
+
 // ─── 统计卡片筛选 ───────────────────────────────────────────────────
 
 function filterByStatus(status) {
@@ -948,11 +958,17 @@ function getQuickAction(o) {
   const revertBtn = (o.status === "已下单" || o.status === "待处理" || o.status === "生产中" || o.status === "打标签")
     ? ` <button style="background:none;border:1px solid #d9d9d9;color:#999;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:4px" onclick="revertOrder('${o.orderNo}','${cn}',${pi},'${o.status}')" title="退回上一步">退回</button>`
     : '';
+  const slipBtn = (o.status === "打标签" || o.status === "已发货")
+    ? ` <button style="background:none;border:1px solid #722ed1;color:#722ed1;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:4px" onclick="quickSlip('${o.orderNo}','${cn}',${pi})" title="随货同行单">同行单</button>`
+    : '';
+  const excelBtn = (o.status === "打标签" || o.status === "已发货")
+    ? ` <button style="background:none;border:1px solid #eb2f96;color:#eb2f96;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:4px" onclick="quickExportExcel('${o.orderNo}','${cn}',${pi})" title="导出Excel">Excel</button>`
+    : '';
   if (o.status === "已下单") return `<button class="row-action-btn act-confirm" style="background:#1677ff;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px" onclick="quickConfirm('${o.orderNo}','${cn}',${pi})">待确认</button>${revertBtn}`;
   if (o.status === "待处理") return `<span style="color:#722ed1;font-size:12px;font-weight:600">&#10003; 已确认</span>${revertBtn}`;
   if (o.status === "生产中") return `<span style="color:#0958d9;font-size:12px;font-weight:600">&#9881; 生产中</span>${revertBtn}`;
-  if (o.status === "打标签") return `<span style="color:#531dab;font-size:12px;font-weight:600">&#127991; 打标签</span>${revertBtn}`;
-  if (o.status === "已发货") return `<span style="color:#389e0d;font-size:12px">&#128666; 已发货</span>`;
+  if (o.status === "打标签") return `<span style="color:#531dab;font-size:12px;font-weight:600">&#127991; 打标签</span>${slipBtn}${excelBtn}${revertBtn}`;
+  if (o.status === "已发货") return `<span style="color:#389e0d;font-size:12px">&#128666; 已发货</span>${slipBtn}${excelBtn}`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
 }
 
@@ -1136,6 +1152,8 @@ function updateContextualActions() {
   });
   const hasSelection = selectedOrders.size > 0;
   document.querySelector(".act-confirm-btn").classList.toggle("visible", hasSelection && statuses.has("已下单") && [...statuses].every(s => s === "已下单"));
+  document.querySelector(".act-slip-btn").classList.toggle("visible", hasSelection && (statuses.has("打标签") || statuses.has("已发货")));
+  document.querySelector(".act-excel-btn").classList.toggle("visible", hasSelection && (statuses.has("打标签") || statuses.has("已发货")));
   document.querySelector(".act-print-btn").classList.toggle("visible", hasSelection && statuses.has("打标签"));
   document.querySelector(".act-ship-btn").classList.toggle("visible", hasSelection && (statuses.has("打标签") || statuses.has("生产中")));
 }
@@ -1203,12 +1221,20 @@ async function quickConfirm(orderNo, customerName, pairIndex) {
   const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
   const ok = await showConfirmModal({ title: "确认订单", body: `确认 <b>${orderNo}</b> · <b>${customerName}</b>${badge}？<br>状态将变为"待处理"并生成镜片码。` });
   if (!ok) return;
+  // 乐观更新：立即改本地状态并重渲染
+  const targets = allOrders.filter(o => o.orderNo === orderNo && o.customerName === customerName && (o.pairIndex || 1) === pi && o.status === "已下单");
+  const prev = targets.map(o => ({ order: o, status: o.status }));
+  targets.forEach(o => o.status = "待处理");
+  updateStats(-targets.length, targets.length);
+  renderOrders();
+  syncWorkflowSteppers();
   try {
     const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName, pairIndex: pi });
     const r = data.results[0];
     if (r.ok) { showToast(`${orderNo} ${customerName} 已确认`, "success"); loadOrders(); }
-    else showToast(`确认失败: ${r.error}`, "error");
+    else { prev.forEach(p => p.order.status = p.status); updateStats(targets.length, -targets.length); renderOrders(); showToast(`确认失败: ${r.error}`, "error"); }
   } catch (e) {
+    prev.forEach(p => p.order.status = p.status); updateStats(targets.length, -targets.length); renderOrders();
     showToast(`确认失败: ${e.message}`, "error");
   }
 }
@@ -1245,14 +1271,25 @@ async function confirmOrders() {
   const orderNos = [...new Set(keys.map(k => parseKey(k).orderNo))];
   const btn = document.querySelector(".act-confirm-btn");
   if (btn) { btn.disabled = true; btn.textContent = "确认中..."; }
+  // 乐观更新：立即改本地状态并重渲染
+  const keySet = new Set(keys);
+  const targets = allOrders.filter(o => keySet.has(o.orderNo + "|" + o.customerName + "|" + (o.pairIndex || 1)) && o.status === "已下单");
+  const prev = targets.map(o => ({ order: o, status: o.status }));
+  const n = targets.length;
+  targets.forEach(o => o.status = "待处理");
+  updateStats(-n, n);
+  renderOrders();
+  syncWorkflowSteppers();
   try {
     const data = await adminApi("/api/admin/confirm", { orderNos });
     const results = data.results || [];
     const done = results.filter(r => r.ok).length;
     const fail = results.filter(r => !r.ok).length;
+    if (fail) { prev.forEach(p => p.order.status = p.status); updateStats(n, -n); renderOrders(); }
     showToast(`确认完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
     loadOrders();
   } catch (e) {
+    prev.forEach(p => p.order.status = p.status); updateStats(n, -n); renderOrders();
     showToast(`确认失败: ${e.message}`, "error");
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "确认下单"; }
@@ -1395,6 +1432,42 @@ function quickSlip(orderNo, customerName, pairIndex) {
   window.open(url, "_blank");
 }
 
+function slipBatchSelected() {
+  if (!selectedOrders.size) { showToast("请先选择订单", "info"); return; }
+  const keys = [...selectedOrders].filter(k => {
+    const o = allOrders.find(x => `${x.orderNo}|${x.customerName}|${x.pairIndex||1}` === k);
+    return o && (o.status === "打标签" || o.status === "已发货");
+  });
+  if (!keys.length) { showToast("所选订单中没有\"打标签\"或\"已发货\"的订单", "info"); return; }
+  const orderNos = [...new Set(keys.map(k => k.split("|")[0]))].join(",");
+  window.open(`/api/admin/slip-batch?orderNos=${encodeURIComponent(orderNos)}&admin=${adminToken}`, "_blank");
+}
+
+async function exportExcelSelected() {
+  if (!selectedOrders.size) { showToast("请先选择订单", "info"); return; }
+  const keys = [...selectedOrders];
+  const orderCustomerMap = {};
+  keys.forEach(k => {
+    const [orderNo, customerName] = k.split("|");
+    if (!orderCustomerMap[orderNo]) orderCustomerMap[orderNo] = new Set();
+    if (customerName) orderCustomerMap[orderNo].add(customerName);
+  });
+  const orderNos = Object.keys(orderCustomerMap);
+  const orderCustomers = orderNos.map(no => {
+    const customers = [...orderCustomerMap[no]];
+    return `${no}:${customers.join(",")}`;
+  }).join("|");
+  let url = `/api/admin/labels/export-excel?orderNos=${encodeURIComponent(orderNos.join(","))}&admin=${adminToken}&orderCustomers=${encodeURIComponent(orderCustomers)}`;
+  window.open(url, "_blank");
+  showToast("正在导出 Excel...", "info");
+}
+
+function quickExportExcel(orderNo, customerName, pairIndex) {
+  let url = `/api/admin/labels/export-excel?orderNos=${encodeURIComponent(orderNo)}&admin=${adminToken}`;
+  if (customerName) url += `&orderCustomers=${encodeURIComponent(orderNo + ":" + customerName)}`;
+  window.open(url, "_blank");
+}
+
 function showShipModal(count) {
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
@@ -1493,12 +1566,38 @@ renderDetail = function(panel, data) {
   const on = panel.dataset.orderNo;
   if (on) {
     api(`/api/admin/workflow/${encodeURIComponent(on)}`).then(wfData => {
+      trackDiv._wfData = wfData;
       renderWorkflow(trackDiv, wfData);
     }).catch(() => {
       trackDiv.innerHTML = '<div style="font-size:11px;color:#ccc">流程数据加载失败</div>';
     });
   }
 };
+
+// 根据订单状态推算 workflow 数据（乐观更新用）
+const STATUS_TO_WF = { "已下单": 0, "待处理": 1, "生产中": 2, "打标签": 3, "已发货": 4 };
+function syncWorkflowSteppers() {
+  document.querySelectorAll(".detail-panel").forEach(panel => {
+    const on = panel.dataset.orderNo;
+    if (!on) return;
+    const order = allOrders.find(o => o.orderNo === on);
+    if (!order) return;
+    const trackDiv = panel.querySelector(".workflow-section > div:nth-child(2)");
+    if (!trackDiv) return;
+    const targetIdx = STATUS_TO_WF[order.status];
+    if (targetIdx == null) return;
+    // 合并已有 wfData 的步骤时间戳，补充新步骤
+    const prev = trackDiv._wfData || { steps: {} };
+    const steps = {};
+    for (let i = 0; i <= targetIdx; i++) {
+      const key = STEP_KEYS[i];
+      steps[key] = prev.steps?.[key] || { ts: null };
+    }
+    const wfData = { current: targetIdx, steps };
+    trackDiv._wfData = wfData;
+    renderWorkflow(trackDiv, wfData);
+  });
+}
 
 // ─── 初始化 ─────────────────────────────────────────────────────────
 

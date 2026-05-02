@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-05-02 — 测试环境搭建 + 验真系统加固
+
+### 基础设施
+- **测试环境**：同 ECS 第二容器（端口 3211），独立测试 Bitable `CtXObqwAHaCXYssBBfkcXmrlnUe`
+- **配置文件**：`docker-compose.test.yml` + `.env.test` + `shared/tables.js`（NODE_ENV=test 切换表 ID）
+- **nginx 代理**：`/test/` 路径代理到 3211 容器
+
+### 修复
+- **portal.html 漏部署**：生产容器根路由 404，补部署 portal.html
+- **/verify 路由缺失**：server.js 添加 `/verify` 和 `/verify.html` 静态路由
+- **feishu.js 缺少 batchUpdateRecords**：测试容器旧镜像缺少该函数，已同步
+
+### 优化
+- **草稿同步时间**：DRAFT_AGE_MIN 从 15 分钟缩短到 3 分钟
+
+### 验证
+- 生产环境端到端验真测试通过（下单→同步→确认→赋码→验真）
+- 测试环境端到端验真测试通过
+
+---
+
 ## 2026-04-30 — 批量导入 + 自动赋码 + QR 验真码
 
 ### 新功能

@@ -1,6 +1,6 @@
 # 订单交付系统 — 架构说明
 
-**最后更新：2026-04-23**
+**最后更新：2026-05-02**
 
 > 本文件描述 order-system/ 的技术架构。三系统全景见 [../ARCHITECTURE-OVERVIEW.md](../ARCHITECTURE-OVERVIEW.md)。
 
@@ -56,7 +56,7 @@
                                 └→ 显示验真结果+处方信息
 ```
 
-**订单状态流转（单向，可逐级退回）：** `已下单 → 待处理 → 生产中 → 已发货 → 待签收 → 已签收`
+**订单状态流转（单向，可逐级退回）：** `已下单 → 待处理 → 生产中 → 打标签 → 已发货`
 
 **工作流步骤（8步，叠加在4状态之上）：** `已下单 → 已确认 → 生产中 → 质检完成 → 标签已打印 → 已打包 → 已发货 → 已签收`
 
@@ -138,7 +138,7 @@ import { TABLES } from "../shared/tables.js";
 | 联系人 | 文本 | 收货联系人 |
 | 联系电话 | 电话 | 联系电话 |
 | 镜片码 | 文本 | 该订单的镜片码汇总 |
-| 订单状态 | 单选 | 已下单→待处理→生产中→已发货→待签收→已签收 |
+| 订单状态 | 单选 | 已下单→待处理→生产中→打标签→已发货 |
 | 流程步骤 | 文本 | JSON，8步工作流状态+时间戳 |
 | 预计交期 | 日期时间 | 系统估算的交货日期 |
 | 订单来源 | 单选 | "代理商门户" |
@@ -524,7 +524,7 @@ pull-print.js（本地守护进程）
 
 ### 8.3 状态流转（单向，可逐级退回）
 ```
-已下单 → 待处理 → 生产中 → 已发货 → 待签收 → 已签收
+已下单 → 待处理 → 生产中 → 打标签 → 已发货
   ↑         ↑         ↑
   └─────────┴─────────┘  退回（逐级，不可跨级）
 ```
@@ -566,6 +566,7 @@ pull-print.js（本地守护进程）
 
 ```bash
 node server.js            # 主服务，端口 3210
+NODE_ENV=test node server.js  # 连测试 Bitable
 node logistics.js webhook # 快递回调，端口 3211（可选）
 node pull-print.js        # 打印守护进程（需在本地打印电脑运行）
 ```
@@ -580,12 +581,15 @@ node pull-print.js        # 打印守护进程（需在本地打印电脑运行�
 | `SERVER_BASE_URL` | QR 验真链接的外网地址 |
 | `MIMO_API_URL` / `MIMO_API_KEY` | AI 功能（MiMo Agent） |
 | `PORT` | 覆盖默认 3210 |
+| `NODE_ENV` | 设为 `test` 切换 `shared/tables.js` 到测试 Bitable |
 
 ### Docker 部署
 
 - 华为云 ECS（gaush-lab）：`lab.gaushclear.com`（HTTPS，证书到期 2026-07-18）
 - SWR 镜像：`swr.cn-north-4.myhuaweicloud.com/gaushclear-clark/order-app:v1`
-- 两容器：order-app(:3210) + mock-shuang(:3220)，仅 127.0.0.1
+- 生产容器：order-app(:3210) + mock-shuang(:3220)，仅 127.0.0.1
+- 测试容器：order-app-test(:3211) + mock-shuang-test(:3221)，nginx `/test/` 代理
+- 测试 Bitable App Token：`CtXObqwAHaCXYssBBfkcXmrlnUe`
 - 构建需 `--provenance=false`（SWR 不兼容 BuildKit attestation）
 
 ### 部署流程

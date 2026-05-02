@@ -707,7 +707,6 @@ function quickSlip(orderNo, customerName, pairIndex) {
 async function exportExcelSelected() {
   if (!selectedOrders.size) { showToast("请先选择订单", "info"); return; }
   const keys = [...selectedOrders];
-  // 按订单号分组客户名，避免跨订单客户过滤错乱
   const orderCustomerMap = {};
   keys.forEach(k => {
     const [orderNo, customerName] = k.split("|");
@@ -722,10 +721,6 @@ async function exportExcelSelected() {
   let url = `/api/admin/labels/export-excel?orderNos=${encodeURIComponent(orderNos.join(","))}&admin=${adminToken}&orderCustomers=${encodeURIComponent(orderCustomers)}`;
   window.open(url, "_blank");
   showToast("正在导出 Excel...", "info");
-  for (const orderNo of orderNos) {
-    try { await adminApi("/api/admin/update-field", { orderNo, field: "订单状态", value: "打标签" }); } catch {}
-  }
-  loadOrders();
 }
 
 async function quickExportExcel(orderNo, customerName, pairIndex) {
