@@ -3101,7 +3101,7 @@ const server = createServer(async (req, res) => {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const payload = await readBody(req, 30 * 1024 * 1024);
       const { files } = payload;
-      if (!files?.length) { jsonRes(res, 400, { error: "请提供文件" }); return logReq(req, 400, start); }
+      if (!files || !Array.isArray(files) || files.length === 0) { jsonRes(res, 400, { error: "请提供文件" }); return logReq(req, 400, start); }
 
       const orders = [];
       const warnings = [];
@@ -3121,8 +3121,8 @@ const server = createServer(async (req, res) => {
           
           orders.push({
             file: file.name,
-            agentId: agentId || Object.keys(agentMap)[0] || "",
-            agentName: agentInfo?.name || "",
+            agentId: agentId || (agents.length > 0 ? agents[0].id : ""),
+            agentName: agentInfo?.name || (agents.length > 0 ? agents[0].name : ""),
             patients: parsed.patients,
             contact: parsed.contact,
             phone: parsed.phone,
