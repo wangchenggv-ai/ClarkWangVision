@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>暑期作战 · 高视星</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --navy: #1A5276; --navy-dark: #0f3352; --navy-light: #2471a3;
+  --bg: #f0f4f8; --surface: #ffffff; --border: #dde6ef;
+  --text: #1a2332; --text-2: #4a5568; --text-3: #8a9ab0;
+  --green: #27ae60; --orange: #e67e22; --red: #e74c3c;
+  --shadow: 0 1px 3px rgba(26,82,118,0.08), 0 4px 16px rgba(26,82,118,0.05);
+  --a-bg: #d1fae5; --a-text: #065f46; --a-border: #059669;
+  --b-bg: #fef3c7; --b-text: #92400e; --b-border: #d97706;
+  --c-bg: #f1f5f9; --c-text: #64748b; --c-border: #94a3b8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans SC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ── Topbar ── */
+.topbar {
+  background: var(--navy); height: 52px;
+  display: flex; align-items: stretch; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-left { display: flex; align-items: center; gap: 1rem; padding: 0 1.5rem; }
+.topbar-brand { font-size: 0.82rem; font-weight: 700; color: #fff; letter-spacing: 0.08em; }
+.topbar-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.2); }
+.topbar-name { font-size: 0.78rem; color: rgba(255,255,255,0.7); }
+.topbar-tabs { display: flex; align-items: stretch; }
+.tab-btn {
+  display: flex; align-items: center; padding: 0 1.75rem;
+  font-size: 0.82rem; font-weight: 600; color: rgba(255,255,255,0.55);
+  border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent;
+  transition: color 0.15s; white-space: nowrap;
+}
+.tab-btn:hover { color: rgba(255,255,255,0.85); }
+.tab-btn.active { color: #fff; border-bottom-color: #f0a050; }
+.topbar-right { display: flex; align-items: center; padding: 0 1.5rem; }
+.summer-badge {
+  font-size: 0.65rem; font-weight: 700;
+  background: rgba(230,126,34,0.25); color: #f0a050;
+  border: 1px solid rgba(230,126,34,0.4); padding: 0.2rem 0.6rem;
+  border-radius: 4px; letter-spacing: 0.06em;
+}
+
+/* ── Layout ── */
+.page { max-width: 1280px; margin: 0 auto; padding: 1.5rem 1.5rem 6rem; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+.grid-main { display: grid; grid-template-columns: 2fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+.work-area { display: grid; grid-template-columns: 3fr 2fr; gap: 1.25rem; margin-bottom: 1.25rem; align-items: start; }
+
+/* ── Cards ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; margin-bottom: 1.25rem; }
+.work-area .card { margin-bottom: 0; }
+.card-header {
+  padding: 0.9rem 1.25rem 0.75rem; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-title { font-size: 0.82rem; font-weight: 700; color: var(--navy-dark); }
+.card-sub { font-size: 0.7rem; color: var(--text-3); margin-top: 0.1rem; }
+.card-body { padding: 1.25rem; }
+
+/* ── 产品目标 ── */
+.target-inputs { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem; }
+.field-group { display: flex; flex-direction: column; gap: 0.4rem; }
+.field-label { font-size: 0.72rem; font-weight: 600; color: var(--text-2); }
+.field-input {
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.55rem 0.75rem;
+  font-size: 0.9rem; font-family: 'DM Mono', monospace; color: var(--navy-dark); width: 100%;
+}
+.field-input:focus { outline: none; border-color: var(--navy-light); }
+.field-suffix { font-size: 0.68rem; color: var(--text-3); }
+.region-select {
+  border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.75rem;
+  font-size: 0.82rem; color: var(--text); background: #fff; min-width: 140px;
+}
+.region-select:focus { outline: none; border-color: var(--navy-light); }
+
+/* ── A类门店表 ── */
+.stores-table { width: 100%; border-collapse: collapse; }
+.stores-table th {
+  font-size: 0.65rem; letter-spacing: 0.07em; color: var(--text-3); font-weight: 500;
+  padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--border); background: #fafbfc;
+}
+.stores-table th.right-col { text-align: right; }
+.stores-table td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--border); }
+.stores-table tr:last-child td { border-bottom: none; }
+.store-input {
+  border: 1px solid transparent; border-radius: 6px; padding: 0.38rem 0.55rem;
+  font-size: 0.82rem; width: 100%; background: transparent; color: var(--text);
+}
+.store-input:focus { outline: none; border-color: var(--border); background: #fff; }
+.store-input.num { width: 90px; font-family: 'DM Mono', monospace; text-align: right; }
+.store-remove { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: 1.1rem; padding: 0.15rem 0.35rem; border-radius: 4px; }
+.store-remove:hover { color: var(--red); background: #fdf0ee; }
+.btn-add-store {
+  display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem;
+  color: var(--navy-light); border: 1px dashed var(--border); border-radius: 8px;
+  padding: 0.5rem 1rem; cursor: pointer; background: none; margin-top: 0.75rem;
+  width: 100%; justify-content: center; transition: all 0.15s;
+}
+.btn-add-store:hover { background: var(--bg); border-color: var(--navy-light); }
+
+/* ── 自动分配 ── */
+.auto-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: end; }
+.btn-auto {
+  padding: 0.55rem 1.5rem; background: var(--navy-light); color: #fff; border: none;
+  border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 700; white-space: nowrap;
+  height: fit-content;
+}
+.btn-auto:hover { background: var(--navy); }
+
+/* ── ABC 图例 ── */
+.abc-legend {
+  display: flex; gap: 1.5rem; margin-top: 1rem; padding-top: 0.85rem;
+  border-top: 1px solid var(--border); flex-wrap: wrap;
+}
+.legend-item { display: flex; align-items: center; gap: 0.45rem; font-size: 0.72rem; }
+.legend-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+.legend-a { background: var(--a-bg); color: var(--a-text); }
+.legend-b { background: var(--b-bg); color: var(--b-text); }
+.legend-c { background: var(--c-bg); color: var(--c-text); }
+.legend-dot.a { background: var(--a-bg); border: 1.5px solid var(--a-border); }
+.legend-dot.b { background: var(--b-bg); border: 1.5px solid var(--b-border); }
+.legend-dot.c { background: var(--c-bg); border: 1.5px solid var(--c-border); }
+
+/* ── 热力图 ── */
+.heat-section { margin-bottom: 1.5rem; }
+.heat-section:last-child { margin-bottom: 0; }
+.heat-title { font-size: 0.8rem; font-weight: 700; color: var(--navy-dark); margin-bottom: 0.6rem; }
+.heat-table-wrap { overflow-x: auto; }
+.heat-table { border-collapse: collapse; font-size: 0.68rem; min-width: 520px; }
+.heat-table th {
+  padding: 0.35rem 0.4rem; text-align: center;
+  font-size: 0.6rem; color: var(--text-3); font-weight: 500;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.heat-table th.row-header { text-align: left; padding-left: 0; }
+.heat-table td {
+  padding: 0.26rem 0.35rem; text-align: center; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.6); border-radius: 3px; transition: transform 0.1s;
+  font-family: 'DM Mono', monospace; font-size: 0.62rem; user-select: none;
+}
+.heat-table td.sku-label { font-weight: 600; color: var(--navy); text-align: left; padding-left: 0; cursor: default; background: none; border-color: transparent; }
+.heat-table td:not(.sku-label):hover { transform: scale(1.15); z-index: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+/* ABC classes */
+.sku-a { background: var(--a-bg); color: var(--a-text); }
+.sku-b { background: var(--b-bg); color: var(--b-text); }
+.sku-c { background: var(--c-bg); color: var(--c-text); opacity: 0.7; }
+/* Selected */
+.sku-a.selected { outline: 2px solid var(--a-border); outline-offset: -1px; opacity: 1; }
+.sku-b.selected { outline: 2px solid var(--b-border); outline-offset: -1px; opacity: 1; }
+.sku-c.selected { outline: 2px solid var(--c-border); outline-offset: -1px; opacity: 1; }
+
+/* ── 备库清单 ── */
+.sel-item {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center;
+  gap: 0.6rem; padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.35rem;
+}
+.sel-item:last-child { margin-bottom: 0; }
+.sel-sku { font-size: 0.74rem; font-weight: 600; color: var(--navy); }
+.sel-params { font-size: 0.62rem; color: var(--text-3); font-family: 'DM Mono', monospace; }
+.sel-class-tag { font-size: 0.58rem; font-weight: 700; padding: 0.05rem 0.3rem; border-radius: 3px; display: inline-block; margin-left: 0.3rem; }
+.sel-class-a { background: var(--a-bg); color: var(--a-text); }
+.sel-class-b { background: var(--b-bg); color: var(--b-text); }
+.sel-class-c { background: var(--c-bg); color: var(--c-text); }
+.sel-qty-wrap { display: flex; align-items: center; gap: 0.3rem; }
+.sel-qty-wrap button {
+  width: 22px; height: 22px; border: 1px solid var(--border); background: #fff;
+  border-radius: 4px; cursor: pointer; font-size: 0.85rem; color: var(--navy);
+  display: flex; align-items: center; justify-content: center;
+}
+.sel-qty-wrap input {
+  width: 50px; text-align: center; border: 1px solid var(--border);
+  border-radius: 4px; padding: 0.2rem; font-family: 'DM Mono', monospace; font-size: 0.82rem;
+}
+.sel-remove { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: 1.1rem; padding: 0 0.2rem; }
+.sel-remove:hover { color: var(--red); }
+.empty-tip { text-align: center; color: var(--text-3); font-size: 0.8rem; padding: 2rem 1rem; }
+
+/* ── 保存栏 ── */
+.save-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 90;
+  background: rgba(255,255,255,0.96); backdrop-filter: blur(8px);
+  border-top: 1px solid var(--border); padding: 0.85rem 2rem;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 -2px 12px rgba(26,82,118,0.08);
+}
+.save-info { font-size: 0.78rem; color: var(--text-2); }
+.save-info strong { font-family: 'DM Mono', monospace; font-size: 1rem; color: var(--navy-dark); }
+.btn-save {
+  padding: 0.6rem 1.4rem; background: var(--navy); color: #fff; border: none;
+  border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+}
+.btn-save:hover { background: var(--navy-dark); }
+.btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-export {
+  padding: 0.6rem 1.2rem; background: #fff; color: var(--navy-light); border: 1px solid var(--border);
+  border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+}
+.btn-export:hover { background: var(--bg); }
+.btn-confirm {
+  padding: 0.6rem 1.5rem; background: var(--green); color: #fff; border: none;
+  border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 700;
+}
+.btn-confirm:hover { background: #219a52; }
+.btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+.save-ok { font-size: 0.75rem; color: var(--green); margin-left: 1rem; display: none; }
+
+/* ── 看板 KPI ── */
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow); padding: 1.1rem 1.25rem; margin-bottom: 0;
+}
+.kpi-label { font-size: 0.72rem; color: var(--text-3); margin-bottom: 0.5rem; font-weight: 500; }
+.kpi-value { font-size: 1.8rem; font-family: 'DM Mono', monospace; font-weight: 500; color: var(--navy-dark); line-height: 1; margin-bottom: 0.4rem; }
+.kpi-value span { font-size: 0.82rem; font-family: 'Noto Sans SC', sans-serif; color: var(--text-3); font-weight: 400; margin-left: 0.2rem; }
+.kpi-change { font-size: 0.72rem; }
+.kpi-change.up { color: var(--green); }
+.kpi-change.neutral { color: var(--text-3); }
+.kpi-bar-bg { height: 4px; background: var(--bg); border-radius: 2px; margin-top: 0.75rem; }
+.kpi-bar-fill { height: 100%; border-radius: 2px; }
+
+/* ── 看板倒计时 ── */
+.countdown-bar {
+  background: linear-gradient(135deg, var(--navy-dark), var(--navy));
+  border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+}
+.countdown-left h2 { font-size: 0.78rem; color: rgba(255,255,255,0.6); margin-bottom: 0.25rem; font-weight: 400; }
+.countdown-left p { font-size: 0.85rem; color: rgba(255,255,255,0.9); }
+.countdown-nums { display: flex; gap: 1.5rem; }
+.cnum { text-align: center; }
+.cnum-val { font-family: 'DM Mono', monospace; font-size: 2rem; font-weight: 500; color: #fff; line-height: 1; }
+.cnum-label { font-size: 0.62rem; color: rgba(255,255,255,0.45); margin-top: 0.2rem; letter-spacing: 0.06em; }
+.progress-track { flex: 1; max-width: 300px; }
+.progress-label { display: flex; justify-content: space-between; font-size: 0.68rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; }
+.progress-bar-bg { height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; }
+.progress-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #f0a050, #e67e22); }
+
+/* ── 看板门店表 ── */
+.store-summary {
+  display: flex; gap: 2.5rem; padding: 1rem 1.25rem;
+  background: linear-gradient(90deg, #f0f7ff, #fff);
+  border-bottom: 1px solid var(--border);
+}
+.store-sum-item { text-align: center; }
+.store-sum-val { font-family: 'DM Mono', monospace; font-size: 1.4rem; font-weight: 600; color: var(--navy-dark); }
+.store-sum-label { font-size: 0.65rem; color: var(--text-3); margin-top: 0.15rem; }
+.store-sum-pct { font-size: 0.72rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 4px; display: inline-block; }
+.board-table { width: 100%; border-collapse: collapse; }
+.board-table th {
+  font-size: 0.65rem; letter-spacing: 0.07em; color: var(--text-3); font-weight: 500;
+  padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid var(--border); background: #fafbfc;
+}
+.board-table th.r { text-align: right; }
+.board-table td { padding: 0.85rem 1rem; font-size: 0.8rem; border-bottom: 1px solid var(--border); color: var(--text-2); vertical-align: middle; }
+.board-table tr:last-child td { border-bottom: none; }
+.board-table tr:hover td { background: #f8fafc; }
+.store-name-cell { font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 0.5rem; }
+.store-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.td-r { text-align: right; font-family: 'DM Mono', monospace; font-weight: 600; color: var(--navy-dark); }
+.td-actual { text-align: right; font-family: 'DM Mono', monospace; }
+.prog-wrap { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; }
+.prog-bg { width: 60px; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 3px; }
+.prog-num { font-family: 'DM Mono', monospace; font-size: 0.72rem; font-weight: 700; width: 32px; text-align: right; }
+
+/* ── 看板产品进度 ── */
+.target-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+.target-row:last-child { border-bottom: none; }
+.target-name { font-size: 0.78rem; font-weight: 600; width: 80px; flex-shrink: 0; color: var(--navy); }
+.target-track { flex: 1; }
+.target-nums { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-3); margin-bottom: 0.35rem; font-family: 'DM Mono', monospace; }
+.target-bg { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.target-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+.target-pct { font-family: 'DM Mono', monospace; font-size: 0.78rem; font-weight: 700; width: 42px; text-align: right; flex-shrink: 0; }
+.chart-box { height: 220px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-brand">高视星</div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-name" id="agent-display">加载中…</div>
+  </div>
+  <div class="topbar-tabs">
+    <button class="tab-btn active" data-tab="plan" onclick="switchTab('plan')">备库计划</button>
+    <button class="tab-btn" data-tab="board" onclick="switchTab('board')">看板</button>
+  </div>
+  <div class="topbar-right">
+    <div class="summer-badge">▌ 暑期作战中</div>
+  </div>
+</div>
+
+<!-- ══ Tab 1：备库计划 ══ -->
+<div id="tab-plan" class="tab-panel active">
+<div class="page">
+
+  <!-- 产品目标 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">暑期产品目标</div>
+        <div class="card-sub">设置各产品线整体进货目标（片）</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="target-inputs">
+        <div class="field-group">
+          <div class="field-label">Ultra双效</div>
+          <input type="number" id="t-ultra" class="field-input" min="0" placeholder="0">
+          <div class="field-suffix">片 · 暑期目标</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">时空之眼</div>
+          <input type="number" id="t-sky" class="field-input" min="0" placeholder="0">
+          <div class="field-suffix">片 · 暑期目标</div>
+        </div>
+        <div class="field-group">
+          <div class="field-label">小旋风</div>
+          <input type="number" id="t-storm" class="field-input" min="0" placeholder="0">
+          <div class="field-suffix">片 · 暑期目标</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- A类门店（含实际销量） -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">A类门店清单</div>
+        <div class="card-sub">填写重点门店的暑期目标及实际销量（可随时更新）</div>
+      </div>
+      <span id="store-count" style="font-size:0.72rem;color:var(--text-3)">共 0 家</span>
+    </div>
+    <div class="card-body" style="padding:0">
+      <table class="stores-table">
+        <thead>
+          <tr>
+            <th style="padding-left:1.25rem;width:45%">门店名称</th>
+            <th class="right-col">暑期目标（片）</th>
+            <th class="right-col">实际销量（片）</th>
+            <th style="width:36px"></th>
+          </tr>
+        </thead>
+        <tbody id="stores-body">
+          <tr id="stores-empty-row">
+            <td colspan="4" style="text-align:center;color:var(--text-3);font-size:0.8rem;padding:1.25rem">
+              暂无门店，点击下方添加
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="padding:0.75rem 1.25rem 1.25rem">
+        <button class="btn-add-store" onclick="addStore()">＋ 添加门店</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 自动分配 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">按A/B/C自动分配备库</div>
+        <div class="card-sub">输入各产品总量，按处方分布（A类80% · B类15%）自动填入建议数量，可手动调整</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="auto-grid">
+        <div class="field-group">
+          <div class="field-label">Ultra双效 总备货量</div>
+          <input type="number" id="auto-ultra" class="field-input" min="0" placeholder="例：200">
+        </div>
+        <div class="field-group">
+          <div class="field-label">时空之眼 总备货量</div>
+          <input type="number" id="auto-sky" class="field-input" min="0" placeholder="例：150">
+        </div>
+        <div class="field-group">
+          <div class="field-label">小旋风 总备货量</div>
+          <input type="number" id="auto-storm" class="field-input" min="0" placeholder="例：100">
+        </div>
+        <button class="btn-auto" onclick="autoDistribute()">自动分配</button>
+      </div>
+      <div class="abc-legend">
+        <div class="legend-item"><div class="legend-dot a"></div><span class="legend-a"><strong>A类</strong> · 高频 · 可退货 · 建议足量备货</span></div>
+        <div class="legend-item"><div class="legend-dot b"></div><span class="legend-b"><strong>B类</strong> · 中频 · 6个月内可退 · 适量备货</span></div>
+        <div class="legend-item"><div class="legend-dot c"></div><span class="legend-c"><strong>C类</strong> · 低频 · 不可退 · 不建议备货，厂家急单5日达</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 热力图 + 备库清单 -->
+  <div class="work-area">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-header">
+        <div>
+          <div class="card-title">SKU热力图</div>
+          <div class="card-sub">点击选择需要备库的度数</div>
+        </div>
+        <span id="heat-selected-count" style="font-size:0.72rem;color:var(--text-3)">已选 0 个SKU</span>
+      </div>
+      <div class="card-body" id="heatmap-body">
+        <div class="empty-tip">加载中…</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:0;position:sticky;top:68px">
+      <div class="card-header">
+        <div class="card-title">备库确认清单</div>
+        <span id="selected-total-badge" style="font-size:0.72rem;color:var(--navy-light);font-family:'DM Mono',monospace;font-weight:600">0 片</span>
+      </div>
+      <div class="card-body" style="max-height:68vh;overflow-y:auto">
+        <div id="selected-list"><div class="empty-tip">从左侧热力图点击选择</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══ Tab 2：看板 ══ -->
+<div id="tab-board" class="tab-panel">
+<div class="page" style="padding-bottom:1.5rem">
+
+  <!-- 倒计时 -->
+  <div class="countdown-bar">
+    <div class="countdown-left">
+      <h2>2026暑期战役</h2>
+      <p>7月1日 → 10月8日 · 共99天</p>
+    </div>
+    <div class="countdown-nums">
+      <div class="cnum"><div class="cnum-val" id="days-elapsed">—</div><div class="cnum-label">已过天数</div></div>
+      <div class="cnum"><div class="cnum-val" id="days-left">—</div><div class="cnum-label">剩余天数</div></div>
+    </div>
+    <div class="progress-track">
+      <div class="progress-label"><span>战役进度</span><span id="progress-pct">—</span></div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="grid-3">
+    <div class="kpi-card">
+      <div class="kpi-label">A类门店销售汇总 vs 目标</div>
+      <div class="kpi-value" id="kpi-sales">—<span>片</span></div>
+      <div class="kpi-change up" id="kpi-sales-rate">—</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="kpi-sales-bar" style="width:0%;background:var(--green)"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-3);margin-top:0.4rem" id="kpi-sales-detail">目标 — 片</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Ultra双效销售进度</div>
+      <div class="kpi-value" id="kpi-ultra">—<span>片</span></div>
+      <div class="kpi-change up" id="kpi-ultra-rate">—</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="kpi-ultra-bar" style="width:0%;background:var(--navy-light)"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-3);margin-top:0.4rem" id="kpi-ultra-detail">目标 — 片</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">时空之眼 + 小旋风</div>
+      <div class="kpi-value" id="kpi-other">—<span>片</span></div>
+      <div class="kpi-change neutral" id="kpi-other-rate">—</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="kpi-other-bar" style="width:0%;background:var(--orange)"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-3);margin-top:0.4rem" id="kpi-other-detail">目标 — 片</div>
+    </div>
+  </div>
+
+  <!-- 核心：门店销售 vs 目标 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">A类门店 · 实际销量 vs 目标</div>
+        <div class="card-sub">在「备库计划」Tab 更新各门店实际销量</div>
+      </div>
+    </div>
+    <div id="board-store-summary" style="display:none" class="store-summary">
+      <div class="store-sum-item">
+        <div class="store-sum-val" id="ss-actual">—</div>
+        <div class="store-sum-label">门店实际销量（片）</div>
+      </div>
+      <div class="store-sum-item">
+        <div class="store-sum-val" id="ss-target">—</div>
+        <div class="store-sum-label">门店销售目标（片）</div>
+      </div>
+      <div class="store-sum-item">
+        <div class="store-sum-pct" id="ss-pct" style="background:#e8f4fd;color:var(--navy-light)">—%</div>
+        <div class="store-sum-label">完成率</div>
+      </div>
+      <div class="store-sum-item">
+        <div class="store-sum-val" id="ss-stores">—</div>
+        <div class="store-sum-label">A类门店数</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto" id="board-store-body">
+      <div style="text-align:center;color:var(--text-3);font-size:0.82rem;padding:1.5rem">加载中…</div>
+    </div>
+  </div>
+
+  <!-- 销售趋势 + 产品进度 -->
+  <div class="grid-main">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-header">
+        <div>
+          <div class="card-title">月度销售趋势</div>
+          <div class="card-sub">近几个月销售量（片）</div>
+        </div>
+      </div>
+      <div class="card-body" style="padding-bottom:0.75rem">
+        <div class="chart-box" id="chart-trend"></div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-header">
+        <div class="card-title">销售量 vs 暑期目标</div>
+        <div class="card-sub">各产品线进度</div>
+      </div>
+      <div class="card-body" id="target-progress">
+        <div style="text-align:center;color:var(--text-3);padding:1rem;font-size:0.82rem">加载中…</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- 保存栏（只在备库计划tab显示） -->
+<div class="save-bar" id="save-bar">
+  <div class="save-info">
+    备库已选 <strong id="total-qty">0</strong> 片
+    <span class="save-ok" id="save-ok">✓ 草稿已保存</span>
+  </div>
+  <div style="display:flex;gap:0.65rem;align-items:center">
+    <button class="btn-export" onclick="exportExcel()">导出 Excel</button>
+    <button class="btn-save" id="save-btn" onclick="savePlan()">保存草稿</button>
+    <button class="btn-confirm" id="confirm-btn" onclick="submitConfirm()">提交确认 →</button>
+  </div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+const API = '';
+
+// ── Tab ────────────────────────────────────────
+let boardLoaded = false;
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('tab-plan').classList.toggle('active', tab === 'plan');
+  document.getElementById('tab-board').classList.toggle('active', tab === 'board');
+  document.getElementById('save-bar').style.display = tab === 'plan' ? 'flex' : 'none';
+  if (tab === 'board' && !boardLoaded) { boardLoaded = true; initCountdown(); loadDashboard(); }
+}
+
+// ════════════════════════════════════════════════
+// Tab 1：备库计划
+// ════════════════════════════════════════════════
+
+const PRODUCTS = [
+  { name:'Ultra双效', key:'ultra',
+    sphs:[0,-0.5,-1,-1.5,-2,-2.5,-3,-3.5,-4,-4.5,-5,-5.5,-6],
+    cyls:[0,-0.25,-0.5,-0.75,-1,-1.25,-1.5,-1.75,-2] },
+  { name:'时空之眼', key:'sky',
+    sphs:[0,-0.5,-1,-1.5,-2,-2.5,-3,-3.5,-4,-4.5,-5,-5.5,-6],
+    cyls:[0,-0.25,-0.5,-0.75,-1,-1.25,-1.5,-1.75,-2] },
+  { name:'小旋风', key:'storm',
+    sphs:[0,-0.5,-1,-1.5,-2,-2.5,-3,-3.5,-4,-4.5,-5,-5.5,-6],
+    cyls:[0,-0.25,-0.5,-0.75,-1,-1.25,-1.5,-1.75,-2] },
+];
+
+// ABC分类：基于处方分布热力图（临床数据）
+// A=高频80%患者，SPH -1~-3.5 & CYL 0~-1
+// B=中频15%，其余非长尾
+// C=低频5%/长尾，SPH=0或≤-5.5，或CYL≤-1.75
+function getSkuClass(sph, cyl) {
+  const sphRank = (sph >= -3.5 && sph <= -1) ? 0 : (sph === 0 || sph <= -5.5) ? 2 : 1;
+  const cylRank = cyl >= -1 ? 0 : cyl >= -1.5 ? 1 : 2;
+  return ['A','B','C'][Math.max(sphRank, cylRank)];
+}
+
+let stores = [];
+let selectedItems = [];
+let storeIdCtr = 0;
+
+function addStore(name='', target='', actual='') {
+  const id = ++storeIdCtr;
+  stores.push({ id, name, target, actual });
+  renderStoresTable();
+}
+
+function removeStore(id) {
+  stores = stores.filter(s => s.id !== id);
+  renderStoresTable();
+}
+
+function renderStoresTable() {
+  const tbody = document.getElementById('stores-body');
+  document.getElementById('store-count').textContent = `共 ${stores.length} 家`;
+  if (!stores.length) {
+    tbody.innerHTML = `<tr id="stores-empty-row"><td colspan="4" style="text-align:center;color:var(--text-3);font-size:0.8rem;padding:1.25rem">暂无门店，点击下方添加</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = stores.map(s => `
+    <tr data-id="${s.id}">
+      <td style="padding-left:1.25rem"><input class="store-input" type="text" value="${s.name||''}" placeholder="门店名称"></td>
+      <td><input class="store-input num" type="number" min="0" value="${s.target||''}" placeholder="0"></td>
+      <td><input class="store-input num" type="number" min="0" value="${s.actual||''}" placeholder="—" style="color:var(--green)"></td>
+      <td><button class="store-remove" onclick="removeStore(${s.id})">×</button></td>
+    </tr>`).join('');
+}
+
+function renderHeatmap() {
+  document.getElementById('heatmap-body').innerHTML = PRODUCTS.map(p => `
+    <div class="heat-section">
+      <div class="heat-title">${p.name}</div>
+      <div class="heat-table-wrap">
+        <table class="heat-table">
+          <thead><tr>
+            <th class="row-header">SPH \\ CYL</th>
+            ${p.cyls.map(c => `<th>${c.toFixed(2)}</th>`).join('')}
+          </tr></thead>
+          <tbody>
+            ${p.sphs.map(sph => `<tr>
+              <td class="sku-label">${sph.toFixed(2)}</td>
+              ${p.cyls.map(cyl => {
+                const cls = getSkuClass(sph, cyl);
+                const sel = selectedItems.some(i => i.sku===p.name && i.sph===sph && i.cyl===cyl);
+                const tip = cls==='C' ? ' title="C类·不建议备货·不可退货"' : '';
+                return `<td class="sku-${cls.toLowerCase()}${sel?' selected':''}"
+                  data-sku="${p.name}" data-sph="${sph}" data-cyl="${cyl}"
+                  onclick="toggleCell(this,'${p.name}',${sph},${cyl},'${cls}')"${tip}>${cls}</td>`;
+              }).join('')}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`).join('');
+}
+
+function toggleCell(el, sku, sph, cyl, cls) {
+  const idx = selectedItems.findIndex(i => i.sku===sku && i.sph===sph && i.cyl===cyl);
+  if (idx >= 0) { selectedItems.splice(idx, 1); el.classList.remove('selected'); }
+  else { selectedItems.push({sku, sph, cyl, cls, qty:10}); el.classList.add('selected'); }
+  renderSelectedList();
+}
+
+function autoDistribute() {
+  const totals = {
+    'Ultra双效': Number(document.getElementById('auto-ultra').value||0),
+    '时空之眼':  Number(document.getElementById('auto-sky').value||0),
+    '小旋风':    Number(document.getElementById('auto-storm').value||0),
+  };
+  // 清除旧选择
+  selectedItems = [];
+  document.querySelectorAll('.heat-table td.selected').forEach(el => el.classList.remove('selected'));
+
+  for (const p of PRODUCTS) {
+    const total = totals[p.name];
+    if (!total) continue;
+    const aSkus = [], bSkus = [];
+    for (const sph of p.sphs) for (const cyl of p.cyls) {
+      const cls = getSkuClass(sph, cyl);
+      if (cls==='A') aSkus.push({sph,cyl,cls});
+      else if (cls==='B') bSkus.push({sph,cyl,cls});
+    }
+    // A 类分配 80%，B 类分配 15%，C 类不备货
+    const qtyA = Math.round(total * 0.80);
+    const qtyB = total - qtyA;
+    const perA = aSkus.length ? Math.max(1, Math.round(qtyA / aSkus.length)) : 0;
+    const perB = bSkus.length ? Math.max(1, Math.round(qtyB / bSkus.length)) : 0;
+
+    for (const s of aSkus) {
+      selectedItems.push({sku:p.name, sph:s.sph, cyl:s.cyl, cls:'A', qty:perA});
+      const cell = document.querySelector(`[data-sku="${p.name}"][data-sph="${s.sph}"][data-cyl="${s.cyl}"]`);
+      if (cell) cell.classList.add('selected');
+    }
+    for (const s of bSkus) {
+      if (perB > 0) {
+        selectedItems.push({sku:p.name, sph:s.sph, cyl:s.cyl, cls:'B', qty:perB});
+        const cell = document.querySelector(`[data-sku="${p.name}"][data-sph="${s.sph}"][data-cyl="${s.cyl}"]`);
+        if (cell) cell.classList.add('selected');
+      }
+    }
+  }
+  renderSelectedList();
+}
+
+function renderSelectedList() {
+  const total = selectedItems.reduce((s,i) => s+(i.qty||0), 0);
+  document.getElementById('total-qty').textContent = total.toLocaleString();
+  document.getElementById('selected-total-badge').textContent = total.toLocaleString() + ' 片';
+  document.getElementById('heat-selected-count').textContent = `已选 ${selectedItems.length} 个SKU`;
+  const el = document.getElementById('selected-list');
+  if (!selectedItems.length) { el.innerHTML = '<div class="empty-tip">从左侧热力图点击选择</div>'; return; }
+
+  // 按产品分组展示
+  const groups = {};
+  for (const item of selectedItems) {
+    if (!groups[item.sku]) groups[item.sku] = [];
+    groups[item.sku].push(item);
+  }
+  el.innerHTML = Object.entries(groups).map(([sku, items]) => `
+    <div style="margin-bottom:0.75rem">
+      <div style="font-size:0.72rem;font-weight:700;color:var(--navy-dark);margin-bottom:0.35rem;padding:0 0.1rem">${sku}</div>
+      ${items.map((item, gi) => {
+        const globalIdx = selectedItems.indexOf(item);
+        const tagCls = `sel-class-${item.cls.toLowerCase()}`;
+        return `<div class="sel-item">
+          <div>
+            <span class="sel-params">SPH ${item.sph.toFixed(2)} / CYL ${item.cyl.toFixed(2)}</span>
+            <span class="sel-class-tag ${tagCls}">${item.cls}</span>
+          </div>
+          <div class="sel-qty-wrap">
+            <button onclick="changeQty(${globalIdx},-5)">−</button>
+            <input type="number" min="1" value="${item.qty}"
+              oninput="selectedItems[${globalIdx}].qty=Math.max(1,Number(this.value)||1);updateTotals()">
+            <button onclick="changeQty(${globalIdx},5)">＋</button>
+          </div>
+          <button class="sel-remove" onclick="removeSelected(${globalIdx})">×</button>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+
+function changeQty(i, delta) {
+  selectedItems[i].qty = Math.max(1, (selectedItems[i].qty||0)+delta);
+  renderSelectedList();
+}
+
+function removeSelected(i) {
+  const item = selectedItems[i];
+  selectedItems.splice(i, 1);
+  const cell = document.querySelector(`[data-sku="${item.sku}"][data-sph="${item.sph}"][data-cyl="${item.cyl}"]`);
+  if (cell) cell.classList.remove('selected');
+  renderSelectedList();
+}
+
+function updateTotals() {
+  const total = selectedItems.reduce((s,i) => s+(i.qty||0), 0);
+  document.getElementById('total-qty').textContent = total.toLocaleString();
+  document.getElementById('selected-total-badge').textContent = total.toLocaleString() + ' 片';
+}
+
+async function savePlan() {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = '保存中…';
+
+  const ultra = Number(document.getElementById('t-ultra').value||0);
+  const sky   = Number(document.getElementById('t-sky').value||0);
+  const storm = Number(document.getElementById('t-storm').value||0);
+
+  const storeList = Array.from(document.querySelectorAll('#stores-body tr[data-id]')).map(tr => {
+    const inp = tr.querySelectorAll('input');
+    return { name: inp[0].value.trim(), target: Number(inp[1].value||0), actual: Number(inp[2].value||0) };
+  }).filter(s => s.name);
+
+  try {
+    await fetch(`${API}/api/summer-plan?t=${token}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ targets:{ultra,sky,storm}, stores:storeList, status:'草稿' }),
+    });
+    if (selectedItems.length) {
+      const stockMap = {ultra:0, sky:0, storm:0};
+      for (const item of selectedItems) {
+        if (item.sku==='Ultra双效') stockMap.ultra += item.qty;
+        else if (item.sku==='时空之眼') stockMap.sky += item.qty;
+        else if (item.sku==='小旋风') stockMap.storm += item.qty;
+      }
+      stockMap.skuDetail = JSON.stringify(selectedItems);
+      await fetch(`${API}/api/summer-plan/stock?t=${token}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(stockMap),
+      });
+    }
+    const ok = document.getElementById('save-ok');
+    ok.style.display='inline'; setTimeout(()=>{ ok.style.display='none'; }, 3000);
+  } catch(e) { alert('保存失败：'+e.message); }
+  btn.disabled=false; btn.textContent='保存计划';
+}
+
+async function submitConfirm() {
+  if (!confirm('确认正式提交暑期备库计划？\n提交后视为确认，可随时导出 Excel 留存。')) return;
+  const btn = document.getElementById('confirm-btn');
+  btn.disabled = true; btn.textContent = '提交中…';
+
+  const ultra = Number(document.getElementById('t-ultra').value||0);
+  const sky   = Number(document.getElementById('t-sky').value||0);
+  const storm = Number(document.getElementById('t-storm').value||0);
+  const storeList = Array.from(document.querySelectorAll('#stores-body tr[data-id]')).map(tr => {
+    const inp = tr.querySelectorAll('input');
+    return { name: inp[0].value.trim(), target: Number(inp[1].value||0), actual: Number(inp[2].value||0) };
+  }).filter(s => s.name);
+
+  try {
+    await fetch(`${API}/api/summer-plan?t=${token}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ targets:{ultra,sky,storm}, stores:storeList, status:'已确认' }),
+    });
+    if (selectedItems.length) {
+      const stockMap = {ultra:0, sky:0, storm:0};
+      for (const item of selectedItems) {
+        if (item.sku==='Ultra双效') stockMap.ultra += item.qty;
+        else if (item.sku==='时空之眼') stockMap.sky += item.qty;
+        else if (item.sku==='小旋风') stockMap.storm += item.qty;
+      }
+      stockMap.skuDetail = JSON.stringify(selectedItems);
+      await fetch(`${API}/api/summer-plan/stock?t=${token}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(stockMap),
+      });
+    }
+    btn.textContent = '✓ 已确认提交';
+    btn.style.background = '#219a52';
+    document.getElementById('save-btn').disabled = true;
+  } catch(e) {
+    alert('提交失败：'+e.message);
+    btn.disabled=false; btn.textContent='提交确认 →';
+  }
+}
+
+function exportExcel() {
+  if (typeof XLSX === 'undefined') { alert('Excel 组件加载中，请稍后重试'); return; }
+  const agentName = document.getElementById('agent-display').textContent || '代理商';
+  const ultra = document.getElementById('t-ultra').value||0;
+  const sky   = document.getElementById('t-sky').value||0;
+  const storm = document.getElementById('t-storm').value||0;
+
+  // Sheet 1: 计划摘要
+  const summary = [
+    ['暑期备库计划', ''],
+    ['代理商', agentName],
+    ['导出时间', new Date().toLocaleString('zh-CN')],
+    ['', ''],
+    ['产品', '暑期目标（片）'],
+    ['Ultra双效', ultra],
+    ['时空之眼', sky],
+    ['小旋风', storm],
+  ];
+
+  // Sheet 2: A类门店
+  const storeRows = [['门店名称', '暑期目标（片）', '实际销量（片）']];
+  document.querySelectorAll('#stores-body tr[data-id]').forEach(tr => {
+    const inp = tr.querySelectorAll('input');
+    storeRows.push([inp[0].value, inp[1].value||0, inp[2].value||0]);
+  });
+
+  // Sheet 3: 备库清单（按产品分组）
+  const stockRows = [['产品', 'SPH', 'CYL', 'ABC分类', '建议备货量（片）', '退货政策']];
+  const policyMap = { A:'可退货', B:'6个月内可退', C:'不可退货' };
+  selectedItems.forEach(item => {
+    stockRows.push([item.sku, item.sph.toFixed(2), item.cyl.toFixed(2), item.cls, item.qty, policyMap[item.cls]||'']);
+  });
+  // 追加合计行
+  const total = selectedItems.reduce((s,i)=>s+(i.qty||0),0);
+  stockRows.push(['', '', '', '合计', total, '']);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), '计划摘要');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(storeRows), 'A类门店');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(stockRows), '备库清单');
+
+  const date = new Date().toLocaleDateString('zh-CN').replace(/\//g,'-');
+  XLSX.writeFile(wb, `暑期备库计划_${agentName}_${date}.xlsx`);
+}
+
+async function initPlan() {
+  if (!token) { document.getElementById('agent-display').textContent='无效链接'; return; }
+  try {
+    const r = await fetch(`${API}/api/summer-plan?t=${token}`);
+    const d = await r.json();
+    document.getElementById('agent-display').textContent = d.agent?.name || d.name || '';
+    const plan = d.plan;
+    if (plan) {
+      document.getElementById('t-ultra').value = plan.target_ultra||0;
+      document.getElementById('t-sky').value   = plan.target_sky||0;
+      document.getElementById('t-storm').value = plan.target_storm||0;
+      try {
+        const parsed = typeof plan.stores==='string' ? JSON.parse(plan.stores) : (plan.stores||[]);
+        for (const s of parsed) addStore(s.name||'', s.target||'', s.actual||'');
+      } catch{}
+    }
+  } catch{}
+  renderHeatmap();
+  renderSelectedList();
+}
+
+// ════════════════════════════════════════════════
+// Tab 2：看板
+// ════════════════════════════════════════════════
+
+function initCountdown() {
+  const S = new Date('2026-07-01').getTime();
+  const E = new Date('2026-10-08T23:59:59').getTime();
+  const now = Date.now();
+  const el = Math.max(0, Math.floor((now-S)/86400000));
+  const lf = Math.max(0, Math.ceil((E-now)/86400000));
+  const pct = Math.min(100, Math.round(el/99*100));
+  document.getElementById('days-elapsed').textContent = el;
+  document.getElementById('days-left').textContent = lf;
+  document.getElementById('progress-pct').textContent = pct+'%';
+  document.getElementById('progress-fill').style.width = pct+'%';
+}
+
+function pct2(a,b) { return (!b)?0:Math.min(100,Math.round(a/b*100)); }
+let trendChart = null;
+
+function renderKPI(plan, summary) {
+  // KPI 1: 门店销售汇总（来自 store.actual）
+  let storeList = [];
+  try { storeList = typeof plan?.stores==='string' ? JSON.parse(plan.stores) : (plan?.stores||[]); } catch{}
+  const salesActual = storeList.reduce((s,r)=>s+(Number(r.actual)||0), 0);
+  const salesTarget = storeList.reduce((s,r)=>s+(Number(r.target)||0), 0);
+  const salesRate = pct2(salesActual, salesTarget);
+  document.getElementById('kpi-sales').innerHTML = `${salesActual.toLocaleString()}<span>片</span>`;
+  document.getElementById('kpi-sales-rate').textContent = `▲ 完成率 ${salesRate}%`;
+  document.getElementById('kpi-sales-bar').style.width = salesRate+'%';
+  document.getElementById('kpi-sales-detail').textContent = `目标 ${salesTarget.toLocaleString()} 片 · 剩余 ${Math.max(0,salesTarget-salesActual).toLocaleString()} 片`;
+
+  // KPI 2: Ultra
+  const ur = pct2(summary.ultraIn||0, summary.targetUltra||0);
+  document.getElementById('kpi-ultra').innerHTML = `${summary.ultraIn||0}<span>片</span>`;
+  document.getElementById('kpi-ultra-rate').textContent = `▲ 销售完成率 ${ur}%`;
+  document.getElementById('kpi-ultra-bar').style.width = ur+'%';
+  document.getElementById('kpi-ultra-detail').textContent = `目标 ${summary.targetUltra||0} 片`;
+
+  // KPI 3: 时空之眼+小旋风
+  const otherIn = (summary.skyIn||0)+(summary.stormIn||0);
+  const otherTgt = (summary.targetSky||0)+(summary.targetStorm||0);
+  const or = pct2(otherIn, otherTgt);
+  document.getElementById('kpi-other').innerHTML = `${otherIn}<span>片</span>`;
+  document.getElementById('kpi-other-rate').textContent = `销售完成率 ${or}%`;
+  document.getElementById('kpi-other-bar').style.width = or+'%';
+  document.getElementById('kpi-other-detail').textContent = `目标 ${otherTgt} 片`;
+}
+
+function renderTrend(trend) {
+  const months = trend.map(t=>t.month.replace(/^\d{4}-/,'').replace(/^0/,'')+'月');
+  const qtys = trend.map(t=>t.qty);
+  if (!trendChart) trendChart = echarts.init(document.getElementById('chart-trend'));
+  trendChart.setOption({
+    grid:{top:10,right:10,bottom:24,left:40},
+    xAxis:{type:'category',data:months,
+      axisLine:{lineStyle:{color:'#dde6ef'}},axisTick:{show:false},
+      axisLabel:{fontSize:11,color:'#8a9ab0'}},
+    yAxis:{type:'value',axisLabel:{fontSize:11,color:'#8a9ab0'},
+      splitLine:{lineStyle:{color:'#f0f4f8'}}},
+    series:[{type:'bar',data:qtys,itemStyle:{color:'#2471a3',borderRadius:[4,4,0,0]}}],
+    tooltip:{trigger:'axis',axisPointer:{type:'shadow'}},
+  });
+  window.addEventListener('resize',()=>trendChart&&trendChart.resize());
+}
+
+function renderProductProgress(plan, summary) {
+  const el = document.getElementById('target-progress');
+  if (!plan) { el.innerHTML='<div style="text-align:center;color:var(--text-3);padding:1rem;font-size:0.82rem">尚未填写计划</div>'; return; }
+  const rows = [
+    {name:'Ultra',     in:summary.ultraIn||0,  target:plan.target_ultra, color:'var(--navy-light)'},
+    {name:'时空之眼', in:summary.skyIn||0,    target:plan.target_sky,   color:'var(--orange)'},
+    {name:'小旋风',   in:summary.stormIn||0,  target:plan.target_storm, color:'var(--green)'},
+  ];
+  el.innerHTML = rows.map(r => {
+    const p = pct2(r.in, r.target);
+    return `<div class="target-row">
+      <div class="target-name">${r.name}</div>
+      <div class="target-track">
+        <div class="target-nums"><span>已进 ${r.in} 片</span><span>目标 ${r.target||0} 片</span></div>
+        <div class="target-bg"><div class="target-fill" style="width:${p}%;background:${r.color}"></div></div>
+      </div>
+      <div class="target-pct" style="color:${r.color}">${p}%</div>
+    </div>`;
+  }).join('');
+}
+
+function renderBoardStores(plan) {
+  const el = document.getElementById('board-store-body');
+  if (!plan) { el.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:0.82rem;padding:1.5rem">尚未填写计划</div>'; return; }
+  let storeList = [];
+  try { storeList = typeof plan.stores==='string' ? JSON.parse(plan.stores) : (plan.stores||[]); } catch{}
+
+  const totalActual = storeList.reduce((s,r)=>s+(Number(r.actual)||0),0);
+  const totalTarget = storeList.reduce((s,r)=>s+(Number(r.target)||0),0);
+
+  const sumEl = document.getElementById('board-store-summary');
+  sumEl.style.display='flex';
+  document.getElementById('ss-actual').textContent = totalActual.toLocaleString();
+  document.getElementById('ss-target').textContent = totalTarget.toLocaleString();
+  document.getElementById('ss-stores').textContent = storeList.length;
+  const op = pct2(totalActual, totalTarget);
+  const pctEl = document.getElementById('ss-pct');
+  pctEl.textContent = op+'%';
+  if (op>=80){pctEl.style.background='#edf7f1';pctEl.style.color='var(--green)';}
+  else if (op>=50){pctEl.style.background='#fdf8ec';pctEl.style.color='var(--orange)';}
+
+  if (!storeList.length) {
+    el.innerHTML='<div style="text-align:center;color:var(--text-3);font-size:0.82rem;padding:1.5rem">计划中未填写门店</div>'; return;
+  }
+  el.innerHTML=`<table class="board-table">
+    <thead><tr>
+      <th style="padding-left:1.25rem">门店名称</th>
+      <th class="r">暑期目标</th>
+      <th class="r">实际销量</th>
+      <th class="r" style="padding-right:1.25rem">完成率</th>
+    </tr></thead>
+    <tbody>
+      ${storeList.map(s => {
+        const tgt = Number(s.target)||0;
+        const act = Number(s.actual)||0;
+        const p = pct2(act, tgt);
+        const hasData = act > 0;
+        const barColor = p>=80?'var(--green)':p>=40?'var(--navy-light)':'var(--orange)';
+        const dotColor = hasData ? (p>=80?'var(--green)':p>=40?'var(--navy-light)':'var(--orange)') : 'var(--text-3)';
+        return `<tr>
+          <td style="padding-left:1.25rem"><div class="store-name-cell"><span class="store-dot" style="background:${dotColor}"></span>${s.name||'—'}</div></td>
+          <td class="td-r">${tgt} 片</td>
+          <td class="td-actual" style="color:${hasData?'var(--green)':'var(--text-3)'}">${hasData?act+' 片':'—'}</td>
+          <td style="text-align:right;padding-right:1.25rem">
+            <div class="prog-wrap">
+              <div class="prog-bg"><div class="prog-fill" style="width:${p}%;background:${barColor}"></div></div>
+              <div class="prog-num" style="color:${hasData?barColor:'var(--text-3)'}">${hasData?p+'%':'—'}</div>
+            </div>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function loadDashboard() {
+  try {
+    const r = await fetch(`${API}/api/summer-dashboard?t=${token}`);
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    renderKPI(d.plan, d.summary||{});
+    renderTrend(d.trend||[]);
+    renderProductProgress(d.plan, d.summary||{});
+    renderBoardStores(d.plan);
+  } catch {
+    document.getElementById('board-store-body').innerHTML='<div style="text-align:center;color:var(--text-3);padding:1.5rem">加载失败，请刷新重试</div>';
+  }
+}
+
+initPlan();
+</script>
+</body>
+</html>
