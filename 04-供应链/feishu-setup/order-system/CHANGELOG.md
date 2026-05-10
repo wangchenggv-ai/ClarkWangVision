@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## 2026-05-10 — 合并下单系统 + 导出记录系统
+
+### 合并下单系统
+- **新增 `lib/batch-merge.js`**：合并逻辑，状态写"已下单"，不生成镜片码
+- **新增 `public/batch-merge.html`**：拖拽上传+可编辑预览+确认
+- **新增 API**：`/api/admin/batch-merge/parse`（解析Excel）+ `/api/admin/batch-merge/confirm`（确认导入）
+- **场景**：助理汇总多个代理商散单，每个Excel对应一个订单，支持多代理商
+
+### 导出记录系统
+- **新增 `lib/export-log.js`**：导出记录管理（检查/记录/查询/状态）
+- **创建飞书导出记录表**：`tblBhxfut1XWWP0Q`（导出类型/批次号/订单号/镜片码/时间/操作人/文件名/备注）
+- **改造 batch-zip 端点**：导出后记录日志
+- **改造 print-queue 端点**：入队前防重复检查，打印完成后记录日志
+- **改造 slip 端点**：生成通行单后记录日志
+- **新增 API**：
+  - `/api/admin/statement` — 代理商对账单（按代理商+时间范围查询已发货订单，生成Excel）
+  - `/api/admin/export-logs` — 查询导出记录
+  - `/api/admin/export-status` — 批量查询订单导出状态
+- **前端改造**：`orders.html` 新增"导出状态"列，显示工厂/标签/通行单/对账单状态
+
+### 测试
+- 本地 Docker 测试通过
+
+---
+
 ## 2026-05-10 — orders.html 三项修复（待部署）
 
 ### 删除"有无库存"显示
