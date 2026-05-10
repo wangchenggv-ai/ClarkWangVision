@@ -12,6 +12,7 @@ export const APP_TOKEN = isTest
   : "B3xQbbqicaome1sKdZbcwdk8nWg";
 
 const prod = {
+  summer_target: "tblbe05eY32IlUcw",
   order: "tblk9Ch4gk2uQ1zG",
   lens_detail: "tblC7pve7ObFgIOl",
   customer: "tbltXNNhF65EBl17",

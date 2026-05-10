@@ -11,7 +11,7 @@ export function init({ base, appToken, env }) {
 }
 
 export async function getFeishuToken() {
-  if (Date.now() - _feishuTokenTime < 7000 * 1000 && _feishuToken) return _feishuToken;
+  if (Date.now() - _feishuTokenTime < 5000 * 1000 && _feishuToken) return _feishuToken;
   const res = await fetch(`${BASE}/auth/v3/tenant_access_token/internal`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -45,10 +45,13 @@ export async function feishuApi(method, path, body) {
     return null;
   }
   if (json.code !== 0) {
-    console.error(`  飞书 API 错误 [${method} ${path}]:`, json.msg);
-    if (json.code === 99991663 || /invalid access token/i.test(json.msg || "")) {
+    console.error(`  飞书 API 错误 [${method} ${path}]: code=${json.code} msg=${json.msg}`);
+    // token 相关错误一律清除缓存，下次调用会重新获取
+    if (json.code === 99991663 || json.code === 99991664 ||
+        /invalid access token|token.*expired|token.*revoked/i.test(json.msg || "")) {
       _feishuToken = "";
       _feishuTokenTime = 0;
+      console.log(`  🔄 token 已清除，下次调用将重新获取`);
     }
     return null;
   }

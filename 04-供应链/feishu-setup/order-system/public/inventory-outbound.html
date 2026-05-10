@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>出库验货 — 高视高清</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <style>
+    body { background:#f0f2f5; }
+    .page-header { background:#fff; padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+    .page-header h1 { font-size:16px; font-weight:700; }
+    .main { max-width:640px; margin:24px auto; }
+    .card { background:#fff; border-radius:var(--radius-sm); border:1px solid var(--border); padding:20px 24px; margin-bottom:16px; }
+    .section-title { font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:12px; text-transform:uppercase; letter-spacing:.5px; }
+    .order-row { display:flex; gap:8px; }
+    .order-input { flex:1; padding:10px 14px; border:2px solid var(--brand); border-radius:8px; font-size:14px; font-family:var(--font-num); }
+    .order-input:focus { outline:none; box-shadow:0 0 0 3px var(--brand-light); }
+    .btn { padding:9px 18px; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-family:var(--font); font-weight:600; }
+    .btn-primary { background:var(--brand); color:#fff; }
+    .btn-success { background:var(--success); color:#fff; }
+    .btn-success:disabled { opacity:.4; cursor:not-allowed; }
+    .req-table { width:100%; border-collapse:collapse; }
+    .req-table th { font-size:12px; text-align:left; padding:8px 8px; color:var(--text-muted); border-bottom:1px solid var(--border); }
+    .req-table td { padding:10px 8px; border-bottom:1px solid #f0f0f0; font-size:13px; vertical-align:middle; }
+    .req-table tr:last-child td { border-bottom:none; }
+    .scan-cell { display:flex; gap:6px; align-items:center; }
+    .scan-field { flex:1; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:var(--font-num); }
+    .scan-field.ok { border-color:var(--success); background:#f0faf6; }
+    .scan-field.err { border-color:var(--error); background:#fdecec; }
+    .status-icon { font-size:18px; width:24px; text-align:center; }
+    .badge-pending { background:#f0f2f5; color:var(--text-muted); padding:2px 8px; border-radius:10px; font-size:11px; }
+    .badge-ok { background:#e8f8f5; color:var(--success); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+    .badge-err { background:#fdecec; color:var(--error); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+    .err-msg { font-size:11px; color:var(--error); margin-top:3px; }
+    .progress-bar { height:4px; background:#eee; border-radius:2px; margin-bottom:14px; }
+    .progress-fill { height:100%; background:var(--success); border-radius:2px; transition:.3s; }
+    .confirm-area { text-align:center; padding-top:8px; }
+    .confirm-btn { width:100%; padding:12px; font-size:15px; }
+    .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:10px 20px; border-radius:8px; font-size:13px; opacity:0; transition:.3s; pointer-events:none; z-index:999; }
+    .toast.show { opacity:1; }
+    .empty { color:var(--text-muted); font-size:13px; text-align:center; padding:20px 0; }
+    .order-meta { font-size:12px; color:var(--text-muted); margin-top:8px; }
+  </style>
+</head>
+<body>
+<div class="page-header">
+  <h1>出库验货</h1>
+</div>
+
+<div class="main">
+  <div class="card">
+    <div class="section-title">扫码或输入订单号</div>
+    <div class="order-row">
+      <input id="orderInput" class="order-input" type="text" placeholder="扫随货单条码 / 输入 ORD-XXXXXX" autocomplete="off" autofocus>
+      <button class="btn btn-primary" onclick="loadOrder()">加载</button>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">支持扫随货单条码（自动识别订单号）或手动输入</div>
+    <div class="order-meta" id="orderMeta"></div>
+  </div>
+
+  <div class="card" id="verifyCard" style="display:none">
+    <div class="section-title">逐一扫码验货</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <table class="req-table">
+      <thead><tr><th>#</th><th>型号</th><th>SPH / CYL</th><th>需求</th><th>扫码</th><th>状态</th></tr></thead>
+      <tbody id="reqBody"></tbody>
+    </table>
+    <div class="confirm-area" style="margin-top:16px;">
+      <button id="confirmBtn" class="btn btn-success confirm-btn" disabled onclick="confirmOutbound()">
+        全部验证通过，确认出库
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const token = new URLSearchParams(location.search).get("admin") || "";
+const authQ = `?admin=${token}`;
+let requirements = [];
+let verifyState = []; // per-line: { verified: bool, scannedBarcode: string }
+
+document.getElementById("orderInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") loadOrder();
+});
+
+function extractOrderNo(raw) {
+  const s = raw.trim();
+  // URL形式（QR码扫出来的）：取 orderNo 参数
+  try {
+    const u = new URL(s);
+    const v = u.searchParams.get("orderNo");
+    if (v) return v;
+  } catch(_) {}
+  // ORD- 开头直接返回
+  const m = s.match(/(ORD-\d{8}-[A-Z0-9]+)/i);
+  if (m) return m[1].toUpperCase();
+  return s;
+}
+
+async function loadOrder() {
+  const raw = document.getElementById("orderInput").value.trim();
+  if (!raw) return;
+  const orderNo = extractOrderNo(raw);
+  document.getElementById("orderInput").value = orderNo;
+  document.getElementById("orderMeta").textContent = "加载中...";
+  document.getElementById("verifyCard").style.display = "none";
+  try {
+    const res = await fetch(`/api/inventory/outbound-requirements/${encodeURIComponent(orderNo)}${authQ}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "加载失败");
+    requirements = data.requirements;
+    verifyState = requirements.map(() => ({ verified: false, scannedBarcode: "", error: "" }));
+    document.getElementById("orderMeta").textContent = `订单 ${data.orderNo}，共 ${requirements.length} 种SKU，${requirements.reduce((s,r)=>s+r.qty,0)} 片`;
+    renderRequirements();
+    document.getElementById("verifyCard").style.display = "block";
+    // focus first scan input
+    const first = document.querySelector(".scan-field");
+    if (first) first.focus();
+  } catch(e) {
+    document.getElementById("orderMeta").textContent = "❌ " + e.message;
+  }
+}
+
+function renderRequirements() {
+  const tbody = document.getElementById("reqBody");
+  tbody.innerHTML = requirements.map((req, i) => {
+    const st = verifyState[i];
+    const statusBadge = st.verified
+      ? `<span class="badge-ok">✓ 已验</span>`
+      : st.error
+        ? `<span class="badge-err">✗ 不符</span>`
+        : `<span class="badge-pending">待扫</span>`;
+    const fieldCls = st.verified ? "ok" : st.error ? "err" : "";
+    return `<tr id="row-${i}">
+      <td>${i+1}</td>
+      <td style="font-weight:600">${req.sku}</td>
+      <td style="font-family:var(--font-num)">${fmtNum(req.sph)} / ${fmtNum(req.cyl)}</td>
+      <td>${req.qty} 片</td>
+      <td>
+        <div class="scan-cell">
+          <input class="scan-field ${fieldCls}" id="sf-${i}" type="text"
+            placeholder="${req.barcode}"
+            value="${st.scannedBarcode}"
+            ${st.verified ? "disabled" : ""}
+            onkeydown="handleScanKey(event, ${i})"
+            oninput="clearRowError(${i})">
+        </div>
+        ${st.error ? `<div class="err-msg">${st.error}</div>` : ""}
+      </td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join("");
+  updateProgress();
+}
+
+function handleScanKey(e, idx) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    verifyScan(idx);
+  }
+}
+
+function clearRowError(idx) {
+  if (verifyState[idx].error) {
+    verifyState[idx].error = "";
+    renderRequirements();
+    document.getElementById(`sf-${idx}`)?.focus();
+  }
+}
+
+function verifyScan(idx) {
+  const input = document.getElementById(`sf-${idx}`);
+  const scanned = (input?.value || "").trim().toUpperCase();
+  if (!scanned) return;
+  const req = requirements[idx];
+  if (scanned === req.barcode) {
+    verifyState[idx] = { verified: true, scannedBarcode: scanned, error: "" };
+    renderRequirements();
+    // auto-focus next unverified
+    const next = verifyState.findIndex((s, i) => i > idx && !s.verified);
+    if (next >= 0) document.getElementById(`sf-${next}`)?.focus();
+  } else {
+    verifyState[idx] = { verified: false, scannedBarcode: scanned, error: `条码不符！应为 ${req.barcode}，扫到 ${scanned}` };
+    renderRequirements();
+    // re-focus same field for re-scan
+    const field = document.getElementById(`sf-${idx}`);
+    if (field) { field.value = ""; field.focus(); }
+  }
+}
+
+function updateProgress() {
+  const done = verifyState.filter(s => s.verified).length;
+  const total = requirements.length;
+  document.getElementById("progressFill").style.width = total ? `${(done/total*100).toFixed(0)}%` : "0%";
+  const allDone = done === total && total > 0;
+  document.getElementById("confirmBtn").disabled = !allDone;
+  document.getElementById("confirmBtn").textContent = allDone
+    ? `全部 ${total} 片验证通过，确认出库`
+    : `等待验证 (${done}/${total})`;
+}
+
+async function confirmOutbound() {
+  const orderNo = document.getElementById("orderInput").value.trim();
+  const btn = document.getElementById("confirmBtn");
+  btn.disabled = true;
+  btn.textContent = "提交中...";
+  try {
+    const lines = requirements.map(r => ({ sku: r.sku, sph: r.sph, cyl: r.cyl, qty: r.qty }));
+    const res = await fetch(`/api/admin/stock-movement${authQ}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "出库", source: "订单发货",
+        lines, refNo: orderNo,
+        note: `扫码出库验货 ${orderNo}`
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "出库失败");
+    showToast(`出库成功！单据 ${data.docNo}`);
+    document.getElementById("verifyCard").style.display = "none";
+    document.getElementById("orderInput").value = "";
+    document.getElementById("orderMeta").textContent = "";
+    requirements = [];
+    verifyState = [];
+    document.getElementById("orderInput").focus();
+  } catch(e) {
+    showToast("出库失败: " + e.message, true);
+    btn.disabled = false;
+    btn.textContent = "全部验证通过，确认出库";
+  }
+}
+
+function fmtNum(v) {
+  const n = Number(v);
+  return (n >= 0 ? "+" : "") + n.toFixed(2);
+}
+
+function showToast(msg, isErr = false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.style.background = isErr ? "var(--error)" : "#222";
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 3000);
+}
+</script>
+</body>
+</html>

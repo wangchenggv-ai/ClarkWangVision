@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批量发货管理 — 高视高清</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <style>
+    body { background:#f0f2f5; }
+    .page-header { background:#fff; padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+    .page-header h1 { font-size:16px; font-weight:700; flex:1; }
+    .main { max-width:900px; margin:20px auto; }
+    .card { background:#fff; border-radius:var(--radius-sm); border:1px solid var(--border); padding:0; margin-bottom:14px; overflow:hidden; }
+    .card-header { padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; background:#fafbfc; }
+    .card-body { padding:16px 20px; }
+    .blk-no { font-family:var(--font-num); font-size:13px; font-weight:700; }
+    .agent-name { font-size:13px; color:var(--text-muted); }
+    .stat { font-size:12px; }
+    .btn { padding:7px 14px; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-family:var(--font); font-weight:600; transition:.15s; }
+    .btn-primary { background:var(--brand); color:#fff; }
+    .btn-success { background:var(--success); color:#fff; }
+    .btn-success:disabled { opacity:.4; cursor:not-allowed; }
+    .btn-outline { background:#fff; border:1px solid var(--border); color:var(--text); }
+    .btn-sm { padding:4px 10px; font-size:12px; }
+    .status-badge { padding:3px 10px; border-radius:10px; font-size:11px; font-weight:700; }
+    .s-待出库 { background:#f0f2f5; color:#666; }
+    .s-已出库 { background:#e8f8f5; color:var(--success); }
+    .s-已发货 { background:#e8f0ff; color:var(--brand); }
+    .lines-mini { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
+    .line-chip { background:#f0f2f5; border-radius:4px; padding:3px 8px; font-size:11px; font-family:var(--font-num); }
+    .shortage-chip { background:#fdecec; color:var(--error); }
+    .actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px; }
+    .tracking-row { display:flex; gap:8px; align-items:center; }
+    .tracking-input { padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; width:200px; }
+    .empty { text-align:center; padding:48px; color:var(--text-muted); font-size:13px; }
+    .filter-bar { background:#fff; border-bottom:1px solid var(--border); padding:10px 20px; display:flex; gap:10px; align-items:center; }
+    .filter-bar select { padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; }
+    .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:10px 20px; border-radius:8px; font-size:13px; opacity:0; transition:.3s; pointer-events:none; z-index:999; }
+    .toast.show { opacity:1; }
+    .section-title { font-size:13px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:.5px; }
+  </style>
+</head>
+<body>
+<div class="page-header">
+  <h1>批量发货管理</h1>
+  <a id="toOrder" href="#" class="btn btn-primary btn-sm">新建批量单</a>
+</div>
+
+<div class="filter-bar">
+  <span class="section-title" style="margin:0">筛选</span>
+  <select id="statusFilter" onchange="loadList()">
+    <option value="">全部状态</option>
+    <option value="待出库">待出库</option>
+    <option value="已出库">已出库</option>
+    <option value="已发货">已发货</option>
+  </select>
+  <button class="btn btn-outline btn-sm" onclick="loadList()">刷新</button>
+</div>
+
+<div class="main" id="listArea">
+  <p class="empty">加载中...</p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const token = new URLSearchParams(location.search).get("admin") || "";
+const authQ = `?admin=${token}`;
+document.getElementById("toOrder").href = `/bulk-order${authQ}`;
+
+async function loadList() {
+  const status = document.getElementById("statusFilter").value;
+  const area = document.getElementById("listArea");
+  area.innerHTML = '<p class="empty">加载中...</p>';
+  try {
+    const r = await fetch(`/api/bulk/list${authQ}&status=${encodeURIComponent(status)}`);
+    const d = await r.json();
+    if (!d.items?.length) { area.innerHTML = '<p class="empty">暂无批量单</p>'; return; }
+    area.innerHTML = d.items.map(b => renderCard(b)).join("");
+  } catch(e) {
+    area.innerHTML = `<p class="empty" style="color:var(--error)">${e.message}</p>`;
+  }
+}
+
+function renderCard(b) {
+  const date = new Date(b.createdAt).toLocaleString("zh-CN", {month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
+  const statusCls = `s-${b.status}`;
+  const actions = {
+    "待出库": `
+      <button class="btn btn-success" onclick="doFulfill('${b.blkNo}')">出库 + 生成标签</button>`,
+    "已出库": `
+      <a href="/api/bulk/labels/${b.blkNo}${authQ}" target="_blank" class="btn btn-primary btn-sm">打印标签</a>
+      <div class="tracking-row">
+        <input class="tracking-input" id="tr-${b.blkNo}" placeholder="输入快递单号" value="${b.trackingNo||''}">
+        <button class="btn btn-success btn-sm" onclick="doShip('${b.blkNo}')">确认发货</button>
+      </div>`,
+    "已发货": `
+      <a href="/api/bulk/labels/${b.blkNo}${authQ}" target="_blank" class="btn btn-outline btn-sm">查看标签</a>
+      <span style="font-size:12px;color:var(--text-muted)">快递: ${b.trackingNo||'—'}</span>`,
+  }[b.status] || "";
+
+  return `<div class="card">
+    <div class="card-header">
+      <span class="blk-no">${b.blkNo}</span>
+      <span class="agent-name">${b.agentName||b.agentId}</span>
+      <span class="stat">${b.totalFulfilled}/${b.totalRequested}片</span>
+      <span style="flex:1"></span>
+      <span style="font-size:11px;color:var(--text-muted)">${date}</span>
+      <span class="status-badge ${statusCls}">${b.status}</span>
+    </div>
+    <div class="card-body">
+      ${b.note ? `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">${b.note}</div>` : ""}
+      <div class="actions">${actions}</div>
+    </div>
+  </div>`;
+}
+
+async function doFulfill(blkNo) {
+  if (!confirm(`确认出库 ${blkNo}？将扣减库存并生成标签。`)) return;
+  try {
+    const r = await fetch(`/api/bulk/fulfill/${blkNo}${authQ}`, { method:"POST" });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error||"出库失败");
+    showToast(`出库成功！单据 ${d.docNo}`);
+    setTimeout(() => loadList(), 800);
+    // Auto open label page
+    setTimeout(() => window.open(`/api/bulk/labels/${blkNo}${authQ}`, "_blank"), 1000);
+  } catch(e) { showToast(e.message, true); }
+}
+
+async function doShip(blkNo) {
+  const trackingNo = document.getElementById(`tr-${blkNo}`)?.value?.trim() || "";
+  if (!trackingNo) { showToast("请输入快递单号", true); return; }
+  try {
+    const r = await fetch(`/api/bulk/ship/${blkNo}${authQ}`, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ trackingNo })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error||"发货失败");
+    showToast(`发货成功！${blkNo}`);
+    loadList();
+  } catch(e) { showToast(e.message, true); }
+}
+
+function showToast(msg, isErr=false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.background = isErr?"var(--error)":"#222";
+  t.classList.add("show"); setTimeout(()=>t.classList.remove("show"), 3000);
+}
+
+loadList();
+</script>
+</body>
+</html>

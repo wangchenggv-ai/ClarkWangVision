@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批量下单 — 高视高清</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <style>
+    body { background:#f0f2f5; }
+    .page-header { background:#fff; padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+    .page-header h1 { font-size:16px; font-weight:700; flex:1; }
+    .main { max-width:820px; margin:20px auto; }
+    .card { background:#fff; border-radius:var(--radius-sm); border:1px solid var(--border); padding:20px 24px; margin-bottom:14px; }
+    .section-title { font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:12px; text-transform:uppercase; letter-spacing:.5px; }
+    .form-row { display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+    .form-row label { font-size:12px; color:var(--text-muted); min-width:56px; }
+    .form-row select, .form-row input[type="text"], .form-row input[type="number"] {
+      padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:var(--font);
+    }
+    .btn { padding:7px 16px; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-family:var(--font); font-weight:600; transition:.15s; }
+    .btn-primary { background:var(--brand); color:#fff; }
+    .btn-primary:hover { background:var(--brand-dark); }
+    .btn-outline { background:#fff; border:1px solid var(--border); color:var(--text); }
+    .btn-success { background:var(--success); color:#fff; }
+    .btn-success:disabled { opacity:.4; cursor:not-allowed; }
+    .btn-danger { background:var(--error); color:#fff; }
+    .btn-sm { padding:4px 10px; font-size:12px; }
+    .lines-table { width:100%; border-collapse:collapse; margin-bottom:10px; }
+    .lines-table th { font-size:12px; text-align:left; padding:7px 8px; color:var(--text-muted); border-bottom:1px solid var(--border); background:#f8fafc; }
+    .lines-table td { padding:6px 6px; border-bottom:1px solid #f5f5f5; vertical-align:middle; }
+    .lines-table td select, .lines-table td input { padding:5px 8px; border:1px solid var(--border); border-radius:5px; font-size:13px; width:100%; }
+    .lines-table td input[type="number"] { width:70px; }
+    .preview-table { width:100%; border-collapse:collapse; }
+    .preview-table th { font-size:12px; text-align:left; padding:8px 10px; color:var(--text-muted); border-bottom:1px solid var(--border); }
+    .preview-table td { padding:9px 10px; font-size:13px; border-bottom:1px solid #f0f0f0; }
+    .ok { color:var(--success); font-weight:600; }
+    .warn { color:var(--gold); font-weight:600; }
+    .shortage { color:var(--error); font-weight:600; }
+    .summary-box { background:#f8fafc; border-radius:6px; padding:12px 16px; margin-bottom:14px; font-size:13px; display:flex; gap:24px; flex-wrap:wrap; }
+    .summary-item { display:flex; flex-direction:column; gap:2px; }
+    .summary-item .val { font-size:22px; font-weight:700; font-family:var(--font-num); }
+    .summary-item .lbl { font-size:11px; color:var(--text-muted); }
+    .agent-select { min-width:180px; }
+    .tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:16px; }
+    .tab { padding:8px 16px; cursor:pointer; font-size:13px; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px; }
+    .tab.active { color:var(--brand); border-bottom-color:var(--brand); font-weight:600; }
+    .tab-pnl { display:none; }
+    .tab-pnl.active { display:block; }
+    .drop-zone { border:2px dashed var(--border); border-radius:8px; padding:32px; text-align:center; color:var(--text-muted); cursor:pointer; transition:.2s; }
+    .drop-zone:hover, .drop-zone.over { border-color:var(--brand); background:var(--brand-light); }
+    .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:10px 20px; border-radius:8px; font-size:13px; opacity:0; transition:.3s; pointer-events:none; z-index:999; }
+    .toast.show { opacity:1; }
+  </style>
+</head>
+<body>
+<div class="page-header">
+  <h1>批量下单</h1>
+  <a href="/bulk-labels?admin=TOKEN_PLACEHOLDER" id="toLabels" class="btn btn-outline btn-sm">发货管理</a>
+</div>
+
+<div class="main">
+  <!-- 基本信息 -->
+  <div class="card">
+    <div class="section-title">基本信息</div>
+    <div class="form-row">
+      <label>代理商</label>
+      <select id="agentSelect" class="agent-select"><option value="">加载中...</option></select>
+      <label style="margin-left:12px">备注</label>
+      <input type="text" id="noteInput" placeholder="可选" style="width:200px">
+    </div>
+  </div>
+
+  <!-- 商品清单 -->
+  <div class="card">
+    <div class="section-title">商品清单</div>
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('manual')">手动录入</div>
+      <div class="tab" onclick="switchTab('excel')">Excel 上传</div>
+    </div>
+
+    <!-- 手动录入 -->
+    <div class="tab-pnl active" id="pnl-manual">
+      <table class="lines-table">
+        <thead><tr><th style="width:30%">型号</th><th style="width:18%">球镜 SPH</th><th style="width:18%">柱镜 CYL</th><th style="width:14%">数量</th><th style="width:10%"></th></tr></thead>
+        <tbody id="lineBody"></tbody>
+      </table>
+      <button class="btn btn-outline btn-sm" onclick="addLine()">+ 添加行</button>
+    </div>
+
+    <!-- Excel 上传 -->
+    <div class="tab-pnl" id="pnl-excel">
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+        <div style="font-size:28px;margin-bottom:8px">📂</div>
+        <div>点击或拖入 Excel 文件</div>
+        <div style="font-size:12px;margin-top:6px">列名：型号 / 球镜SPH / 柱镜CYL / 数量</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileUpload(this)">
+      <div id="excelPreview" style="margin-top:12px"></div>
+    </div>
+
+    <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+      <button class="btn btn-primary" onclick="doPreview()">预检库存</button>
+      <span id="previewHint" style="font-size:12px;color:var(--text-muted)">确认清单后点击预检</span>
+    </div>
+  </div>
+
+  <!-- 预检结果 -->
+  <div class="card" id="previewCard" style="display:none">
+    <div class="section-title">库存预检结果</div>
+    <div class="summary-box" id="summaryBox"></div>
+    <table class="preview-table">
+      <thead><tr><th>型号</th><th>SPH / CYL</th><th>需求</th><th>可发</th><th>缺货</th><th>状态</th></tr></thead>
+      <tbody id="previewBody"></tbody>
+    </table>
+    <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+      <button id="submitBtn" class="btn btn-success" onclick="doSubmit()">确认下单（按可发数量）</button>
+      <span style="font-size:12px;color:var(--text-muted)">缺货部分不下单，不影响有货部分</span>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const token = new URLSearchParams(location.search).get("admin") || "";
+const authQ = `?admin=${token}`;
+document.getElementById("toLabels").href = `/bulk-labels${authQ}`;
+
+const SKUS = ["Ultra双效","D8","时空之眼A","时空之眼B","时空之眼PRO","时空之眼MAX","小旋风"];
+const SPH_VALS = Array.from({length:24}, (_,i) => (-(i+1)*0.25).toFixed(2));
+const CYL_VALS = ["0.00","-0.25","-0.50","-0.75","-1.00","-1.25","-1.50","-1.75","-2.00"];
+
+let lastPreviewLines = [];
+
+// Load agents
+(async () => {
+  try {
+    const r = await fetch(`/api/agents${authQ}`);
+    const d = await r.json();
+    const sel = document.getElementById("agentSelect");
+    sel.innerHTML = '<option value="">请选择代理商</option>' +
+      (d.agents||[]).map(a => `<option value="${a.id}" data-name="${a.name}">${a.name} (${a.id})</option>`).join("");
+  } catch(e) { console.error(e); }
+})();
+
+function addLine(sku="", sph="", cyl="", qty=1) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><select class="l-sku">${SKUS.map(s=>`<option ${s===sku?'selected':''}>${s}</option>`).join("")}</select></td>
+    <td><select class="l-sph">${SPH_VALS.map(v=>`<option ${v===String(sph)?'selected':''}>${v}</option>`).join("")}</select></td>
+    <td><select class="l-cyl">${CYL_VALS.map(v=>`<option ${v===String(cyl)?'selected':''}>${v}</option>`).join("")}</select></td>
+    <td><input type="number" class="l-qty" min="1" value="${qty}" style="width:70px"></td>
+    <td><button class="btn btn-danger btn-sm" onclick="this.closest('tr').remove()">✕</button></td>
+  `;
+  document.getElementById("lineBody").appendChild(tr);
+}
+
+function getManualLines() {
+  return [...document.getElementById("lineBody").querySelectorAll("tr")].map(tr => ({
+    sku: tr.querySelector(".l-sku").value,
+    sph: Number(tr.querySelector(".l-sph").value),
+    cyl: Number(tr.querySelector(".l-cyl").value),
+    qty: Number(tr.querySelector(".l-qty").value) || 1,
+  })).filter(l => l.sku && l.qty > 0);
+}
+
+function switchTab(name) {
+  document.querySelectorAll(".tab").forEach((t,i) => t.classList.toggle("active", ["manual","excel"][i]===name));
+  document.querySelectorAll(".tab-pnl").forEach(p => p.classList.remove("active"));
+  document.getElementById(`pnl-${name}`).classList.add("active");
+}
+
+// Excel upload
+const dz = document.getElementById("dropZone");
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("over"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("over"); handleFile(e.dataTransfer.files[0]); });
+function handleFileUpload(inp) { if (inp.files[0]) handleFile(inp.files[0]); }
+
+let excelLines = [];
+async function handleFile(file) {
+  if (!file) return;
+  const fd = new FormData(); fd.append("file", file);
+  try {
+    const r = await fetch(`/api/excel-parse${authQ}`, { method:"POST", body:fd });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "解析失败");
+    excelLines = (d.rows||[]).map(row => ({
+      sku: row.productModel || row.sku || "",
+      sph: Number(row.sph || row.球镜 || 0),
+      cyl: Number(row.cyl || row.柱镜 || 0),
+      qty: Number(row.qty || row.数量 || 1),
+    })).filter(l => l.sku && l.qty > 0);
+    document.getElementById("excelPreview").innerHTML = `<div style="font-size:13px;color:var(--success);margin-top:8px">已解析 ${excelLines.length} 行</div>`;
+  } catch(e) {
+    document.getElementById("excelPreview").innerHTML = `<div style="color:var(--error);font-size:13px">${e.message}</div>`;
+  }
+}
+
+function getLines() {
+  const tab = document.querySelector(".tab.active").textContent.trim();
+  return tab === "Excel 上传" ? excelLines : getManualLines();
+}
+
+async function doPreview() {
+  const lines = getLines();
+  if (!lines.length) { showToast("清单为空", true); return; }
+  document.getElementById("previewHint").textContent = "检查中...";
+  try {
+    const r = await fetch(`/api/bulk/preview${authQ}`, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ lines })
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    lastPreviewLines = d.lines;
+    renderPreview(d);
+    document.getElementById("previewCard").style.display = "block";
+    document.getElementById("previewCard").scrollIntoView({ behavior:"smooth" });
+    document.getElementById("previewHint").textContent = "预检完成";
+  } catch(e) {
+    showToast(e.message, true);
+    document.getElementById("previewHint").textContent = "预检失败";
+  }
+}
+
+function renderPreview(d) {
+  document.getElementById("summaryBox").innerHTML = [
+    { val: d.totalRequested, lbl: "需求总片数", cls:"" },
+    { val: d.totalFulfillable, lbl: "可发片数", cls: d.totalFulfillable===d.totalRequested?"ok":"warn" },
+    { val: d.totalShortage, lbl: "缺货片数", cls: d.totalShortage>0?"shortage":"ok" },
+  ].map(s => `<div class="summary-item"><span class="val ${s.cls}">${s.val}</span><span class="lbl">${s.lbl}</span></div>`).join("");
+
+  document.getElementById("previewBody").innerHTML = d.lines.map(l => {
+    const full = l.shortage === 0;
+    const none = l.fulfillable === 0;
+    return `<tr>
+      <td style="font-weight:600">${l.sku}</td>
+      <td style="font-family:var(--font-num)">${fmtNum(l.sph)} / ${fmtNum(l.cyl)}</td>
+      <td>${l.qty}</td>
+      <td class="${none?'shortage':full?'ok':'warn'}">${l.fulfillable}</td>
+      <td class="${l.shortage>0?'shortage':''}">${l.shortage||'—'}</td>
+      <td>${none?'<span style="color:var(--error)">无库存</span>':full?'<span class="ok">充足</span>':'<span class="warn">部分</span>'}</td>
+    </tr>`;
+  }).join("");
+  document.getElementById("submitBtn").disabled = d.totalFulfillable === 0;
+}
+
+async function doSubmit() {
+  if (!lastPreviewLines.length) return;
+  const agentSel = document.getElementById("agentSelect");
+  const agentId = agentSel.value;
+  if (!agentId) { showToast("请先选择代理商", true); return; }
+  const agentName = agentSel.options[agentSel.selectedIndex]?.dataset?.name || agentId;
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true; btn.textContent = "提交中...";
+  try {
+    const r = await fetch(`/api/bulk/submit${authQ}`, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        agentId, agentName,
+        note: document.getElementById("noteInput").value,
+        lines: lastPreviewLines.map(l => ({ sku:l.sku, sph:l.sph, cyl:l.cyl, qty:l.qty }))
+      })
+    });
+    const d = await r.json();
+    if (!r.ok || !d.ok) throw new Error(d.error||"提交失败");
+    showToast(`批量单 ${d.blkNo} 已创建，${d.totalFulfilled}片已赋码`);
+    setTimeout(() => location.href = `/bulk-labels${authQ}`, 1500);
+  } catch(e) {
+    showToast(e.message, true);
+    btn.disabled = false; btn.textContent = "确认下单（按可发数量）";
+  }
+}
+
+function fmtNum(v) { const n=Number(v); return (n>=0?"+":"")+n.toFixed(2); }
+function showToast(msg, isErr=false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.style.background = isErr?"var(--error)":"#222";
+  t.classList.add("show"); setTimeout(()=>t.classList.remove("show"), 3000);
+}
+
+// Init: add one default line
+addLine("Ultra双效", "-3.00", "-0.75", 10);
+</script>
+</body>
+</html>

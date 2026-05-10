@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>代理商看板 · 高视星</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<style>
+:root {
+  --navy: #1A5276; --navy-dark: #0f3352; --navy-light: #2471a3;
+  --blue-mist: #d6e8f5; --bg: #f0f4f8; --surface: #ffffff;
+  --border: #dde6ef; --text: #1a2332; --text-2: #4a5568; --text-3: #8a9ab0;
+  --green: #27ae60; --orange: #e67e22; --red: #e74c3c;
+  --shadow: 0 1px 3px rgba(26,82,118,0.08), 0 4px 16px rgba(26,82,118,0.05);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans SC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.topbar {
+  background: var(--navy); padding: 0 1.5rem; height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-left { display: flex; align-items: center; gap: 1rem; }
+.topbar-brand { font-size: 0.82rem; font-weight: 700; color: #fff; letter-spacing: 0.08em; }
+.topbar-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.2); }
+.topbar-name { font-size: 0.78rem; color: rgba(255,255,255,0.7); }
+.topbar-right { display: flex; align-items: center; gap: 1rem; }
+.topbar-date { font-size: 0.7rem; color: rgba(255,255,255,0.5); font-family: 'DM Mono', monospace; }
+.summer-badge {
+  font-size: 0.65rem; font-weight: 700;
+  background: rgba(230,126,34,0.25); color: #f0a050;
+  border: 1px solid rgba(230,126,34,0.4); padding: 0.2rem 0.6rem;
+  border-radius: 4px; letter-spacing: 0.06em;
+}
+
+.page { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+
+.countdown-bar {
+  background: linear-gradient(135deg, var(--navy-dark), var(--navy));
+  border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+}
+.countdown-left h2 { font-size: 0.78rem; color: rgba(255,255,255,0.6); margin-bottom: 0.25rem; font-weight: 400; }
+.countdown-left p { font-size: 0.85rem; color: rgba(255,255,255,0.9); }
+.countdown-nums { display: flex; gap: 1.5rem; }
+.cnum { text-align: center; }
+.cnum-val { font-family: 'DM Mono', monospace; font-size: 2rem; font-weight: 500; color: #fff; line-height: 1; }
+.cnum-label { font-size: 0.62rem; color: rgba(255,255,255,0.45); margin-top: 0.2rem; letter-spacing: 0.06em; }
+.progress-track { flex: 1; max-width: 300px; }
+.progress-label { display: flex; justify-content: space-between; font-size: 0.68rem; color: rgba(255,255,255,0.5); margin-bottom: 0.4rem; }
+.progress-bar-bg { height: 6px; background: rgba(255,255,255,0.12); border-radius: 3px; }
+.progress-bar-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #f0a050, #e67e22); }
+
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+.grid-main { display: grid; grid-template-columns: 2fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+.card-header {
+  padding: 1rem 1.25rem 0.75rem; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-title { font-size: 0.82rem; font-weight: 700; color: var(--navy-dark); }
+.card-sub { font-size: 0.7rem; color: var(--text-3); margin-top: 0.1rem; }
+.card-body { padding: 1.25rem; }
+
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow); padding: 1.1rem 1.25rem;
+}
+.kpi-label { font-size: 0.72rem; color: var(--text-3); margin-bottom: 0.5rem; font-weight: 500; }
+.kpi-value { font-size: 1.8rem; font-family: 'DM Mono', monospace; font-weight: 500; color: var(--navy-dark); line-height: 1; margin-bottom: 0.4rem; }
+.kpi-value span { font-size: 0.85rem; font-family: 'Noto Sans SC', sans-serif; color: var(--text-3); font-weight: 400; margin-left: 0.25rem; }
+.kpi-change { font-size: 0.72rem; display: flex; align-items: center; gap: 0.3rem; }
+.kpi-change.up { color: var(--green); }
+.kpi-change.down { color: var(--red); }
+.kpi-change.neutral { color: var(--text-3); }
+.kpi-bar-bg { height: 4px; background: var(--bg); border-radius: 2px; margin-top: 0.75rem; }
+.kpi-bar-fill { height: 100%; border-radius: 2px; }
+
+/* 门店目标表 — 核心区域 */
+.store-main { margin-bottom: 1.25rem; }
+.store-summary {
+  display: flex; gap: 2rem; padding: 1rem 1.25rem;
+  background: linear-gradient(90deg, #f0f7ff, #fff);
+  border-bottom: 1px solid var(--border);
+}
+.store-sum-item { text-align: center; }
+.store-sum-val { font-family: 'DM Mono', monospace; font-size: 1.4rem; font-weight: 600; color: var(--navy-dark); }
+.store-sum-label { font-size: 0.65rem; color: var(--text-3); margin-top: 0.15rem; }
+.store-sum-pct {
+  font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.4rem;
+  border-radius: 4px; margin-top: 0.2rem; display: inline-block;
+}
+.store-table { width: 100%; border-collapse: collapse; }
+.store-table th {
+  font-size: 0.65rem; letter-spacing: 0.08em;
+  color: var(--text-3); font-weight: 500; padding: 0.6rem 1rem;
+  text-align: left; border-bottom: 1px solid var(--border); background: #fafbfc;
+}
+.store-table th.num-col { text-align: right; }
+.store-table td { padding: 0.85rem 1rem; font-size: 0.8rem; border-bottom: 1px solid var(--border); color: var(--text-2); vertical-align: middle; }
+.store-table tr:last-child td { border-bottom: none; }
+.store-table tr:hover td { background: #f8fafc; }
+.store-name-cell { font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 0.5rem; }
+.store-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.num-col { text-align: right; font-family: 'DM Mono', monospace; font-weight: 600; color: var(--navy-dark); }
+.actual-col { text-align: right; font-family: 'DM Mono', monospace; color: var(--text-3); }
+.pct-col { text-align: right; }
+.store-prog-wrap { display: flex; align-items: center; gap: 0.5rem; justify-content: flex-end; }
+.store-prog-bg { width: 60px; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.store-prog-fill { height: 100%; border-radius: 3px; background: var(--navy-light); }
+.store-prog-num { font-family: 'DM Mono', monospace; font-size: 0.72rem; font-weight: 700; color: var(--navy-light); width: 32px; text-align: right; }
+
+/* 目标进度条 */
+.target-row { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+.target-row:last-child { border-bottom: none; }
+.target-name { font-size: 0.78rem; font-weight: 600; width: 80px; flex-shrink: 0; color: var(--navy); }
+.target-track { flex: 1; }
+.target-nums { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--text-3); margin-bottom: 0.35rem; font-family: 'DM Mono', monospace; }
+.target-bg { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.target-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+.target-pct { font-family: 'DM Mono', monospace; font-size: 0.78rem; font-weight: 700; width: 42px; text-align: right; flex-shrink: 0; }
+
+.chart-box { height: 220px; }
+
+.action-link { font-size: 0.72rem; color: var(--navy-light); text-decoration: none; padding: 0.25rem 0.6rem; border: 1px solid var(--border); border-radius: 6px; }
+.action-link:hover { background: var(--bg); }
+
+.no-plan-banner {
+  background: linear-gradient(90deg, #fff7e6, #fff);
+  border: 1px solid #ffd591; border-radius: 12px; padding: 1.25rem 1.5rem;
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+.no-plan-banner .msg { font-size: 0.85rem; color: #7c5807; }
+.no-plan-banner .msg strong { display: block; font-size: 0.95rem; margin-bottom: 0.25rem; }
+.btn-plan { padding: 0.6rem 1.25rem; background: var(--orange); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.82rem; font-weight: 700; text-decoration: none; display: inline-block; }
+.btn-plan:hover { background: #cf6d17; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-brand">高视星</div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-name" id="agent-display">加载中…</div>
+  </div>
+  <div class="topbar-right">
+    <div class="summer-badge">▌ 暑期作战中</div>
+    <div class="topbar-date" id="today-date"></div>
+  </div>
+</div>
+
+<div class="page" id="main-page">
+
+  <!-- 无计划提示（默认隐藏） -->
+  <div class="no-plan-banner" id="no-plan-banner" style="display:none">
+    <div class="msg">
+      <strong>还未填写暑期计划</strong>
+      填写计划后，门店目标进度和看板数据将自动生成
+    </div>
+    <a class="btn-plan" id="plan-link" href="#">立即填写暑期计划</a>
+  </div>
+
+  <!-- 倒计时 -->
+  <div class="countdown-bar">
+    <div class="countdown-left">
+      <h2>2026暑期战役</h2>
+      <p>7月1日 → 10月8日 · 共99天</p>
+    </div>
+    <div class="countdown-nums">
+      <div class="cnum"><div class="cnum-val" id="days-elapsed">—</div><div class="cnum-label">已过天数</div></div>
+      <div class="cnum"><div class="cnum-val" id="days-left">—</div><div class="cnum-label">剩余天数</div></div>
+    </div>
+    <div class="progress-track">
+      <div class="progress-label"><span>战役进度</span><span id="progress-pct">—</span></div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="grid-3">
+    <div class="kpi-card">
+      <div class="kpi-label">暑期进货量 vs 目标</div>
+      <div class="kpi-value" id="kpi-in">—<span>片</span></div>
+      <div class="kpi-change up" id="kpi-rate">—</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="kpi-bar" style="width:0%;background:var(--green)"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-3);margin-top:0.4rem" id="kpi-detail">目标 — 片</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Ultra双效进度</div>
+      <div class="kpi-value" id="kpi-ultra">—<span>片</span></div>
+      <div class="kpi-change up" id="kpi-ultra-rate">—</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="kpi-ultra-bar" style="width:0%;background:var(--navy-light)"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-3);margin-top:0.4rem" id="kpi-ultra-detail">目标 — 片</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">时空之眼 + 小旋风</div>
+      <div class="kpi-value" id="kpi-other">—<span>片</span></div>
+      <div class="kpi-change neutral" id="kpi-other-rate">—</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="kpi-other-bar" style="width:0%;background:var(--orange)"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-3);margin-top:0.4rem" id="kpi-other-detail">目标 — 片</div>
+    </div>
+  </div>
+
+  <!-- 门店目标 & 实际销售（核心区域） -->
+  <div class="card store-main">
+    <div class="card-header">
+      <div>
+        <div class="card-title">门店目标 & 实际进货</div>
+        <div class="card-sub">各门店暑期目标分配与总体进货进度</div>
+      </div>
+      <a class="action-link" id="plan-edit-link" href="#">编辑计划</a>
+    </div>
+    <div id="store-summary-row" style="display:none" class="store-summary">
+      <div class="store-sum-item">
+        <div class="store-sum-val" id="ss-total-in">—</div>
+        <div class="store-sum-label">暑期累计进货（片）</div>
+      </div>
+      <div class="store-sum-item">
+        <div class="store-sum-val" id="ss-total-target">—</div>
+        <div class="store-sum-label">暑期总目标（片）</div>
+      </div>
+      <div class="store-sum-item">
+        <div class="store-sum-pct" id="ss-pct" style="background:#e8f4fd;color:var(--navy-light)">—%</div>
+        <div class="store-sum-label">完成率</div>
+      </div>
+      <div class="store-sum-item">
+        <div class="store-sum-val" id="ss-stores">—</div>
+        <div class="store-sum-label">A类门店数</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto" id="store-body">
+      <div style="text-align:center;color:var(--text-3);font-size:0.82rem;padding:1.5rem">加载中…</div>
+    </div>
+  </div>
+
+  <!-- 月度趋势 + 产品进度 -->
+  <div class="grid-main">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">月度进货趋势</div>
+          <div class="card-sub">近几个月进货量（片）</div>
+        </div>
+        <a class="action-link" id="stock-link" href="#">备库填单</a>
+      </div>
+      <div class="card-body" style="padding-bottom:0.75rem">
+        <div class="chart-box" id="chart-trend"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">产品线完成进度</div>
+        <div class="card-sub">进货量 vs 暑期目标</div>
+      </div>
+      <div class="card-body" id="target-progress">
+        <div style="text-align:center;color:var(--text-3);font-size:0.82rem;padding:1rem">加载中…</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+const API = '';
+
+const now = new Date();
+document.getElementById('today-date').textContent =
+  now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' }) + ' · ' +
+  now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+
+document.getElementById('plan-link').href = `/summer-plan?t=${token}`;
+document.getElementById('stock-link').href = `/summer-stock?t=${token}`;
+document.getElementById('plan-edit-link').href = `/summer-plan?t=${token}`;
+
+const SUMMER_START = new Date('2026-07-01').getTime();
+const SUMMER_END = new Date('2026-10-08T23:59:59').getTime();
+const today = Date.now();
+const elapsed = Math.max(0, Math.floor((today - SUMMER_START) / 86400000));
+const left = Math.max(0, Math.ceil((SUMMER_END - today) / 86400000));
+const pct = Math.min(100, Math.round(elapsed / 99 * 100));
+document.getElementById('days-elapsed').textContent = elapsed;
+document.getElementById('days-left').textContent = left;
+document.getElementById('progress-pct').textContent = pct + '%';
+document.getElementById('progress-fill').style.width = pct + '%';
+
+let trendChart = null;
+
+function pct2(a, b) {
+  if (!b) return 0;
+  return Math.min(100, Math.round(a / b * 100));
+}
+
+function renderKPI(s) {
+  const totalIn = s.totalIn || 0;
+  const totalTarget = s.totalTarget || 0;
+  const rate = pct2(totalIn, totalTarget);
+  document.getElementById('kpi-in').innerHTML = `${totalIn.toLocaleString()}<span>片</span>`;
+  document.getElementById('kpi-rate').textContent = `▲ 完成率 ${rate}%`;
+  document.getElementById('kpi-bar').style.width = rate + '%';
+  document.getElementById('kpi-detail').textContent = `目标 ${totalTarget.toLocaleString()} 片 · 剩余 ${Math.max(0, totalTarget - totalIn).toLocaleString()} 片`;
+
+  const ultraRate = pct2(s.ultraIn, s.targetUltra);
+  document.getElementById('kpi-ultra').innerHTML = `${s.ultraIn}<span>片</span>`;
+  document.getElementById('kpi-ultra-rate').textContent = `▲ 完成率 ${ultraRate}%`;
+  document.getElementById('kpi-ultra-bar').style.width = ultraRate + '%';
+  document.getElementById('kpi-ultra-detail').textContent = `目标 ${s.targetUltra} 片`;
+
+  const otherIn = (s.skyIn || 0) + (s.stormIn || 0);
+  const otherTarget = (s.targetSky || 0) + (s.targetStorm || 0);
+  const otherRate = pct2(otherIn, otherTarget);
+  document.getElementById('kpi-other').innerHTML = `${otherIn}<span>片</span>`;
+  document.getElementById('kpi-other-rate').textContent = `完成率 ${otherRate}%`;
+  document.getElementById('kpi-other-bar').style.width = otherRate + '%';
+  document.getElementById('kpi-other-detail').textContent = `目标 ${otherTarget} 片`;
+}
+
+function renderTrend(trend) {
+  const months = trend.map(t => t.month.replace(/^\d{4}-/, '').replace(/^0/, '') + '月');
+  const qtys = trend.map(t => t.qty);
+  if (!trendChart) trendChart = echarts.init(document.getElementById('chart-trend'));
+  trendChart.setOption({
+    grid: { top: 10, right: 10, bottom: 24, left: 40 },
+    xAxis: {
+      type: 'category', data: months,
+      axisLine: { lineStyle: { color: '#dde6ef' } },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 11, color: '#8a9ab0' }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 11, color: '#8a9ab0' },
+      splitLine: { lineStyle: { color: '#f0f4f8' } }
+    },
+    series: [{
+      type: 'bar', data: qtys,
+      itemStyle: { color: '#2471a3', borderRadius: [4, 4, 0, 0] }
+    }],
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+  });
+  window.addEventListener('resize', () => trendChart.resize());
+}
+
+function renderTargetProgress(plan, summary) {
+  const el = document.getElementById('target-progress');
+  if (!plan) {
+    el.innerHTML = '<div style="text-align:center;padding:1rem"><div style="color:var(--text-3);font-size:0.82rem;margin-bottom:0.75rem">尚未填写暑期计划</div><a href="/summer-plan?t=' + token + '" style="font-size:0.82rem;color:var(--navy-light);border:1px solid var(--border);padding:0.4rem 1rem;border-radius:6px">立即填写</a></div>';
+    return;
+  }
+  const rows = [
+    { name: 'Ultra', in: summary.ultraIn, target: plan.target_ultra, color: 'var(--navy-light)' },
+    { name: '时空之眼', in: summary.skyIn, target: plan.target_sky, color: 'var(--orange)' },
+    { name: '小旋风', in: summary.stormIn, target: plan.target_storm, color: 'var(--green)' },
+  ];
+  el.innerHTML = rows.map(r => {
+    const p = pct2(r.in, r.target);
+    return `<div class="target-row">
+      <div class="target-name">${r.name}</div>
+      <div class="target-track">
+        <div class="target-nums"><span>已进 ${r.in} 片</span><span>目标 ${r.target} 片</span></div>
+        <div class="target-bg"><div class="target-fill" style="width:${p}%;background:${r.color}"></div></div>
+      </div>
+      <div class="target-pct" style="color:${r.color}">${p}%</div>
+    </div>`;
+  }).join('');
+}
+
+function renderStores(plan, summary) {
+  const el = document.getElementById('store-body');
+  if (!plan) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-3);font-size:0.82rem;padding:1.5rem">暂无门店数据，请先填写暑期计划</div>';
+    return;
+  }
+
+  let stores = [];
+  try { stores = JSON.parse(plan.stores || '[]'); } catch {}
+
+  const totalIn = (summary && summary.totalIn) || 0;
+  const totalTarget = (summary && summary.totalTarget) || 0;
+
+  // 摘要行
+  const summaryRow = document.getElementById('store-summary-row');
+  summaryRow.style.display = 'flex';
+  document.getElementById('ss-total-in').textContent = totalIn.toLocaleString();
+  document.getElementById('ss-total-target').textContent = totalTarget.toLocaleString();
+  document.getElementById('ss-stores').textContent = stores.length;
+  const overallPct = pct2(totalIn, totalTarget);
+  const pctEl = document.getElementById('ss-pct');
+  pctEl.textContent = overallPct + '%';
+  if (overallPct >= 80) { pctEl.style.background = '#edf7f1'; pctEl.style.color = 'var(--green)'; }
+  else if (overallPct >= 50) { pctEl.style.background = '#fdf8ec'; pctEl.style.color = 'var(--orange)'; }
+
+  if (!stores.length) {
+    el.innerHTML = '<div style="text-align:center;color:var(--text-3);font-size:0.82rem;padding:1.5rem">计划中未填写门店，请<a href="/summer-plan?t=' + token + '" style="color:var(--navy-light)">编辑计划</a>补充</div>';
+    return;
+  }
+
+  // 按目标比例分配已进货量（近似显示，无实际门店维度数据）
+  const totalStoreTgt = stores.reduce((s, r) => s + (r.target || 0), 0);
+  el.innerHTML = `<table class="store-table">
+    <thead><tr>
+      <th style="padding-left:1.25rem">门店名称</th>
+      <th class="num-col">暑期目标</th>
+      <th class="num-col">估算进货</th>
+      <th class="num-col" style="padding-right:1.25rem">完成率</th>
+    </tr></thead>
+    <tbody>
+      ${stores.map(s => {
+        const tgt = s.target || 0;
+        const storeIn = totalStoreTgt > 0 ? Math.round(totalIn * tgt / totalStoreTgt) : 0;
+        const p = pct2(storeIn, tgt);
+        const barColor = p >= 80 ? 'var(--green)' : p >= 40 ? 'var(--navy-light)' : 'var(--orange)';
+        return `<tr>
+          <td style="padding-left:1.25rem"><div class="store-name-cell"><span class="store-dot"></span>${s.name || '—'}</div></td>
+          <td class="num-col">${tgt} 片</td>
+          <td class="num-col">${storeIn > 0 ? storeIn + ' 片' : '—'}</td>
+          <td class="pct-col" style="padding-right:1.25rem">
+            <div class="store-prog-wrap">
+              <div class="store-prog-bg"><div class="store-prog-fill" style="width:${p}%;background:${barColor}"></div></div>
+              <div class="store-prog-num" style="color:${barColor}">${p}%</div>
+            </div>
+          </td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>`;
+}
+
+async function loadDashboard() {
+  if (!token) {
+    document.getElementById('agent-display').textContent = '无效链接';
+    return;
+  }
+  try {
+    const r = await fetch(`${API}/api/summer-dashboard?t=${token}`);
+    if (!r.ok) throw new Error('请求失败');
+    const d = await r.json();
+
+    document.getElementById('agent-display').textContent = d.agent?.name || '';
+
+    if (!d.plan) {
+      document.getElementById('no-plan-banner').style.display = 'flex';
+    }
+
+    renderKPI(d.summary || {});
+    renderTrend(d.trend || []);
+    renderTargetProgress(d.plan, d.summary || {});
+    renderStores(d.plan, d.summary || {});
+
+  } catch (e) {
+    document.getElementById('agent-display').textContent = '加载失败';
+    console.error(e);
+  }
+}
+
+loadDashboard();
+</script>
+</body>
+</html>

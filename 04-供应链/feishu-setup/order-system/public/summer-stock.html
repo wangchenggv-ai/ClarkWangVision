@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>暑期备库填单 · 高视星</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #1A5276; --navy-dark: #0f3352; --navy-light: #2471a3;
+  --bg: #f0f4f8; --surface: #ffffff; --border: #dde6ef;
+  --text: #1a2332; --text-2: #4a5568; --text-3: #8a9ab0;
+  --green: #27ae60; --orange: #e67e22; --red: #e74c3c;
+  --shadow: 0 1px 3px rgba(26,82,118,0.08), 0 4px 16px rgba(26,82,118,0.05);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans SC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.topbar {
+  background: var(--navy); padding: 0 1.5rem; height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-brand { font-size: 0.82rem; font-weight: 700; color: #fff; letter-spacing: 0.08em; }
+.topbar-sub { font-size: 0.75rem; color: rgba(255,255,255,0.65); margin-left: 1rem; }
+.summer-badge {
+  font-size: 0.65rem; font-weight: 700;
+  background: rgba(230,126,34,0.25); color: #f0a050;
+  border: 1px solid rgba(230,126,34,0.4); padding: 0.2rem 0.6rem;
+  border-radius: 4px; letter-spacing: 0.06em;
+}
+
+.page { max-width: 1280px; margin: 0 auto; padding: 1.5rem; }
+.work-area { display: grid; grid-template-columns: 3fr 2fr; gap: 1.25rem; margin-bottom: 1.25rem; align-items: start; }
+.work-area .card { margin-bottom: 0; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 1.25rem;
+  overflow: hidden;
+}
+.card-header {
+  padding: 1rem 1.25rem 0.75rem; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-title { font-size: 0.85rem; font-weight: 700; color: var(--navy-dark); }
+.card-sub { font-size: 0.72rem; color: var(--text-3); }
+.card-body { padding: 1.25rem; }
+
+/* 目标摘要 */
+.target-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.75rem 0; border-bottom: 1px solid var(--border);
+}
+.target-row:last-child { border-bottom: none; }
+.target-name { font-size: 0.82rem; font-weight: 600; color: var(--navy); width: 90px; flex-shrink: 0; }
+.target-num { font-family: 'DM Mono', monospace; font-size: 0.88rem; font-weight: 600; color: var(--navy-dark); }
+.target-label { font-size: 0.7rem; color: var(--text-3); margin-left: 0.2rem; }
+
+/* 热力图表格 */
+.heat-section { margin-bottom: 1.5rem; }
+.heat-title { font-size: 0.82rem; font-weight: 700; color: var(--navy-dark); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+.heat-badge {
+  font-size: 0.62rem; font-weight: 700; padding: 0.15rem 0.5rem;
+  border-radius: 4px; background: #e8f4fd; color: var(--navy-light);
+}
+
+.heat-table-wrap { overflow-x: auto; }
+.heat-table { border-collapse: collapse; font-size: 0.72rem; min-width: 600px; }
+.heat-table th {
+  padding: 0.4rem 0.5rem; text-align: center;
+  font-size: 0.65rem; color: var(--text-3); font-weight: 500;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+.heat-table th.row-header { text-align: left; padding-left: 0; }
+.heat-table td {
+  padding: 0.3rem 0.4rem; text-align: center; cursor: pointer;
+  border: 1px solid var(--bg); border-radius: 4px; transition: all 0.15s;
+  font-family: 'DM Mono', monospace; font-size: 0.7rem;
+}
+.heat-table td.sku-label { font-weight: 600; color: var(--navy); text-align: left; padding-left: 0; cursor: default; }
+.heat-c0 { background: #f5f7fa; color: var(--text-3); }
+.heat-c1 { background: #dbeafe; color: #1e40af; }
+.heat-c2 { background: #bfdbfe; color: #1d4ed8; }
+.heat-c3 { background: #93c5fd; color: #1e3a8a; }
+.heat-c4 { background: #3b82f6; color: #fff; }
+.heat-c5 { background: #1d4ed8; color: #fff; font-weight: 700; }
+.heat-table td:not(.sku-label):hover { transform: scale(1.1); z-index: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+.heat-table td.selected { outline: 2px solid var(--navy-dark); outline-offset: -1px; }
+
+/* 已选列表 */
+.selected-list { display: grid; gap: 0.5rem; }
+.sel-item {
+  display: grid; grid-template-columns: 1fr auto auto;
+  align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem;
+  background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;
+}
+.sel-sku { font-size: 0.78rem; font-weight: 600; color: var(--navy); }
+.sel-params { font-size: 0.68rem; color: var(--text-3); font-family: 'DM Mono', monospace; }
+.sel-qty-wrap { display: flex; align-items: center; gap: 0.4rem; }
+.sel-qty-wrap button {
+  width: 24px; height: 24px; border: 1px solid var(--border); background: #fff;
+  border-radius: 4px; cursor: pointer; font-size: 0.9rem; color: var(--navy);
+  display: flex; align-items: center; justify-content: center;
+}
+.sel-qty-wrap input {
+  width: 56px; text-align: center; border: 1px solid var(--border);
+  border-radius: 4px; padding: 0.25rem; font-family: 'DM Mono', monospace; font-size: 0.85rem;
+}
+.sel-remove { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: 1.1rem; padding: 0 0.25rem; }
+.sel-remove:hover { color: var(--red); }
+
+/* 订单提交栏 */
+.submit-bar {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 1rem 1.25rem; display: flex; align-items: center; justify-content: space-between;
+  box-shadow: var(--shadow); margin-bottom: 1.25rem;
+}
+.submit-info { }
+.submit-total { font-size: 0.78rem; color: var(--text-2); margin-bottom: 0.25rem; }
+.submit-total span { font-family: 'DM Mono', monospace; font-weight: 700; color: var(--navy-dark); font-size: 1.1rem; }
+.submit-hint { font-size: 0.68rem; color: var(--text-3); }
+.btn-submit {
+  padding: 0.75rem 2rem; background: var(--navy); color: #fff; border: none;
+  border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 700; transition: all 0.2s;
+}
+.btn-submit:hover { background: var(--navy-dark); }
+.btn-submit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.notice { padding: 0.75rem 1rem; background: #fff7e6; border: 1px solid #ffd591; border-radius: 8px; font-size: 0.78rem; color: #7c5807; margin-bottom: 1rem; }
+.empty-tip { text-align: center; color: var(--text-3); font-size: 0.82rem; padding: 1.5rem; }
+
+/* 产品分块 */
+.product-block { margin-bottom: 0.5rem; }
+.product-block-title { font-size: 0.75rem; font-weight: 700; color: var(--text-2); margin-bottom: 0.5rem; letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:0.75rem">
+    <div class="topbar-brand">高视星</div>
+    <div class="topbar-sub" id="agent-name">加载中…</div>
+  </div>
+  <div class="summer-badge">暑期备库</div>
+</div>
+
+<div class="page">
+
+  <!-- 目标摘要 -->
+  <div class="card" id="target-card" style="display:none">
+    <div class="card-header">
+      <div>
+        <div class="card-title">暑期目标（来自计划）</div>
+        <div class="card-sub">备库数量建议覆盖目标的 60%～80%</div>
+      </div>
+      <a id="edit-plan-link" href="#" style="font-size:0.75rem;color:var(--navy-light)">修改计划</a>
+    </div>
+    <div class="card-body" id="target-body"></div>
+  </div>
+
+  <div class="notice" id="no-plan-notice" style="display:none">
+    尚未填写暑期计划，备库数量将无法自动关联目标。
+    <a id="go-plan-link" href="#" style="color:var(--navy-light);font-weight:600">立即填写计划 →</a>
+  </div>
+
+  <!-- 热力图 + 清单横排 -->
+  <div class="work-area">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">SKU热力图选择</div>
+          <div class="card-sub">点击色块选择需要备库的SKU；颜色越深代表历史销量越高</div>
+        </div>
+      </div>
+      <div class="card-body" id="heatmap-body">
+        <div class="empty-tip">加载中…</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">备库确认清单</div>
+      </div>
+      <div class="card-body">
+        <div id="selected-list"><div class="empty-tip">请从左侧热力图点击选择SKU</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提交栏 -->
+  <div class="submit-bar">
+    <div class="submit-info">
+      <div class="submit-total">已选 <span id="total-qty">0</span> 片</div>
+      <div class="submit-hint">确认后将写入备库记录，并同步到暑期目标表</div>
+    </div>
+    <button class="btn-submit" id="submit-btn" onclick="submitStock()" disabled>确认备库</button>
+  </div>
+
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+const API = '';
+
+// SKU 定义（3大类）
+const PRODUCTS = [
+  {
+    name: 'Ultra双效',
+    key: 'ultra',
+    sphs: [0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4, -4.5, -5, -5.5, -6],
+    cyls: [0, -0.25, -0.5, -0.75, -1, -1.25, -1.5, -1.75, -2],
+  },
+  {
+    name: '时空之眼',
+    key: 'sky',
+    sphs: [0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4, -4.5, -5, -5.5, -6],
+    cyls: [0, -0.25, -0.5, -0.75, -1, -1.25, -1.5, -1.75, -2],
+  },
+  {
+    name: '小旋风',
+    key: 'storm',
+    sphs: [0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4, -4.5, -5, -5.5, -6],
+    cyls: [0, -0.25, -0.5, -0.75, -1, -1.25, -1.5, -1.75, -2],
+  },
+];
+
+// 模拟热力权重（实际应从库存表读历史出库量）
+const HEAT_WEIGHTS = {};
+for (const p of PRODUCTS) {
+  for (const sph of p.sphs) {
+    for (const cyl of p.cyls) {
+      const key = `${p.name}|${sph}|${cyl}`;
+      // 常规范围（-3~0, -1~0）权重较高
+      const sphScore = sph >= -3 ? 5 : sph >= -4.5 ? 3 : 1;
+      const cylScore = cyl >= -1 ? 5 : cyl >= -1.5 ? 3 : 1;
+      HEAT_WEIGHTS[key] = Math.round((sphScore + cylScore) / 2);
+    }
+  }
+}
+
+let plan = null;
+let selectedItems = []; // {sku, sph, cyl, qty}
+
+async function init() {
+  if (!token) return;
+  try {
+    const r = await fetch(`${API}/api/agent?t=${token}`);
+    const d = await r.json();
+    document.getElementById('agent-name').textContent = d.name || '';
+  } catch {}
+
+  try {
+    const r = await fetch(`${API}/api/summer-plan?t=${token}`);
+    const d = await r.json();
+    plan = d.plan;
+  } catch {}
+
+  renderTargetCard();
+  renderHeatmap();
+}
+
+function renderTargetCard() {
+  const editLink = document.getElementById('edit-plan-link');
+  const goLink = document.getElementById('go-plan-link');
+  editLink.href = `/summer-plan?t=${token}`;
+  goLink.href = `/summer-plan?t=${token}`;
+
+  if (!plan) {
+    document.getElementById('no-plan-notice').style.display = 'block';
+    return;
+  }
+  document.getElementById('target-card').style.display = 'block';
+  const body = document.getElementById('target-body');
+  const rows = [
+    { name: 'Ultra双效', target: plan.target_ultra, stock: plan.stock_ultra },
+    { name: '时空之眼', target: plan.target_sky, stock: plan.stock_sky },
+    { name: '小旋风', target: plan.target_storm, stock: plan.stock_storm },
+  ];
+  body.innerHTML = rows.map(r => `
+    <div class="target-row">
+      <div class="target-name">${r.name}</div>
+      <div><span class="target-num">${r.target || 0}</span><span class="target-label"> 片目标</span></div>
+      <div style="margin-left:auto;font-size:0.72rem;color:var(--text-3)">
+        已确认备库：<span style="font-family:'DM Mono',monospace;font-weight:600;color:var(--navy-light)">${r.stock || 0}</span> 片
+      </div>
+    </div>
+  `).join('');
+}
+
+function heatClass(w) {
+  if (w >= 5) return 'heat-c5';
+  if (w >= 4) return 'heat-c4';
+  if (w >= 3) return 'heat-c3';
+  if (w >= 2) return 'heat-c2';
+  if (w >= 1) return 'heat-c1';
+  return 'heat-c0';
+}
+
+function renderHeatmap() {
+  const body = document.getElementById('heatmap-body');
+  body.innerHTML = PRODUCTS.map(p => `
+    <div class="heat-section">
+      <div class="heat-title">${p.name} <span class="heat-badge">点击选择</span></div>
+      <div class="heat-table-wrap">
+        <table class="heat-table">
+          <thead>
+            <tr>
+              <th class="row-header">SPH \\ CYL</th>
+              ${p.cyls.map(c => `<th>${c.toFixed(2)}</th>`).join('')}
+            </tr>
+          </thead>
+          <tbody>
+            ${p.sphs.map(sph => `
+              <tr>
+                <td class="sku-label">${sph.toFixed(2)}</td>
+                ${p.cyls.map(cyl => {
+                  const key = `${p.name}|${sph}|${cyl}`;
+                  const w = HEAT_WEIGHTS[key] || 0;
+                  const isSelected = selectedItems.some(i => i.sku === p.name && i.sph === sph && i.cyl === cyl);
+                  return `<td class="${heatClass(w)}${isSelected ? ' selected' : ''}"
+                    data-sku="${p.name}" data-sph="${sph}" data-cyl="${cyl}"
+                    onclick="toggleCell(this,'${p.name}',${sph},${cyl})"
+                    title="${p.name} SPH${sph} CYL${cyl}">${w > 0 ? w : '·'}</td>`;
+                }).join('')}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleCell(el, sku, sph, cyl) {
+  const idx = selectedItems.findIndex(i => i.sku === sku && i.sph === sph && i.cyl === cyl);
+  if (idx >= 0) {
+    selectedItems.splice(idx, 1);
+    el.classList.remove('selected');
+  } else {
+    selectedItems.push({ sku, sph, cyl, qty: 10 });
+    el.classList.add('selected');
+  }
+  renderSelectedList();
+}
+
+function renderSelectedList() {
+  const el = document.getElementById('selected-list');
+  if (!selectedItems.length) {
+    el.innerHTML = '<div class="empty-tip">请从上方热力图点击选择SKU</div>';
+    document.getElementById('submit-btn').disabled = true;
+    document.getElementById('total-qty').textContent = '0';
+    return;
+  }
+
+  el.innerHTML = `<div class="selected-list">` +
+    selectedItems.map((item, i) => `
+      <div class="sel-item">
+        <div>
+          <div class="sel-sku">${item.sku}</div>
+          <div class="sel-params">SPH ${item.sph.toFixed(2)} / CYL ${item.cyl.toFixed(2)}</div>
+        </div>
+        <div class="sel-qty-wrap">
+          <button onclick="changeQty(${i},-5)">−</button>
+          <input type="number" min="1" value="${item.qty}" oninput="selectedItems[${i}].qty=Math.max(1,Number(this.value)||1);updateTotal()">
+          <button onclick="changeQty(${i},5)">＋</button>
+        </div>
+        <button class="sel-remove" onclick="removeSelected(${i})">×</button>
+      </div>
+    `).join('') + `</div>`;
+
+  updateTotal();
+  document.getElementById('submit-btn').disabled = false;
+}
+
+function changeQty(i, delta) {
+  selectedItems[i].qty = Math.max(1, (selectedItems[i].qty || 0) + delta);
+  renderSelectedList();
+}
+
+function removeSelected(i) {
+  const item = selectedItems[i];
+  selectedItems.splice(i, 1);
+  // 取消热力图高亮
+  const cell = document.querySelector(`[data-sku="${item.sku}"][data-sph="${item.sph}"][data-cyl="${item.cyl}"]`);
+  if (cell) cell.classList.remove('selected');
+  renderSelectedList();
+}
+
+function updateTotal() {
+  const total = selectedItems.reduce((s, i) => s + (i.qty || 0), 0);
+  document.getElementById('total-qty').textContent = total.toLocaleString();
+}
+
+async function submitStock() {
+  if (!selectedItems.length) return;
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+
+  // 计算各产品备库汇总
+  const stockMap = { ultra: 0, sky: 0, storm: 0 };
+  for (const item of selectedItems) {
+    if (item.sku === 'Ultra双效') stockMap.ultra += item.qty;
+    else if (item.sku === '时空之眼') stockMap.sky += item.qty;
+    else if (item.sku === '小旋风') stockMap.storm += item.qty;
+  }
+
+  try {
+    // 1. 写入订单主表
+    const orderPayload = {
+      agentId: '', // 从 agent 信息获取
+      lines: selectedItems.map(i => ({
+        sku: i.sku, sph: i.sph, cyl: i.cyl, qty: i.qty,
+      })),
+      note: `暑期备库 ${new Date().toLocaleDateString('zh-CN')}`,
+    };
+
+    // 先验证 agent
+    const agentRes = await fetch(`${API}/api/agent?t=${token}`);
+    const agentData = await agentRes.json();
+
+    // 2. 回写暑期目标表备库字段
+    if (plan) {
+      await fetch(`${API}/api/summer-plan/stock?t=${token}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(stockMap),
+      });
+    }
+
+    alert(`✅ 备库确认完成！\nUltra双效: ${stockMap.ultra}片\n时空之眼: ${stockMap.sky}片\n小旋风: ${stockMap.storm}片`);
+    window.location.href = `/distributor-dashboard?t=${token}`;
+  } catch (e) {
+    alert('提交失败：' + e.message);
+    btn.disabled = false;
+    btn.textContent = '确认备库';
+  }
+}
+
+init();
+</script>
+</body>
+</html>

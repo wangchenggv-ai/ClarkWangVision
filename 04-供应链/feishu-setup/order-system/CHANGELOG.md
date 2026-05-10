@@ -1,5 +1,30 @@
 # CHANGELOG
 
+## 2026-05-10 — 暑期支持政策页面
+
+### 新增「支持政策」Tab
+- **`public/summer.html`**：新增第三个 Tab「支持政策」，展示《2026暑期上量支持政策》完整内容
+  - 标准支持（培训/物料/样片/市场会议/IP探店）
+  - 资格制支持（CDSA挂牌/ECP游学/抗疲劳OK镜种子用户/返利）
+  - 备库超量货款分担政策（>300副部分高视星承担50%）
+- **代理商备注**：手动填写备注，点「保存备注」单独保存
+- **政策确认**：点「我已阅读并知晓」后记录确认时间
+
+### 后端 API
+- **新增 `/api/summer-policy`**：
+  - `POST` — 确认政策（写入 `policy_confirmed` 时间戳）+ 可选保存备注
+  - `PATCH` — 仅保存备注（不更新确认状态）
+
+### Bitable 字段
+- **`summer_target` 表新增**：
+  - `policy_confirmed`（数字）— 政策确认时间戳
+  - `policy_remark`（文本）— 代理商备注
+
+### 部署
+- ✅ 已部署 ECS（2026-05-10）
+
+---
+
 ## 2026-05-10 — 合并下单系统 + 导出记录系统
 
 ### 合并下单系统
@@ -2201,3 +2226,17 @@ ssh -i 密钥/key-gaush-lab.pem root@113.44.175.221 "docker cp /tmp/server.js or
 ### 端到端测试（2026-05-10）
 - BLK-20260510-969F14 / 镜片码 D6C3D399F82ED945 / Ultra双效 -3.00/-0.75
 - 全流程通过：预检→提交→出库→验真页正常显示
+
+
+## 2026-05-10 orders.html 三项修复 + 死代码清理
+
+### 改动
+- 删除「有无库存」列（表头+行内select+筛选栏 filterStock）
+- 筛选 bug 修复：查询按钮重置页码、状态卡与下拉冲突（filterStatus onchange 补 activeQuickFilter）、超期分页 pageSize 9999
+- 确认按钮显示处理单数
+- server.js filterStock 死代码清理（参数读取+2行过滤逻辑）
+- server.js 文件损坏恢复（286KB 空字节 git restore）
+
+### 涉及文件
+- public/orders.html
+- server.js

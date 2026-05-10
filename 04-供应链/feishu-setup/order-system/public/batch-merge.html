@@ -280,7 +280,7 @@ async function startParse() {
 
   try {
     const admin = new URLSearchParams(location.search).get('admin') || '';
-    const res = await fetch(`/api/admin/batch-merge/parse?admin=${admin}`, {
+    const res = await fetch(`api/admin/batch-merge/parse?admin=${admin}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ files: filesData }),
@@ -414,7 +414,7 @@ async function confirmImport() {
 
   try {
     const admin = new URLSearchParams(location.search).get('admin') || '';
-    const res = await fetch(`/api/admin/batch-merge/confirm?admin=${admin}`, {
+    const res = await fetch(`api/admin/batch-merge/confirm?admin=${admin}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orders: parsedData }),

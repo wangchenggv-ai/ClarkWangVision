@@ -297,6 +297,7 @@ body { font-family: 'Noto Sans SC', sans-serif; background: var(--bg); color: va
   <div class="topbar-tabs">
     <button class="tab-btn active" data-tab="plan" onclick="switchTab('plan')">备库计划</button>
     <button class="tab-btn" data-tab="board" onclick="switchTab('board')">看板</button>
+    <button class="tab-btn" data-tab="policy" onclick="switchTab('policy')">支持政策</button>
   </div>
   <div class="topbar-right">
     <div class="summer-badge">▌ 暑期作战中</div>
@@ -533,6 +534,166 @@ body { font-family: 'Noto Sans SC', sans-serif; background: var(--bg); color: va
 </div>
 </div>
 
+<!-- ══ Tab 3：支持政策 ══ -->
+<div id="tab-policy" class="tab-panel">
+<div class="page" style="max-width:960px">
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">高视星 2026暑期上量支持政策</div>
+        <div class="card-sub">代理商专属权益手册 · 2026年6月15日代理商大会正式生效</div>
+      </div>
+      <span id="policy-status" style="font-size:0.72rem;padding:0.2rem 0.6rem;border-radius:4px;display:none"></span>
+    </div>
+    <div class="card-body" style="line-height:1.8;font-size:0.85rem">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.5rem;padding:1rem;background:var(--bg);border-radius:8px">
+        <div><span style="color:var(--text-3);font-size:0.72rem">政策有效期</span><br><strong>2026.7.1 - 10.8</strong></div>
+        <div><span style="color:var(--text-3);font-size:0.72rem">适用产品</span><br><strong>Ultra / 时空之眼 / 小旋风</strong></div>
+        <div><span style="color:var(--text-3);font-size:0.72rem">适用对象</span><br><strong>签署暑期计划的代理商</strong></div>
+      </div>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">一、支持体系总览</h3>
+      <p>高视星2026暑期支持分为两类：<strong>标准支持</strong>（所有代理商均可申请）和<strong>资格制支持</strong>（达到既定销量目标后解锁）。</p>
+      <table class="stores-table" style="margin:0.75rem 0">
+        <thead><tr><th>类型</th><th>支持项目</th><th>获取方式</th></tr></thead>
+        <tbody>
+          <tr><td><strong>标准支持</strong></td><td>① 培训支持 ② 物料支持 ③ 样片支持 ④ 市场会议支持 ⑤ IP探店</td><td>填写暑期计划后申请</td></tr>
+          <tr><td><strong>资格制支持</strong></td><td>⑥ CDSA同仁挂牌 ⑦ ECP游学 ⑧ 抗疲劳OK镜种子用户 ⑨ 返利</td><td>达到对应销量目标自动解锁</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">二、标准支持（全体代理商适用）</h3>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:0.75rem 0">
+        <div style="padding:1rem;background:var(--bg);border-radius:8px">
+          <div style="font-weight:700;color:var(--navy);margin-bottom:0.5rem">① 培训支持</div>
+          <div style="font-size:0.82rem;color:var(--text-2)">
+            · 到店培训：公司讲师到店，覆盖产品推荐话术、适应症判断<br>
+            · 线上培训：提前安排预约<br>
+            · 培训后跟进：热线支持<br>
+            <span style="color:var(--text-3);font-size:0.72rem">培训完成后1周和30天出货量作为培训质量评估指标</span>
+          </div>
+        </div>
+        <div style="padding:1rem;background:var(--bg);border-radius:8px">
+          <div style="font-weight:700;color:var(--navy);margin-bottom:0.5rem">② 物料支持</div>
+          <div style="font-size:0.82rem;color:var(--text-2)">
+            · 宣传物料：产品海报、患教折页，按终端门店数量配发<br>
+            · 患教材料：儿童近视管控科普手册，每家A类门店首批100份<br>
+            · 申请方式：在暑期计划中填写所需物料清单，6月30日前统一配送
+          </div>
+        </div>
+        <div style="padding:1rem;background:var(--bg);border-radius:8px">
+          <div style="font-weight:700;color:var(--navy);margin-bottom:0.5rem">③ 样片支持</div>
+          <div style="font-size:0.82rem;color:var(--text-2)">
+            · Ultra / 时空之眼 / 小旋风 各产品提供展示样片<br>
+            · A类终端门店每家配置1套，B类门店按需申请<br>
+            · 样片用于门诊展示，不作为销售品，损耗由公司承担
+          </div>
+        </div>
+        <div style="padding:1rem;background:var(--bg);border-radius:8px">
+          <div style="font-weight:700;color:var(--navy);margin-bottom:0.5rem">④ 市场会议支持</div>
+          <div style="font-size:0.82rem;color:var(--text-2)">具体与渠道经理沟通</div>
+          <div style="font-weight:700;color:var(--navy);margin:0.75rem 0 0.5rem">⑤ IP探店支持</div>
+          <div style="font-size:0.82rem;color:var(--text-2)">
+            · 权益内容：高视星品牌IP探店打卡，为终端门店ECP维护关系<br>
+            · 资格条件：有潜力能表达的ECP
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">三、资格制支持（达标解锁）</h3>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:0.75rem 0">
+        <div style="padding:1rem;background:#f0f7ff;border-radius:8px;border-left:3px solid var(--navy-light)">
+          <div style="font-weight:700;color:var(--navy);margin-bottom:0.5rem">⑥ CDSA同仁挂牌支持</div>
+          <div style="font-size:0.82rem;color:var(--text-2)">
+            <strong>资格条件：</strong>终端门店年承诺销量 ≥250副<br>
+            <strong>权益内容：</strong>挂牌为"高视星CDSA临床合作中心"，享有学术背书及患者转介绍资源<br>
+            <strong>数据价值：</strong>门店临床数据纳入CDSA体系，免费使用病程管理软件一年
+          </div>
+        </div>
+        <div style="padding:1rem;background:#f0f7ff;border-radius:8px;border-left:3px solid var(--navy-light)">
+          <div style="font-weight:700;color:var(--navy);margin-bottom:0.5rem">⑦ ECP游学支持</div>
+          <div style="font-size:0.82rem;color:var(--text-2)">
+            <strong>资格条件：</strong>单名验光师/ECP在暑期期间完成 ≥100副销量<br>
+            <strong>权益内容：</strong>全程4天3夜专业游学，高视星承担全程费用<br>
+            <strong>统计周期：</strong>2026年6月15日 - 10月8日，以唯一QR码绑定ECP身份核算
+          </div>
+        </div>
+        <div style="padding:1rem;background:#fff7ed;border-radius:8px;border-left:3px solid var(--orange)">
+          <div style="font-weight:700;color:var(--navy);margin-bottom:0.5rem">⑧ 抗疲劳OK镜种子用户（全国限20家）</div>
+          <div style="font-size:0.82rem;color:var(--text-2)">
+            <strong>资格条件：</strong>代理商申报，市场部审核资质<br>
+            <strong>权益内容：</strong>优先获得高视星成人抗疲劳OK镜种子用户招募资格<br>
+            <strong>战略价值：</strong>成人OK镜是下半年核心增长点，种子资格意味着早3-6个月建立临床案例
+          </div>
+        </div>
+        <div style="padding:1rem;background:#f0f4f8;border-radius:8px;border-left:3px solid var(--text-3)">
+          <div style="font-weight:700;color:var(--navy);margin-bottom:0.5rem">⑨ 其他支持（按需申请）</div>
+          <div style="font-size:0.82rem;color:var(--text-2)">额外政策：如有特殊情况，代理商可向区域经理提报</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">六、返利支持 —— 累计解锁新价格体系</h3>
+      <div style="padding:1rem;background:var(--bg);border-radius:8px;margin:0.75rem 0">
+        <div style="font-size:0.82rem;color:var(--text-2);margin-bottom:0.75rem">适用范围：单一代理商暑期期间（1月1日至6月15日）累计进货量</div>
+        <table class="stores-table">
+          <thead><tr><th>累计进货量</th><th>解锁权益</th><th>生效时间</th></tr></thead>
+          <tbody>
+            <tr><td>&lt; 1,000副</td><td>现行价格体系</td><td>—</td></tr>
+            <tr style="background:#edf7f1"><td><strong>≥ 1,000副</strong></td><td><strong>解锁新价格体系（具体折扣待填）</strong></td><td>达标后次月起生效</td></tr>
+          </tbody>
+        </table>
+        <div style="font-size:0.72rem;color:var(--text-3);margin-top:0.5rem">新价格体系具体内容将在6月15日代理商大会上另行公布</div>
+      </div>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">七、暑期备库超量支持 —— 货款分担政策</h3>
+      <div style="padding:1rem;background:#edf7f1;border-radius:8px;border:1px solid #a7f3d0;margin:0.75rem 0">
+        <div style="font-size:0.82rem;color:var(--text-2);margin-bottom:0.75rem">鼓励代理商暑期前大力备货，超过300副的部分高视星承担一半货款，年底结算。</div>
+        <table class="stores-table">
+          <thead><tr><th>备库条件</th><th>支持权益</th><th>结算时间</th></tr></thead>
+          <tbody>
+            <tr><td>≤ 300副</td><td>正常账期，无额外支持</td><td>按合同约定</td></tr>
+            <tr style="background:#d1fae5"><td><strong>&gt; 300副</strong></td><td><strong>超出300副的部分，高视星承担一半货款（代理商实付50%）</strong></td><td><strong>2026年12月31日</strong></td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:0.75rem;padding:0.75rem;background:#fff;border-radius:6px;font-size:0.82rem">
+          <strong>示例说明：</strong><br>
+          · 备库 400副 → 前300副正常付款，超出100副，高视星承担50副货款，代理商实付50副<br>
+          · 备库 600副 → 前300副正常付款，超出300副，高视星承担150副货款，代理商实付150副<br>
+          · 备库 800副 → 前300副正常付款，超出500副，高视星承担250副货款，代理商实付250副
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-3);margin-top:0.5rem">货款分担须在6月15日大会前提出申请，由区域经理核实备库数量后确认，大会签署时一并锁定。</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 备注区域 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">代理商备注</div>
+        <div class="card-sub">如有特殊需求或说明，请在此填写（手动保存）</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <textarea id="policy-remark" style="width:100%;min-height:120px;border:1px solid var(--border);border-radius:8px;padding:0.75rem;font-size:0.85rem;font-family:'Noto Sans SC',sans-serif;resize:vertical;line-height:1.6" placeholder="请输入备注内容..."></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.75rem">
+        <div id="policy-remark-saved" style="font-size:0.72rem;color:var(--green);display:none">✓ 已保存</div>
+        <div style="display:flex;gap:0.65rem">
+          <button class="btn-save" onclick="savePolicyRemark()">保存备注</button>
+          <button class="btn-confirm" id="policy-confirm-btn" onclick="confirmPolicy()">我已阅读并知晓 →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
 <!-- 保存栏（只在备库计划tab显示） -->
 <div class="save-bar" id="save-bar">
   <div class="save-info">
@@ -557,8 +718,10 @@ function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.getElementById('tab-plan').classList.toggle('active', tab === 'plan');
   document.getElementById('tab-board').classList.toggle('active', tab === 'board');
+  document.getElementById('tab-policy').classList.toggle('active', tab === 'policy');
   document.getElementById('save-bar').style.display = tab === 'plan' ? 'flex' : 'none';
   if (tab === 'board' && !boardLoaded) { boardLoaded = true; initCountdown(); loadDashboard(); }
+  if (tab === 'policy' && !policyLoaded) { policyLoaded = true; loadPolicy(); }
 }
 
 // ════════════════════════════════════════════════
@@ -891,6 +1054,74 @@ async function initPlan() {
   } catch{}
   renderHeatmap();
   renderSelectedList();
+}
+
+// ════════════════════════════════════════════════
+// Tab 3：支持政策
+// ════════════════════════════════════════════════
+
+let policyLoaded = false;
+
+async function loadPolicy() {
+  try {
+    const r = await fetch(`${API}/api/summer-plan?t=${token}`);
+    const d = await r.json();
+    const plan = d.plan;
+    if (plan) {
+      const remark = plan.policy_remark || '';
+      document.getElementById('policy-remark').value = remark;
+      if (plan.policy_confirmed) {
+        const statusEl = document.getElementById('policy-status');
+        statusEl.style.display = 'inline';
+        statusEl.style.background = '#edf7f1';
+        statusEl.style.color = '#065f46';
+        statusEl.textContent = '✓ 已确认 ' + new Date(plan.policy_confirmed).toLocaleDateString('zh-CN');
+        document.getElementById('policy-confirm-btn').disabled = true;
+        document.getElementById('policy-confirm-btn').textContent = '✓ 已确认知晓';
+        document.getElementById('policy-confirm-btn').style.background = '#219a52';
+      }
+    }
+  } catch {}
+}
+
+async function savePolicyRemark() {
+  const remark = document.getElementById('policy-remark').value.trim();
+  try {
+    await fetch(`${API}/api/summer-policy?t=${token}`, {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ remark }),
+    });
+    const ok = document.getElementById('policy-remark-saved');
+    ok.style.display = 'inline';
+    setTimeout(() => { ok.style.display = 'none'; }, 3000);
+  } catch (e) { alert('保存失败：' + e.message); }
+}
+
+async function confirmPolicy() {
+  if (!confirm('确认已阅读并知晓《2026暑期上量支持政策》？')) return;
+  const btn = document.getElementById('policy-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+  const remark = document.getElementById('policy-remark').value.trim();
+  try {
+    await fetch(`${API}/api/summer-policy?t=${token}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ remark }),
+    });
+    btn.textContent = '✓ 已确认知晓';
+    btn.style.background = '#219a52';
+    const statusEl = document.getElementById('policy-status');
+    statusEl.style.display = 'inline';
+    statusEl.style.background = '#edf7f1';
+    statusEl.style.color = '#065f46';
+    statusEl.textContent = '✓ 已确认 ' + new Date().toLocaleDateString('zh-CN');
+  } catch (e) {
+    alert('提交失败：' + e.message);
+    btn.disabled = false;
+    btn.textContent = '我已阅读并知晓 →';
+  }
 }
 
 // ════════════════════════════════════════════════

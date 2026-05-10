@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>成品入库 — 高视高清</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <style>
+    body { background:#f0f2f5; }
+    .page-header { background:#fff; padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+    .page-header h1 { font-size:16px; font-weight:700; }
+    .scan-area { max-width:560px; margin:24px auto; background:#fff; border-radius:var(--radius-sm); border:1px solid var(--border); padding:24px; }
+    .scan-row { display:flex; gap:8px; margin-bottom:16px; }
+    .scan-input { flex:1; padding:10px 14px; border:2px solid var(--brand); border-radius:8px; font-size:15px; font-family:var(--font-num); letter-spacing:1px; }
+    .scan-input:focus { outline:none; box-shadow:0 0 0 3px var(--brand-light); }
+    .info-box { background:#f8fafc; border:1px solid var(--border); border-radius:6px; padding:14px; margin-bottom:16px; display:none; }
+    .info-box.visible { display:block; }
+    .info-box.error { background:#fdecec; border-color:var(--error); color:var(--error); }
+    .info-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:13px; }
+    .info-row:last-child { margin-bottom:0; }
+    .info-label { color:var(--text-muted); }
+    .info-val { font-weight:600; }
+    .stock-ok { color:var(--success); }
+    .stock-low { color:var(--gold); }
+    .qty-row { display:flex; gap:10px; align-items:center; margin-bottom:16px; }
+    .qty-row label { font-size:13px; color:var(--text-muted); }
+    .qty-input { width:100px; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:15px; text-align:center; font-family:var(--font-num); }
+    .btn { padding:9px 20px; border:none; border-radius:6px; font-size:14px; cursor:pointer; font-family:var(--font); font-weight:600; }
+    .btn-confirm { background:var(--success); color:#fff; width:100%; }
+    .btn-confirm:disabled { opacity:.4; cursor:not-allowed; }
+    .section-title { font-size:13px; font-weight:600; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px; }
+    .log-area { max-width:560px; margin:0 auto 24px; background:#fff; border-radius:var(--radius-sm); border:1px solid var(--border); padding:16px 24px; }
+    .log-table { width:100%; border-collapse:collapse; font-size:12px; }
+    .log-table th { text-align:left; padding:6px 8px; color:var(--text-muted); border-bottom:1px solid var(--border); }
+    .log-table td { padding:7px 8px; border-bottom:1px solid #f0f0f0; }
+    .log-table tr:last-child td { border-bottom:none; }
+    .badge-in { background:#e8f8f5; color:var(--success); padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+    .empty { color:var(--text-muted); font-size:13px; text-align:center; padding:16px; }
+    .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#222; color:#fff; padding:10px 20px; border-radius:8px; font-size:13px; opacity:0; transition:.3s; pointer-events:none; z-index:999; }
+    .toast.show { opacity:1; }
+  </style>
+</head>
+<body>
+<div class="page-header">
+  <h1>成品入库扫码</h1>
+</div>
+
+<div class="scan-area">
+  <div class="section-title">扫描条码</div>
+  <div class="scan-row">
+    <input id="scanInput" class="scan-input" type="text" placeholder="扫描或输入条码，如 ULT-300-075" autocomplete="off" autofocus>
+    <button class="btn" style="background:var(--brand);color:#fff;" onclick="lookupBarcode()">查询</button>
+  </div>
+
+  <div id="infoBox" class="info-box">
+    <div class="info-row"><span class="info-label">型号</span><span class="info-val" id="infoSku">—</span></div>
+    <div class="info-row"><span class="info-label">球镜 SPH</span><span class="info-val" id="infoSph">—</span></div>
+    <div class="info-row"><span class="info-label">柱镜 CYL</span><span class="info-val" id="infoCyl">—</span></div>
+    <div class="info-row"><span class="info-label">当前库存</span><span class="info-val" id="infoStock">—</span></div>
+  </div>
+
+  <div class="qty-row">
+    <label>入库数量</label>
+    <input id="qtyInput" class="qty-input" type="number" min="1" value="1">
+    <span style="font-size:12px;color:var(--text-muted)">片</span>
+  </div>
+
+  <button id="confirmBtn" class="btn btn-confirm" disabled onclick="confirmInbound()">确认入库</button>
+</div>
+
+<div class="log-area">
+  <div class="section-title">本次操作记录</div>
+  <div id="logBody">
+    <p class="empty">暂无入库记录</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const token = new URLSearchParams(location.search).get("admin") || "";
+const authQ = `?admin=${token}`;
+let currentSku = null;
+let sessionLog = [];
+
+const scanInput = document.getElementById("scanInput");
+scanInput.addEventListener("keydown", e => { if (e.key === "Enter") lookupBarcode(); });
+
+async function lookupBarcode() {
+  const barcode = scanInput.value.trim().toUpperCase();
+  if (!barcode) return;
+  const infoBox = document.getElementById("infoBox");
+  infoBox.className = "info-box visible";
+  infoBox.style.display = "block";
+  try {
+    const res = await fetch(`/api/inventory/sku/${encodeURIComponent(barcode)}${authQ}`);
+    const data = await res.json();
+    if (!res.ok) {
+      infoBox.className = "info-box visible error";
+      infoBox.innerHTML = `<div style="font-weight:600">${data.error || "查询失败"}</div><div style="font-size:12px;margin-top:4px;">条码：${barcode}</div>`;
+      currentSku = null;
+      document.getElementById("confirmBtn").disabled = true;
+      return;
+    }
+    infoBox.className = "info-box visible";
+    infoBox.innerHTML = `
+      <div class="info-row"><span class="info-label">型号</span><span class="info-val">${data.sku}</span></div>
+      <div class="info-row"><span class="info-label">球镜 SPH</span><span class="info-val">${fmtNum(data.sph)}</span></div>
+      <div class="info-row"><span class="info-label">柱镜 CYL</span><span class="info-val">${fmtNum(data.cyl)}</span></div>
+      <div class="info-row"><span class="info-label">当前库存</span><span class="info-val ${data.currentStock > 0 ? 'stock-ok' : 'stock-low'}">${data.currentStock} 片</span></div>
+    `;
+    currentSku = data;
+    document.getElementById("confirmBtn").disabled = false;
+    document.getElementById("qtyInput").focus();
+  } catch(e) {
+    infoBox.className = "info-box visible error";
+    infoBox.innerHTML = `网络错误: ${e.message}`;
+    currentSku = null;
+    document.getElementById("confirmBtn").disabled = true;
+  }
+}
+
+async function confirmInbound() {
+  if (!currentSku) return;
+  const qty = parseInt(document.getElementById("qtyInput").value, 10);
+  if (!qty || qty <= 0) { showToast("入库数量必须大于0"); return; }
+  const btn = document.getElementById("confirmBtn");
+  btn.disabled = true;
+  btn.textContent = "提交中...";
+  try {
+    const res = await fetch(`/api/admin/stock-movement${authQ}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "入库", source: "采购到货",
+        lines: [{ sku: currentSku.sku, sph: currentSku.sph, cyl: currentSku.cyl, qty }],
+        note: `扫码入库 ${scanInput.value.trim().toUpperCase()}`
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "提交失败");
+    const result = data.results?.[0];
+    sessionLog.unshift({
+      time: new Date().toLocaleTimeString(),
+      barcode: scanInput.value.trim().toUpperCase(),
+      sku: currentSku.sku, sph: currentSku.sph, cyl: currentSku.cyl,
+      qty, newStock: result?.newStock ?? "—", docNo: data.docNo
+    });
+    renderLog();
+    showToast(`入库成功：${qty} 片，单据 ${data.docNo}`);
+    scanInput.value = "";
+    document.getElementById("qtyInput").value = "1";
+    document.getElementById("infoBox").className = "info-box";
+    currentSku = null;
+    scanInput.focus();
+  } catch(e) {
+    showToast("入库失败: " + e.message, true);
+  }
+  btn.disabled = false;
+  btn.textContent = "确认入库";
+}
+
+function renderLog() {
+  const body = document.getElementById("logBody");
+  if (!sessionLog.length) { body.innerHTML = '<p class="empty">暂无入库记录</p>'; return; }
+  body.innerHTML = `<table class="log-table">
+    <thead><tr><th>时间</th><th>条码</th><th>型号</th><th>SPH/CYL</th><th>入库</th><th>库存</th></tr></thead>
+    <tbody>${sessionLog.map(r => `<tr>
+      <td>${r.time}</td>
+      <td style="font-family:var(--font-num);font-size:11px">${r.barcode}</td>
+      <td>${r.sku}</td>
+      <td style="font-family:var(--font-num)">${fmtNum(r.sph)} / ${fmtNum(r.cyl)}</td>
+      <td><span class="badge-in">+${r.qty}</span></td>
+      <td>${r.newStock}</td>
+    </tr>`).join("")}</tbody>
+  </table>`;
+}
+
+function fmtNum(v) {
+  const n = Number(v);
+  return (n >= 0 ? "+" : "") + n.toFixed(2);
+}
+
+function showToast(msg, isErr = false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.style.background = isErr ? "var(--error)" : "#222";
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2800);
+}
+</script>
+</body>
+</html>

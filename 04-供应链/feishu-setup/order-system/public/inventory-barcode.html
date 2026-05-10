@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>库存条码标签 — 高视高清</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+  <style>
+    body { background:#f0f2f5; }
+    .page-header { background:#fff; padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+    .page-header h1 { font-size:16px; font-weight:700; flex:1; }
+    .toolbar { padding:14px 20px; background:#fff; border-bottom:1px solid var(--border); display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .toolbar select, .toolbar input { padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; }
+    .btn { padding:7px 14px; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-family:var(--font); }
+    .btn-primary { background:var(--brand); color:#fff; }
+    .btn-outline { background:#fff; border:1px solid var(--border); }
+    .label-grid { display:flex; flex-wrap:wrap; gap:8px; padding:16px 20px; }
+    .label-card {
+      background:#fff; border:1px solid #ccc; border-radius:4px;
+      padding:10px 12px; width:200px; text-align:center;
+      break-inside:avoid; page-break-inside:avoid;
+    }
+    .label-card .sku-name { font-size:12px; font-weight:700; margin-bottom:2px; }
+    .label-card .rx { font-size:11px; color:var(--text-muted); margin-bottom:6px; }
+    .label-card .bc-val { font-size:10px; color:#888; margin-top:4px; }
+    .empty { text-align:center; padding:60px; color:var(--text-muted); }
+    .stat { font-size:12px; color:var(--text-muted); }
+    @media print {
+      .page-header, .toolbar { display:none; }
+      body { background:#fff; }
+      .label-grid { padding:0; }
+      .label-card { border:1px solid #999; margin:4px; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-header">
+  <h1>库存条码标签</h1>
+  <span class="stat" id="statTxt"></span>
+</div>
+<div class="toolbar">
+  <select id="skuFilter">
+    <option value="">全部型号</option>
+    <option>Ultra双效</option>
+    <option>D8</option>
+    <option>时空之眼A</option>
+    <option>时空之眼B</option>
+    <option>时空之眼PRO</option>
+    <option>时空之眼MAX</option>
+    <option>小旋风</option>
+  </select>
+  <label style="font-size:13px;">只显示有库存</label>
+  <input type="checkbox" id="onlyStock">
+  <button class="btn btn-primary" onclick="loadLabels()">加载</button>
+  <button class="btn btn-outline" onclick="window.print()">打印</button>
+</div>
+<div class="label-grid" id="grid"><p class="empty">点击「加载」显示条码标签</p></div>
+
+<script>
+const token = new URLSearchParams(location.search).get("admin") || "";
+const SKU_ABBR_INV = {
+  "Ultra双效":"ULT","D8":"D8",
+  "时空之眼A":"TKAA","时空之眼B":"TKAB",
+  "时空之眼PRO":"TKAP","时空之眼MAX":"TKAM",
+  "小旋风":"XFJ"
+};
+
+function encodeBarcode(sku, sph, cyl) {
+  const abbr = SKU_ABBR_INV[sku] || sku.replace(/\W/g,"").toUpperCase().slice(0,4);
+  const sphCode = String(Math.round(Math.abs(Number(sph))*100)).padStart(3,"0");
+  const cylCode = String(Math.round(Math.abs(Number(cyl))*100)).padStart(3,"0");
+  return `${abbr}-${sphCode}-${cylCode}`;
+}
+
+function fmtRx(sph, cyl) {
+  const s = Number(sph), c = Number(cyl);
+  const ss = (s >= 0 ? "+" : "") + s.toFixed(2);
+  const cs = c === 0 ? "Plano" : (c > 0 ? "+" : "") + c.toFixed(2);
+  return `${ss} / ${cs}`;
+}
+
+async function loadLabels() {
+  const grid = document.getElementById("grid");
+  const skuF = document.getElementById("skuFilter").value;
+  const onlyStock = document.getElementById("onlyStock").checked;
+  grid.innerHTML = '<p class="empty">加载中...</p>';
+  try {
+    const params = new URLSearchParams({ admin: token, pageSize: 500 });
+    if (skuF) params.set("sku", skuF);
+    const res = await fetch(`/api/admin/stock-detail?${params}`);
+    const data = await res.json();
+    let items = data.items || [];
+    if (onlyStock) items = items.filter(i => i.currentStock > 0);
+    if (!items.length) { grid.innerHTML = '<p class="empty">无数据</p>'; return; }
+    document.getElementById("statTxt").textContent = `共 ${items.length} 条`;
+    grid.innerHTML = "";
+    for (const item of items) {
+      const bc = encodeBarcode(item.sku, item.sph, item.cyl);
+      const card = document.createElement("div");
+      card.className = "label-card";
+      card.innerHTML = `
+        <div class="sku-name">${item.sku}</div>
+        <div class="rx">${fmtRx(item.sph, item.cyl)}</div>
+        <svg class="bc-svg"></svg>
+        <div class="bc-val">${bc}</div>
+        <div style="font-size:10px;color:#aaa;margin-top:2px;">库存: ${item.currentStock}</div>
+      `;
+      grid.appendChild(card);
+      try {
+        JsBarcode(card.querySelector(".bc-svg"), bc, {
+          format: "CODE128", width: 1.5, height: 40,
+          displayValue: false, margin: 4
+        });
+      } catch(e) { card.querySelector(".bc-svg").remove(); }
+    }
+  } catch(e) {
+    grid.innerHTML = `<p class="empty" style="color:var(--error)">加载失败: ${e.message}</p>`;
+  }
+}
+</script>
+</body>
+</html>

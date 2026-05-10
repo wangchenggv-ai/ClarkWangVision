@@ -2244,7 +2244,6 @@ const server = createServer(async (req, res) => {
       const filterAgent = url.searchParams.get("agent") || "";
       const filterSku = url.searchParams.get("sku") || "";
       const filterAssembly = url.searchParams.get("assembly") || "";
-      const filterStock = url.searchParams.get("stock") || "";
       const filterSupplier = url.searchParams.get("supplier") || "";
       const filterQ = url.searchParams.get("q") || "";
       const filterFrom = url.searchParams.get("from") || "";
@@ -2290,8 +2289,6 @@ const server = createServer(async (req, res) => {
       // 筛选
       orders = applyOrderFilters(orders, { filterStatus, filterAgent, filterSku, filterFrom, filterTo, filterQ });
       if (filterAssembly) orders = orders.filter(o => o.assembly === filterAssembly);
-      if (filterStock === "yes") orders = orders.filter(o => o.stockStatus === "有库存");
-      if (filterStock === "no") orders = orders.filter(o => o.stockStatus === "无库存" || !o.stockStatus);
       if (filterSupplier) orders = orders.filter(o => o.supplier === filterSupplier);
 
       orders.sort((a, b) => (b.date || 0) - (a.date || 0));
@@ -5516,6 +5513,50 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
       if (stock_sky !== undefined) fields.stock_sky = Number(stock_sky);
       if (stock_storm !== undefined) fields.stock_storm = Number(stock_storm);
       if (skuDetail !== undefined) fields.stock_sku_json = typeof skuDetail === 'string' ? skuDetail : JSON.stringify(skuDetail);
+      const result = await updateRecord(TABLES.summer_target, existRec.record_id, fields);
+      if (!result) { jsonRes(res, 500, { error: "写入失败" }); return logReq(req, 500, start); }
+      jsonRes(res, 200, { ok: true });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/summer-policy?t=xxx — 确认政策 + 保存备注
+    if (pathname === "/api/summer-policy" && req.method === "POST") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      const { remark } = body;
+
+      const encoded = encodeURIComponent(`"${token}"`);
+      const existing = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.summer_target}/records?page_size=1&filter=CurrentValue.[distributor_token]=${encoded}`
+      );
+      const existRec = (existing?.items || [])[0];
+      if (!existRec) { jsonRes(res, 404, { error: "暑期计划不存在，请先填写计划" }); return logReq(req, 404, start); }
+
+      const fields = { policy_confirmed: Date.now() };
+      if (remark !== undefined) fields.policy_remark = remark;
+      const result = await updateRecord(TABLES.summer_target, existRec.record_id, fields);
+      if (!result) { jsonRes(res, 500, { error: "写入失败" }); return logReq(req, 500, start); }
+      jsonRes(res, 200, { ok: true });
+      return logReq(req, 200, start);
+    }
+
+    // PATCH /api/summer-policy?t=xxx — 只保存备注（不更新确认状态）
+    if (pathname === "/api/summer-policy" && req.method === "PATCH") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      const { remark } = body;
+
+      const encoded = encodeURIComponent(`"${token}"`);
+      const existing = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.summer_target}/records?page_size=1&filter=CurrentValue.[distributor_token]=${encoded}`
+      );
+      const existRec = (existing?.items || [])[0];
+      if (!existRec) { jsonRes(res, 404, { error: "暑期计划不存在，请先填写计划" }); return logReq(req, 404, start); }
+
+      const fields = {};
+      if (remark !== undefined) fields.policy_remark = remark;
       const result = await updateRecord(TABLES.summer_target, existRec.record_id, fields);
       if (!result) { jsonRes(res, 500, { error: "写入失败" }); return logReq(req, 500, start); }
       jsonRes(res, 200, { ok: true });

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批量发货对账单 — 高视高清</title>
+  <link rel="stylesheet" href="/css/common.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    body { background:#f0f2f5; }
+    .page-header { background:#fff; padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; }
+    .page-header h1 { font-size:16px; font-weight:700; flex:1; }
+    .filter-bar { background:#fff; border-bottom:1px solid var(--border); padding:12px 20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    .filter-bar label { font-size:12px; color:var(--text-muted); }
+    .filter-bar select, .filter-bar input { padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; }
+    .main { max-width:1000px; margin:20px auto; }
+    .summary-row { display:flex; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+    .metric { background:#fff; border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 20px; flex:1; min-width:140px; }
+    .metric .val { font-size:26px; font-weight:700; font-family:var(--font-num); color:var(--brand); }
+    .metric .lbl { font-size:11px; color:var(--text-muted); margin-top:2px; }
+    .card { background:#fff; border-radius:var(--radius-sm); border:1px solid var(--border); overflow:hidden; }
+    .tbl { width:100%; border-collapse:collapse; }
+    .tbl th { background:#f8fafc; font-size:12px; text-align:left; padding:8px 12px; border-bottom:1px solid var(--border); color:var(--text-muted); font-weight:600; }
+    .tbl td { padding:9px 12px; font-size:13px; border-bottom:1px solid #f0f0f0; vertical-align:top; }
+    .tbl tr:last-child td { border-bottom:none; }
+    .tbl tr:hover td { background:#fafbfc; }
+    .blk-link { font-family:var(--font-num); font-size:12px; color:var(--brand); cursor:pointer; text-decoration:underline; }
+    .expand-body { display:none; background:#fafbfc; }
+    .expand-body.open { display:table-row-group; }
+    .sub-tbl { width:100%; border-collapse:collapse; font-size:12px; }
+    .sub-tbl td { padding:5px 16px; border-bottom:1px solid #eee; font-family:var(--font-num); }
+    .sub-tbl td:first-child { font-family:var(--font); font-weight:600; padding-left:32px; }
+    .btn { padding:7px 14px; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-family:var(--font); font-weight:600; }
+    .btn-primary { background:var(--brand); color:#fff; }
+    .btn-outline { background:#fff; border:1px solid var(--border); }
+    .btn-sm { padding:4px 10px; font-size:12px; }
+    .empty { text-align:center; padding:48px; color:var(--text-muted); font-size:13px; }
+    .shortage-note { color:var(--error); font-size:11px; }
+    @media print {
+      .filter-bar, .page-header button, .btn { display:none; }
+      body { background:#fff; }
+    }
+  </style>
+</head>
+<body>
+<div class="page-header">
+  <h1>批量发货对账单</h1>
+  <button class="btn btn-outline btn-sm" onclick="window.print()">打印</button>
+  <button class="btn btn-primary btn-sm" onclick="exportExcel()">导出 Excel</button>
+</div>
+
+<div class="filter-bar">
+  <label>代理商</label>
+  <select id="agentFilter" onchange="loadData()"><option value="">全部</option></select>
+  <label>月份</label>
+  <input type="month" id="monthFilter" onchange="loadData()">
+  <label>状态</label>
+  <select id="statusFilter" onchange="loadData()">
+    <option value="已发货">已发货</option>
+    <option value="">全部</option>
+    <option value="已出库">已出库</option>
+    <option value="待出库">待出库</option>
+  </select>
+  <button class="btn btn-outline btn-sm" onclick="loadData()">查询</button>
+</div>
+
+<div class="main">
+  <div class="summary-row" id="summaryRow"></div>
+  <div class="card">
+    <table class="tbl" id="mainTbl">
+      <thead>
+        <tr>
+          <th style="width:32px"></th>
+          <th>批量单号</th>
+          <th>代理商</th>
+          <th>日期</th>
+          <th>需求</th>
+          <th>实发</th>
+          <th>缺货</th>
+          <th>快递单号</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody id="mainBody"></tbody>
+    </table>
+    <p class="empty" id="emptyMsg" style="display:none">暂无数据</p>
+  </div>
+</div>
+
+<script>
+const token = new URLSearchParams(location.search).get("admin") || "";
+const authQ = `?admin=${token}`;
+let allData = [];
+
+// Set default month to current
+document.getElementById("monthFilter").value = new Date().toISOString().slice(0, 7);
+
+// Load agents for filter
+(async () => {
+  try {
+    const r = await fetch(`/api/agents${authQ}`);
+    const d = await r.json();
+    const sel = document.getElementById("agentFilter");
+    (d.agents||[]).forEach(a => {
+      const o = document.createElement("option");
+      o.value = a.id; o.textContent = `${a.name} (${a.id})`; sel.appendChild(o);
+    });
+  } catch(e) {}
+})();
+
+async function loadData() {
+  const agentId = document.getElementById("agentFilter").value;
+  const month = document.getElementById("monthFilter").value;
+  const status = document.getElementById("statusFilter").value;
+  try {
+    const params = new URLSearchParams({ admin: token });
+    if (agentId) params.set("agentId", agentId);
+    if (status) params.set("status", status);
+    const r = await fetch(`/api/bulk/list?${params}`);
+    const d = await r.json();
+    let items = d.items || [];
+    if (month) {
+      items = items.filter(b => {
+        const m = new Date(b.createdAt).toISOString().slice(0,7);
+        return m === month;
+      });
+    }
+    allData = items;
+    renderTable(items);
+  } catch(e) {
+    document.getElementById("mainBody").innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--error);padding:24px">${e.message}</td></tr>`;
+  }
+}
+
+function renderTable(items) {
+  const empty = document.getElementById("emptyMsg");
+  const body = document.getElementById("mainBody");
+  if (!items.length) { body.innerHTML = ""; empty.style.display = "block"; renderSummary([]); return; }
+  empty.style.display = "none";
+  renderSummary(items);
+  body.innerHTML = items.map((b, idx) => {
+    const date = new Date(b.createdAt).toLocaleDateString("zh-CN");
+    const shortage = b.totalRequested - b.totalFulfilled;
+    return `<tr onclick="toggleExpand(${idx})" style="cursor:pointer">
+      <td style="text-align:center;color:var(--text-muted);font-size:11px" id="exp-icon-${idx}">▶</td>
+      <td><span class="blk-link">${b.blkNo}</span></td>
+      <td>${b.agentName||b.agentId}</td>
+      <td>${date}</td>
+      <td>${b.totalRequested}</td>
+      <td style="font-weight:700;color:var(--success)">${b.totalFulfilled}</td>
+      <td>${shortage>0?`<span class="shortage-note">-${shortage}</span>`:'—'}</td>
+      <td style="font-family:var(--font-num);font-size:12px">${b.trackingNo||'—'}</td>
+      <td><span class="status-badge s-${b.status}" style="padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${statusBg(b.status)};color:${statusFg(b.status)}">${b.status}</span></td>
+    </tr>
+    <tr class="expand-body" id="exp-${idx}"><td colspan="9">
+      <div style="padding:0 12px 12px 32px" id="exp-content-${idx}">加载中...</div>
+    </td></tr>`;
+  }).join("");
+}
+
+function statusBg(s) { return s==="已发货"?"#e8f0ff":s==="已出库"?"#e8f8f5":"#f0f2f5"; }
+function statusFg(s) { return s==="已发货"?"var(--brand)":s==="已出库"?"var(--success)":"#666"; }
+
+async function toggleExpand(idx) {
+  const row = document.getElementById(`exp-${idx}`);
+  const icon = document.getElementById(`exp-icon-${idx}`);
+  const isOpen = row.classList.contains("open");
+  row.classList.toggle("open");
+  icon.textContent = isOpen ? "▶" : "▼";
+  if (!isOpen) {
+    const b = allData[idx];
+    const r = await fetch(`/api/bulk/${b.blkNo}${authQ}`);
+    const detail = await r.json();
+    const lines = detail.lines || [];
+    document.getElementById(`exp-content-${idx}`).innerHTML = `
+      <table class="sub-tbl" style="margin-top:8px">
+        <thead><tr style="background:#f0f2f5"><td>型号</td><td>SPH</td><td>CYL</td><td>需求</td><td>实发</td><td>缺货</td><td>镜片码（前5）</td></tr></thead>
+        <tbody>${lines.map(l => `<tr>
+          <td style="font-family:var(--font);font-weight:600">${l.sku}</td>
+          <td>${fmtNum(l.sph)}</td><td>${fmtNum(l.cyl)}</td>
+          <td>${l.requestedQty}</td>
+          <td style="color:var(--success)">${l.fulfilledQty}</td>
+          <td style="color:var(--error)">${l.shortage||'—'}</td>
+          <td style="font-size:10px;color:#888">${(l.lensCodes||[]).slice(0,5).join(', ')}${l.lensCodes?.length>5?'…':''}</td>
+        </tr>`).join("")}</tbody>
+      </table>
+      ${detail.note?`<div style="font-size:12px;color:var(--text-muted);margin-top:6px">备注: ${detail.note}</div>`:''}
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <a href="/api/bulk/labels/${b.blkNo}${authQ}" target="_blank" class="btn btn-outline btn-sm">查看标签</a>
+      </div>
+    `;
+  }
+}
+
+function renderSummary(items) {
+  const totalR = items.reduce((s,b)=>s+b.totalRequested,0);
+  const totalF = items.reduce((s,b)=>s+b.totalFulfilled,0);
+  const shipped = items.filter(b=>b.status==="已发货").length;
+  document.getElementById("summaryRow").innerHTML = [
+    { val: items.length, lbl: "批量单总数" },
+    { val: totalR, lbl: "总需求片数" },
+    { val: totalF, lbl: "实发片数" },
+    { val: shipped, lbl: "已发货单数" },
+  ].map(m=>`<div class="metric"><div class="val">${m.val}</div><div class="lbl">${m.lbl}</div></div>`).join("");
+}
+
+function exportExcel() {
+  if (!allData.length) { alert("无数据"); return; }
+  const rows = [["批量单号","代理商","日期","型号","SPH","CYL","需求","实发","缺货","快递单号","状态","备注"]];
+  for (const b of allData) {
+    for (const l of b.lines||[]) {
+      rows.push([
+        b.blkNo, b.agentName||b.agentId,
+        new Date(b.createdAt).toLocaleDateString("zh-CN"),
+        l.sku, l.sph, l.cyl,
+        l.requestedQty, l.fulfilledQty, l.shortage||0,
+        b.trackingNo||"", b.status, b.note||""
+      ]);
+    }
+  }
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "对账单");
+  const month = document.getElementById("monthFilter").value || "all";
+  XLSX.writeFile(wb, `批量发货对账单_${month}.xlsx`);
+}
+
+function fmtNum(v) { const n=Number(v); return (n>=0?"+":"")+n.toFixed(2); }
+
+loadData();
+</script>
+</body>
+</html>

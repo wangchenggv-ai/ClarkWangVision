@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>暑期计划填报 · 高视星</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #1A5276; --navy-dark: #0f3352; --navy-light: #2471a3;
+  --bg: #f0f4f8; --surface: #ffffff; --border: #dde6ef;
+  --text: #1a2332; --text-2: #4a5568; --text-3: #8a9ab0;
+  --green: #27ae60; --orange: #e67e22; --red: #e74c3c;
+  --shadow: 0 1px 3px rgba(26,82,118,0.08), 0 4px 16px rgba(26,82,118,0.05);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans SC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.topbar {
+  background: var(--navy); padding: 0 1.5rem; height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-brand { font-size: 0.82rem; font-weight: 700; color: #fff; letter-spacing: 0.08em; }
+.topbar-sub { font-size: 0.75rem; color: rgba(255,255,255,0.65); margin-left: 1rem; }
+.summer-badge {
+  font-size: 0.65rem; font-weight: 700;
+  background: rgba(230,126,34,0.25); color: #f0a050;
+  border: 1px solid rgba(230,126,34,0.4); padding: 0.2rem 0.6rem;
+  border-radius: 4px; letter-spacing: 0.06em;
+}
+
+.page { max-width: 700px; margin: 0 auto; padding: 1.5rem; }
+
+/* STEP INDICATOR */
+.steps { display: flex; gap: 0; margin-bottom: 2rem; }
+.step { flex: 1; text-align: center; position: relative; }
+.step::after {
+  content: ''; position: absolute; top: 18px; left: 50%; width: 100%; height: 2px;
+  background: var(--border); z-index: 0;
+}
+.step:last-child::after { display: none; }
+.step-circle {
+  width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--border);
+  background: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 0.75rem; font-weight: 700; color: var(--text-3);
+  margin: 0 auto 0.5rem; position: relative; z-index: 1;
+  transition: all 0.3s;
+}
+.step.active .step-circle { border-color: var(--navy); background: var(--navy); color: #fff; }
+.step.done .step-circle { border-color: var(--green); background: var(--green); color: #fff; }
+.step-label { font-size: 0.7rem; color: var(--text-3); }
+.step.active .step-label { color: var(--navy); font-weight: 600; }
+.step.done .step-label { color: var(--green); }
+
+/* CARD */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow); padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+.card-title { font-size: 1rem; font-weight: 700; color: var(--navy-dark); margin-bottom: 0.25rem; }
+.card-sub { font-size: 0.78rem; color: var(--text-3); margin-bottom: 1.25rem; }
+
+/* FORM */
+.form-row { margin-bottom: 1rem; }
+.form-row label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.35rem; }
+.form-row input[type="number"],
+.form-row input[type="date"],
+.form-row input[type="text"],
+.form-row select {
+  width: 100%; padding: 0.6rem 0.75rem; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 0.9rem; font-family: 'DM Mono', monospace; color: var(--text);
+  background: #fff; outline: none; transition: border-color 0.2s;
+}
+.form-row input:focus, .form-row select:focus { border-color: var(--navy-light); }
+.form-row .hint { font-size: 0.68rem; color: var(--text-3); margin-top: 0.25rem; }
+.form-row .error { font-size: 0.68rem; color: var(--red); margin-top: 0.25rem; display: none; }
+.form-row.has-error input, .form-row.has-error select { border-color: var(--red); }
+.form-row.has-error .error { display: block; }
+
+/* 产品目标行 */
+.product-targets { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+.product-target-card {
+  border: 1px solid var(--border); border-radius: 10px; padding: 1rem;
+  text-align: center; background: #fafbfc;
+}
+.product-target-card .product-name { font-size: 0.75rem; font-weight: 700; color: var(--navy); margin-bottom: 0.5rem; }
+.product-target-card input {
+  width: 100%; border: 1px solid var(--border); border-radius: 6px;
+  padding: 0.5rem; text-align: center; font-size: 1.1rem;
+  font-family: 'DM Mono', monospace; font-weight: 500; color: var(--navy-dark);
+}
+.product-target-card .product-unit { font-size: 0.65rem; color: var(--text-3); margin-top: 0.3rem; }
+.total-check { margin-top: 0.75rem; font-size: 0.78rem; color: var(--text-2); text-align: center; }
+.total-check.warn { color: var(--orange); }
+
+/* 门店列表 */
+.store-list { display: grid; gap: 0.75rem; }
+.store-item {
+  display: grid; grid-template-columns: 1fr auto auto; gap: 0.5rem;
+  align-items: center; background: #fafbfc; border: 1px solid var(--border);
+  border-radius: 8px; padding: 0.75rem;
+}
+.store-item input { border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.85rem; }
+.store-item .store-qty { width: 80px; }
+.store-delete {
+  width: 28px; height: 28px; border: none; background: none; cursor: pointer;
+  color: var(--text-3); font-size: 1rem; display: flex; align-items: center; justify-content: center;
+  border-radius: 4px; transition: color 0.2s;
+}
+.store-delete:hover { color: var(--red); }
+.add-store-btn {
+  width: 100%; padding: 0.6rem; border: 1px dashed var(--border); border-radius: 8px;
+  background: none; cursor: pointer; color: var(--navy-light); font-size: 0.85rem;
+  transition: all 0.2s; margin-top: 0.5rem;
+}
+.add-store-btn:hover { border-color: var(--navy-light); background: #f0f7ff; }
+.store-total { font-size: 0.78rem; color: var(--text-2); margin-top: 0.5rem; text-align: right; }
+.store-total.warn { color: var(--orange); }
+
+/* 里程碑 */
+.milestone-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+/* 确认汇总 */
+.summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+.summary-item { background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem; }
+.summary-item .s-label { font-size: 0.68rem; color: var(--text-3); margin-bottom: 0.25rem; }
+.summary-item .s-value { font-size: 0.9rem; font-weight: 600; color: var(--navy-dark); font-family: 'DM Mono', monospace; }
+.stores-preview { font-size: 0.78rem; color: var(--text-2); line-height: 1.8; }
+.confirm-check { display: flex; align-items: center; gap: 0.75rem; margin: 1rem 0; cursor: pointer; }
+.confirm-check input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--navy); }
+.confirm-check span { font-size: 0.85rem; color: var(--text-2); font-weight: 500; }
+
+/* 导航按钮 */
+.nav-btns { display: flex; gap: 0.75rem; justify-content: space-between; margin-top: 1.25rem; }
+.btn-prev {
+  padding: 0.65rem 1.5rem; border: 1px solid var(--border); background: #fff;
+  border-radius: 8px; color: var(--text-2); cursor: pointer; font-size: 0.85rem; font-weight: 500;
+  transition: all 0.2s;
+}
+.btn-prev:hover { border-color: var(--navy-light); color: var(--navy); }
+.btn-next {
+  padding: 0.65rem 2rem; background: var(--navy); color: #fff; border: none;
+  border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 600;
+  transition: background 0.2s; flex: 1; max-width: 200px;
+}
+.btn-next:hover { background: var(--navy-dark); }
+.btn-next:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-submit {
+  padding: 0.75rem 2rem; background: var(--green); color: #fff; border: none;
+  border-radius: 8px; cursor: pointer; font-size: 0.9rem; font-weight: 700;
+  transition: background 0.2s; flex: 1;
+}
+.btn-submit:hover { background: #219a52; }
+.btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 成功状态 */
+.success-card { text-align: center; padding: 3rem 1.5rem; }
+.success-icon { font-size: 3rem; margin-bottom: 1rem; }
+.success-title { font-size: 1.2rem; font-weight: 700; color: var(--navy-dark); margin-bottom: 0.5rem; }
+.success-sub { font-size: 0.85rem; color: var(--text-3); margin-bottom: 1.5rem; }
+.success-btns { display: flex; gap: 0.75rem; justify-content: center; }
+.success-btn {
+  padding: 0.65rem 1.5rem; border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; text-decoration: none; display: inline-block; transition: all 0.2s;
+}
+.success-btn.primary { background: var(--navy); color: #fff; border: none; }
+.success-btn.secondary { background: #fff; color: var(--navy); border: 1px solid var(--border); }
+.success-btn:hover { opacity: 0.85; }
+
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:0.75rem">
+    <div class="topbar-brand">高视星</div>
+    <div class="topbar-sub" id="agent-name">加载中…</div>
+  </div>
+  <div class="summer-badge">2026暑期计划</div>
+</div>
+
+<div class="page">
+
+  <!-- 步骤指示器 -->
+  <div class="steps" id="steps-bar">
+    <div class="step active" id="step-dot-1">
+      <div class="step-circle">1</div>
+      <div class="step-label">产品目标</div>
+    </div>
+    <div class="step" id="step-dot-2">
+      <div class="step-circle">2</div>
+      <div class="step-label">A类门店</div>
+    </div>
+    <div class="step" id="step-dot-3">
+      <div class="step-circle">3</div>
+      <div class="step-label">节点承诺</div>
+    </div>
+    <div class="step" id="step-dot-4">
+      <div class="step-circle">4</div>
+      <div class="step-label">确认提交</div>
+    </div>
+  </div>
+
+  <!-- Step 1: 产品目标 -->
+  <div id="panel-1">
+    <div class="card">
+      <div class="card-title">暑期产品目标</div>
+      <div class="card-sub">请填写 7月1日～10月8日（共99天）各产品计划进货片数</div>
+
+      <div class="product-targets">
+        <div class="product-target-card">
+          <div class="product-name">Ultra双效</div>
+          <input type="number" id="t-ultra" min="0" value="0" placeholder="0">
+          <div class="product-unit">片</div>
+        </div>
+        <div class="product-target-card">
+          <div class="product-name">时空之眼</div>
+          <input type="number" id="t-sky" min="0" value="0" placeholder="0">
+          <div class="product-unit">片</div>
+        </div>
+        <div class="product-target-card">
+          <div class="product-name">小旋风</div>
+          <input type="number" id="t-storm" min="0" value="0" placeholder="0">
+          <div class="product-unit">片</div>
+        </div>
+      </div>
+
+      <div class="total-check" id="total-display">合计：0 片</div>
+
+      <div class="form-row" style="margin-top:1rem">
+        <label>所在区域</label>
+        <select id="region">
+          <option value="">请选择</option>
+          <option value="北区">北区</option>
+          <option value="长三角">长三角</option>
+          <option value="南区">南区</option>
+          <option value="西北">西北</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="nav-btns">
+      <div></div>
+      <button class="btn-next" onclick="toStep2()">下一步：A类门店</button>
+    </div>
+  </div>
+
+  <!-- Step 2: A类门店 -->
+  <div id="panel-2" class="hidden">
+    <div class="card">
+      <div class="card-title">A类门店清单</div>
+      <div class="card-sub">填写暑期重点跟进门店，各店分目标片数总和不能超过产品总目标</div>
+
+      <div class="store-list" id="store-list"></div>
+      <button class="add-store-btn" onclick="addStore()">＋ 添加门店</button>
+      <div class="store-total" id="store-total-check"></div>
+    </div>
+
+    <div class="nav-btns">
+      <button class="btn-prev" onclick="toStep(1)">上一步</button>
+      <button class="btn-next" onclick="toStep3()">下一步：节点承诺</button>
+    </div>
+  </div>
+
+  <!-- Step 3: 节点承诺 -->
+  <div id="panel-3" class="hidden">
+    <div class="card">
+      <div class="card-title">节点承诺</div>
+      <div class="card-sub">请承诺关键节点时间，系统将自动生成待办提醒</div>
+
+      <div class="milestone-row">
+        <div class="form-row">
+          <label>备货完成时间</label>
+          <input type="date" id="m-stock" max="2026-06-30">
+          <div class="hint">不能晚于 6月30日</div>
+          <div class="error" id="err-stock">请选择不晚于6月30日的日期</div>
+        </div>
+        <div class="form-row">
+          <label>首单完成时间</label>
+          <input type="date" id="m-first" max="2026-07-15">
+          <div class="hint">不能晚于 7月15日</div>
+          <div class="error" id="err-first">请选择不晚于7月15日的日期</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav-btns">
+      <button class="btn-prev" onclick="toStep(2)">上一步</button>
+      <button class="btn-next" onclick="toStep4()">下一步：确认提交</button>
+    </div>
+  </div>
+
+  <!-- Step 4: 确认提交 -->
+  <div id="panel-4" class="hidden">
+    <div class="card">
+      <div class="card-title">确认提交</div>
+      <div class="card-sub">请核对以下信息，确认无误后提交</div>
+
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="s-label">Ultra双效目标</div>
+          <div class="s-value" id="s-ultra">—</div>
+        </div>
+        <div class="summary-item">
+          <div class="s-label">时空之眼目标</div>
+          <div class="s-value" id="s-sky">—</div>
+        </div>
+        <div class="summary-item">
+          <div class="s-label">小旋风目标</div>
+          <div class="s-value" id="s-storm">—</div>
+        </div>
+        <div class="summary-item">
+          <div class="s-label">暑期总目标</div>
+          <div class="s-value" id="s-total">—</div>
+        </div>
+        <div class="summary-item">
+          <div class="s-label">备货承诺日期</div>
+          <div class="s-value" id="s-stock-date">—</div>
+        </div>
+        <div class="summary-item">
+          <div class="s-label">首单承诺日期</div>
+          <div class="s-value" id="s-first-date">—</div>
+        </div>
+      </div>
+
+      <div class="summary-item" style="margin-bottom:0.75rem">
+        <div class="s-label">A类门店清单（<span id="s-store-count">0</span> 家）</div>
+        <div class="stores-preview" id="s-stores-preview"></div>
+      </div>
+
+      <label class="confirm-check">
+        <input type="checkbox" id="confirm-check">
+        <span>我确认以上目标，并承诺按节点执行计划</span>
+      </label>
+    </div>
+
+    <div class="nav-btns">
+      <button class="btn-prev" onclick="toStep(3)">上一步</button>
+      <button class="btn-submit" id="submit-btn" onclick="submitPlan()" disabled>提交暑期计划</button>
+    </div>
+  </div>
+
+  <!-- 成功页 -->
+  <div id="panel-success" class="hidden">
+    <div class="card success-card">
+      <div class="success-icon">✅</div>
+      <div class="success-title">暑期计划提交成功！</div>
+      <div class="success-sub">计划已写入系统，Clark 将在审核后与您确认。</div>
+      <div class="success-btns">
+        <a class="success-btn primary" id="go-stock-btn" href="#">前往备库填单</a>
+        <a class="success-btn secondary" id="go-dashboard-btn" href="#">查看代理商看板</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+const API = '';
+
+let currentStep = 1;
+let stores = [];
+let agentName = '';
+let existingRecordId = null;
+
+async function init() {
+  if (!token) { document.getElementById('agent-name').textContent = '无效链接'; return; }
+  try {
+    const r = await fetch(`${API}/api/agent?t=${token}`);
+    const d = await r.json();
+    agentName = d.name || '';
+    document.getElementById('agent-name').textContent = agentName;
+  } catch {}
+
+  // 加载已有计划
+  try {
+    const r = await fetch(`${API}/api/summer-plan?t=${token}`);
+    const d = await r.json();
+    if (d.plan) {
+      fillPlan(d.plan);
+      existingRecordId = d.plan.recordId;
+    }
+  } catch {}
+
+  if (!stores.length) addStore();
+  updateTargetDisplay();
+}
+
+function fillPlan(plan) {
+  document.getElementById('t-ultra').value = plan.target_ultra || 0;
+  document.getElementById('t-sky').value = plan.target_sky || 0;
+  document.getElementById('t-storm').value = plan.target_storm || 0;
+  if (plan.region) document.getElementById('region').value = plan.region;
+
+  try {
+    const parsed = typeof plan.stores === 'string' ? JSON.parse(plan.stores) : plan.stores;
+    if (Array.isArray(parsed) && parsed.length) {
+      stores = parsed.map(s => ({ name: s.name || '', target: s.target || 0 }));
+      renderStores();
+    }
+  } catch {}
+
+  if (plan.milestone_stock) {
+    const d = new Date(plan.milestone_stock);
+    document.getElementById('m-stock').value = d.toISOString().slice(0, 10);
+  }
+  if (plan.milestone_first_order) {
+    const d = new Date(plan.milestone_first_order);
+    document.getElementById('m-first').value = d.toISOString().slice(0, 10);
+  }
+}
+
+function totalTarget() {
+  return Number(document.getElementById('t-ultra').value || 0)
+       + Number(document.getElementById('t-sky').value || 0)
+       + Number(document.getElementById('t-storm').value || 0);
+}
+
+function updateTargetDisplay() {
+  const t = totalTarget();
+  const el = document.getElementById('total-display');
+  el.textContent = `合计：${t.toLocaleString()} 片`;
+  el.className = 'total-check' + (t === 0 ? ' warn' : '');
+}
+
+['t-ultra','t-sky','t-storm'].forEach(id => {
+  document.getElementById(id).addEventListener('input', () => {
+    updateTargetDisplay();
+    updateStoreTotalCheck();
+  });
+});
+
+function addStore() {
+  stores.push({ name: '', target: 0 });
+  renderStores();
+}
+
+function removeStore(i) {
+  stores.splice(i, 1);
+  renderStores();
+}
+
+function renderStores() {
+  const ul = document.getElementById('store-list');
+  ul.innerHTML = stores.map((s, i) => `
+    <div class="store-item">
+      <input type="text" placeholder="门店名称" value="${s.name}"
+        oninput="stores[${i}].name=this.value">
+      <input type="number" class="store-qty" min="0" placeholder="目标片数" value="${s.target || ''}"
+        oninput="stores[${i}].target=Number(this.value)||0;updateStoreTotalCheck()">
+      <button class="store-delete" onclick="removeStore(${i})">×</button>
+    </div>
+  `).join('');
+  updateStoreTotalCheck();
+}
+
+function updateStoreTotalCheck() {
+  const storeTotal = stores.reduce((s, x) => s + (Number(x.target) || 0), 0);
+  const t = totalTarget();
+  const el = document.getElementById('store-total-check');
+  el.textContent = `门店目标合计：${storeTotal} 片 / 总目标 ${t} 片`;
+  el.className = 'store-total' + (storeTotal > t && t > 0 ? ' warn' : '');
+}
+
+function toStep2() {
+  if (totalTarget() === 0) { alert('请至少填写一个产品的目标片数'); return; }
+  toStep(2);
+}
+
+function toStep3() {
+  const validStores = stores.filter(s => s.name.trim());
+  if (!validStores.length) { alert('请至少填写一家A类门店'); return; }
+  const storeTotal = stores.reduce((s, x) => s + (Number(x.target) || 0), 0);
+  if (storeTotal > totalTarget()) {
+    if (!confirm('门店目标合计超过产品总目标，是否继续？')) return;
+  }
+  toStep(3);
+}
+
+function toStep4() {
+  const stockDate = document.getElementById('m-stock').value;
+  const firstDate = document.getElementById('m-first').value;
+
+  let ok = true;
+  const stockRow = document.querySelector('#panel-3 .form-row:nth-child(1)');
+  if (stockDate && stockDate > '2026-06-30') {
+    document.getElementById('m-stock').closest('.form-row').classList.add('has-error');
+    ok = false;
+  } else {
+    document.getElementById('m-stock').closest('.form-row').classList.remove('has-error');
+  }
+  if (firstDate && firstDate > '2026-07-15') {
+    document.getElementById('m-first').closest('.form-row').classList.add('has-error');
+    ok = false;
+  } else {
+    document.getElementById('m-first').closest('.form-row').classList.remove('has-error');
+  }
+  if (!ok) return;
+
+  // 填充汇总
+  const ultra = Number(document.getElementById('t-ultra').value || 0);
+  const sky = Number(document.getElementById('t-sky').value || 0);
+  const storm = Number(document.getElementById('t-storm').value || 0);
+  document.getElementById('s-ultra').textContent = ultra + ' 片';
+  document.getElementById('s-sky').textContent = sky + ' 片';
+  document.getElementById('s-storm').textContent = storm + ' 片';
+  document.getElementById('s-total').textContent = (ultra + sky + storm) + ' 片';
+  document.getElementById('s-stock-date').textContent = stockDate || '未填';
+  document.getElementById('s-first-date').textContent = firstDate || '未填';
+
+  const validStores = stores.filter(s => s.name.trim());
+  document.getElementById('s-store-count').textContent = validStores.length;
+  document.getElementById('s-stores-preview').innerHTML = validStores.map(s =>
+    `<div style="padding:0.2rem 0">· ${s.name} <span style="color:var(--text-3);font-family:'DM Mono',monospace">${s.target}片</span></div>`
+  ).join('');
+
+  toStep(4);
+}
+
+function toStep(n) {
+  currentStep = n;
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById(`panel-${i}`).classList.toggle('hidden', i !== n);
+    const dot = document.getElementById(`step-dot-${i}`);
+    dot.className = 'step' + (i < n ? ' done' : i === n ? ' active' : '');
+  }
+}
+
+document.getElementById('confirm-check').addEventListener('change', function() {
+  document.getElementById('submit-btn').disabled = !this.checked;
+});
+
+async function submitPlan() {
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+
+  const ultra = Number(document.getElementById('t-ultra').value || 0);
+  const sky = Number(document.getElementById('t-sky').value || 0);
+  const storm = Number(document.getElementById('t-storm').value || 0);
+  const stockDate = document.getElementById('m-stock').value;
+  const firstDate = document.getElementById('m-first').value;
+  const region = document.getElementById('region').value;
+
+  const payload = {
+    targets: { ultra, sky, storm },
+    stores: stores.filter(s => s.name.trim()),
+    region,
+    status: '已提交',
+  };
+  if (stockDate) payload.milestone_stock = new Date(stockDate).getTime();
+  if (firstDate) payload.milestone_first_order = new Date(firstDate).getTime();
+
+  try {
+    const r = await fetch(`${API}/api/summer-plan?t=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || '提交失败');
+
+    // 成功
+    document.getElementById('steps-bar').style.display = 'none';
+    for (let i = 1; i <= 4; i++) document.getElementById(`panel-${i}`).classList.add('hidden');
+    document.getElementById('panel-success').classList.remove('hidden');
+    document.getElementById('go-stock-btn').href = `/summer-stock?t=${token}`;
+    document.getElementById('go-dashboard-btn').href = `/distributor-dashboard?t=${token}`;
+  } catch (e) {
+    alert('提交失败：' + e.message);
+    btn.disabled = false;
+    btn.textContent = '提交暑期计划';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
