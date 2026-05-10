@@ -35,6 +35,9 @@ export const TABLES = {
   monthly_statement: "tblvEIQ7IBCJw2iY",
   stock_movement: "tblCoNeAbrz6tM9C",
 
+  // ── 导出记录 ──
+  export_log: "tblBhxfut1XWWP0Q",
+
   // ── 分析 ──
   ai_analysis: "tbl8W9F9K2RbaL0k",
 };

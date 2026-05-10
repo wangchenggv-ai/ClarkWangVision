@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-05-10 — orders.html 三项修复（待部署）
+
+### 删除"有无库存"显示
+- 移除筛选栏"库存"下拉（`filterStock` select）
+- 移除表头"是否有库存"列
+- 移除表格行内"有库存/无库存"可编辑 select（`data-field="库存状态"`）
+- colspan 16→15；resetFilter 清理残留引用
+
+### 筛选 Bug 修复
+- **Bug A**：查询按钮加 `currentPage=1`，防换筛选后停在空页
+- **Bug B**：filterStatus 下拉加 `onchange` 重置 `activeStatusFilter` + 卡片高亮，解决统计卡与下拉互相残留的状态冲突
+- **Bug C**：超期模式改发 `pageSize=9999`（全量拉取），解决分页下漏掉超期订单的 bug；server.js `/api/admin/orders` pageSize 上限从 100 改为 9999
+- **Bug D**：删除 loadOrders 内 `today`/`week` 两个永远不执行的死代码 else-if 分支
+
+### 确认性能体感优化
+- 确认按钮文案改为 `确认中 (N 单)...`，让操作员看到处理数量，改善等待感知
+
+### 根因说明（确认慢）
+- resolveStock 走缓存（快）、generateQRPng 本地生成（快）
+- 实际瓶颈：4 次 Feishu API 调用（2 并行读 + 2 批量写），受 Feishu 服务端限速，理论下限 ~1.5-2s/批次，代码层面已最优
+
 ## 2026-05-02 — 测试环境搭建 + 验真系统加固
 
 ### 基础设施
@@ -2100,3 +2121,58 @@ ssh -i 密钥/key-gaush-lab.pem root@113.44.175.221 "docker cp /tmp/server.js or
 ### 部署说明
 - 涉及文件：server.js, public/orders.html
 - 已部署 ECS
+
+## 2026-05-10 成品入库扫码系统
+
+### 新功能
+- 条码规则：`{型号缩写}-{SPH×100}-{CYL×100}`，如 `ULT-300-075`（Code128格式）
+- 型号缩写表：ULT/D8/TKAA/TKAB/TKAP/TKAM/XFJ（硬编码，跟 SKU_CATALOG 同源）
+
+### server.js
+- 新增 `SKU_ABBR` 映射表 + `decodeBarcode()` + `encodeBarcode()` 函数
+- 新增路由：`/inventory-barcode`、`/inventory-inbound`、`/inventory-outbound`
+- 新增 `GET /api/inventory/sku/:barcode`：条码解码 → queryStockByRx → 返回库存
+- 新增 `GET /api/inventory/outbound-requirements/:orderNo`：从 lens_detail 聚合出库需求（按 SKU+SPH+CYL 分组，不区分眼别）
+
+### 新增页面
+- `public/inventory-barcode.html`：条码标签打印页，JsBarcode CDN渲染，按型号筛选/只显示有库存，浏览器打印
+- `public/inventory-inbound.html`：扫码入库，Enter触发，复用 `/api/admin/stock-movement`（type=入库/source=采购到货）
+- `public/inventory-outbound.html`：出库验货，输入订单号→加载需求→逐条扫码→全部✅解锁出库，强制拦截不符条码；`extractOrderNo()` 支持URL格式/ORD-正则/手动三种录入方式（含扫码枪）
+
+### 部署说明
+- 涉及文件：server.js, public/inventory-barcode.html, public/inventory-inbound.html, public/inventory-outbound.html
+- 不需要改 Bitable 结构，条码在运行时动态计算，不落库
+- 已部署 ECS（2026-05-10）
+
+## 2026-05-10 批量发货系统
+
+### 设计原则
+- 与常规订单（ORD-）完全隔离：批量单用 BLK- 前缀，不写 order 表
+- 无客户名：代理商级别下单，lens_detail.顾客姓名 = 代理商名
+- 部分发货：库存不足时只发可发数量，shortage 记录在JSON
+
+### server.js
+- 新增 `BULK_DIR`（drafts/bulk/）、`genBulkNo`、`saveBulk`、`loadBulk`、`listBulks`
+- 新增路由：`/bulk-order`、`/bulk-labels`、`/bulk-statement`
+- 新增 7 个 API：
+  - `POST /api/bulk/preview` — 库存预检（不写数据）
+  - `POST /api/bulk/submit` — 预占库存 + 赋码(randomBytes×8) + 写lens_detail + QR预生成
+  - `POST /api/bulk/fulfill/:blkNo` — convertReservation扣库存 + 写stock_movement + 状态→已出库
+  - `POST /api/bulk/ship/:blkNo` — 录快递单号 + 状态→已发货
+  - `GET /api/bulk/list` — 列表（可按agentId/status筛选）
+  - `GET /api/bulk/labels/:blkNo` — 调用buildPrintPage生成标签HTML
+  - `GET /api/bulk/:blkNo` — 详情
+
+### 验真页修复（verify.html + server.js）
+- `isBulk = orderInfo.orderNo.startsWith("BLK-")`
+- BLK-分支：隐藏订单号行（`display:none`）、隐藏顾客姓名、眼别列为空、单行处方展示
+- ORD-分支：原有逻辑完全不变
+
+### 新增页面
+- `public/bulk-order.html`：手动/Excel两种录入，库存预检表格，部分发货提示
+- `public/bulk-labels.html`：批量单列表，出库+自动打开标签页，快递单号录入发货
+- `public/bulk-statement.html`：按代理商+月份查询，展开明细，导出Excel（XLSX CDN）
+
+### 端到端测试（2026-05-10）
+- BLK-20260510-969F14 / 镜片码 D6C3D399F82ED945 / Ultra双效 -3.00/-0.75
+- 全流程通过：预检→提交→出库→验真页正常显示

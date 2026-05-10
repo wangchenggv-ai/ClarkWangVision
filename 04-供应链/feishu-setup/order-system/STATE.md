@@ -1,6 +1,6 @@
 # 系统当前状态
 
-> 更新：2026-05-02 | 完整历史见 CHANGELOG.md
+> 更新：2026-05-10 v2 | 完整历史见 CHANGELOG.md
 
 ---
 
@@ -69,6 +69,12 @@ ssh -i "$KEY" root@113.44.175.221 \
 ---
 
 ## 已知问题 / 待办
+
+- [ ] **导出记录系统**：新增导出记录表（export_log），记录工厂导出/标签打印/通行单/对账单的导出历史，防重复导出。新增 `lib/export-log.js` + 改造 batch-zip/print-queue/slip 端点 + 新增对账单 API + 前端导出状态列。**本地 Docker 测试通过，待部署 ECS**
+- [ ] **合并下单系统**：助理汇总多个代理商散单 → 合并成一张大表 → 可编辑预览 → 确认后写入Bitable（状态"已下单"）。新增 `lib/batch-merge.js` + `public/batch-merge.html` + 2个API端点。与批量导入区别：多代理商、状态已下单、不生成镜片码、有预览确认环节。**本地 Docker 测试通过，待部署 ECS**
+- [x] **成品入库扫码系统**：条码格式 `ULT-300-075`（型号缩写-SPH-CYL），3个新页面（inventory-barcode/inbound/outbound），2个新API端点，复用现有 stock-movement 端点写库存 ✅ 已部署（2026-05-10）
+- [x] **批量发货系统**：代理商级批量下单（无客户名）→ 库存预检 → 赋码 → 出库 → 发货 → 对账单。3个新页面（bulk-order/labels/statement），7个新API，BLK-前缀与ORD-完全隔离，验真页按BLK-分支隐藏代理商信息 ✅ 已部署（2026-05-10）
+- [ ] **orders.html 三项修复**（待今晚推 ECS）：①删除"有无库存"列（表头+行内select+筛选栏），②筛选 bug 修复（查询不重置页码/状态卡与下拉冲突/超期分页漏数/死代码），③确认按钮显示处理单数。涉及文件：`public/orders.html` + `server.js`（pageSize cap 100→9999）
 
 - [x] **部署**：状态机改动已于 2026-04-27 推送 ECS ✅
 - [x] **性能优化**：confirm 端点从 ~9s 优化到 ~4.5s（并行读取 + batchUpdate + 计时日志）✅

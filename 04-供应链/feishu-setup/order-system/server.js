@@ -38,6 +38,8 @@ import { rawVal, fmt, fmtAxis, parsePagination } from "./lib/helpers.js";
 import * as templatesMod from "./lib/templates.js";
 import { buildFactoryExcel, buildZipBuffer, buildLabelExportExcel } from "./lib/factory-export.js";
 import * as batchImportMod from "./lib/batch-import.js";
+import { genOrderNo as genMergeOrderNo, buildMergeOrderRecords, buildMergeLensRecords } from "./lib/batch-merge.js";
+import { checkExportStatus, logExport, getOrderExportStatus, listExportLogs } from "./lib/export-log.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
@@ -195,12 +197,53 @@ async function handleExcelUpload(file) {
 
   const headers = allRows[headerIdx].map(c => String(c || "").trim());
 
-  // 模糊匹配列（支持多别名）
+  // 列名模糊匹配表（规范名 → 可接受变体，来自 excel_merger.py COLUMN_ALIASES）
+  const COLUMN_ALIASES = {
+    "顾客姓名": ["顾客姓名","姓名","患者姓名","客户姓名","配镜人","name"],
+    "眼别":     ["眼别","眼","左右眼","OD/OS","eye"],
+    "球镜SPH":  ["球镜SPH","球镜","SPH","S","sph","近视","度数"],
+    "柱镜CYL":  ["柱镜CYL","柱镜","CYL","C","cyl","散光"],
+    "轴位AXIS": ["轴位AXIS","轴位","轴向","AXIS","A","axis","轴"],
+    "产品型号": ["产品型号","型号","产品","SKU","product"],
+    "数量":     ["数量","数量(片)","数量（副）","片数","副数","qty"],
+    "代理商名称":["代理商名称","代理商","经销商","dealer"],
+    "终端客户": ["终端客户","客户","门店","机构"],
+    "联系人":   ["联系人","收件人","收货人"],
+    "联系电话": ["联系电话","电话","手机","phone"],
+    "收货地址": ["收货地址","地址","送货地址","address"],
+    "备注":     ["备注","说明","remark","特殊要求"],
+  };
+
+  // 规范化列名：将 headers 映射为规范名称 → 列索引（大小写不敏感）
+  const canonIndex = {};
+  for (const [canonical, aliases] of Object.entries(COLUMN_ALIASES)) {
+    for (let i = 0; i < headers.length; i++) {
+      const h = headers[i].toLowerCase();
+      if (aliases.some(a => a.toLowerCase() === h)) {
+        canonIndex[canonical] = i;
+        break;
+      }
+    }
+  }
+
+  // 模糊匹配列（支持多别名，大小写不敏感）
   const findCol = (...names) => {
+    // 优先从 canonIndex 查找匹配
     for (const name of names) {
-      let idx = headers.indexOf(name);
+      const nl = name.toLowerCase();
+      for (const [canonical, idx] of Object.entries(canonIndex)) {
+        const aliases = COLUMN_ALIASES[canonical] || [];
+        if (canonical.toLowerCase() === nl || aliases.some(a => a.toLowerCase() === nl)) {
+          return idx;
+        }
+      }
+    }
+    // 兜底：模糊匹配（startsWith / includes）
+    for (const name of names) {
+      const nl = name.toLowerCase();
+      let idx = headers.findIndex(h => h.toLowerCase() === nl);
       if (idx >= 0) return idx;
-      idx = headers.findIndex(h => h.startsWith(name) || h.includes(name));
+      idx = headers.findIndex(h => h.toLowerCase().startsWith(nl) || h.toLowerCase().includes(nl));
       if (idx >= 0) return idx;
     }
     return -1;
@@ -402,6 +445,36 @@ async function getSkusWithInventory() {
   return SKU_CATALOG;
 }
 
+// ─── 库存条码 ──────────────────────────────────────────────────────────────
+const SKU_ABBR = {
+  ULT: "Ultra双效", D8: "D8",
+  TKAA: "时空之眼A", TKAB: "时空之眼B",
+  TKAP: "时空之眼PRO", TKAM: "时空之眼MAX",
+  XFJ: "小旋风",
+};
+const SKU_ABBR_INV = Object.fromEntries(Object.entries(SKU_ABBR).map(([k, v]) => [v, k]));
+
+function decodeBarcode(str) {
+  const parts = str.toUpperCase().split("-");
+  if (parts.length < 3) return null;
+  const cylCode = parts.pop();
+  const sphCode = parts.pop();
+  const abbr = parts.join("-");
+  const sku = SKU_ABBR[abbr];
+  if (!sku) return null;
+  const sph = -parseInt(sphCode, 10) / 100;
+  const cyl = -parseInt(cylCode, 10) / 100;
+  if (!Number.isFinite(sph) || !Number.isFinite(cyl)) return null;
+  return { sku, sph, cyl };
+}
+
+function encodeBarcode(sku, sph, cyl) {
+  const abbr = SKU_ABBR_INV[sku] || sku.replace(/\W/g, "").toUpperCase().slice(0, 4);
+  const sphCode = String(Math.round(Math.abs(Number(sph)) * 100)).padStart(3, "0");
+  const cylCode = String(Math.round(Math.abs(Number(cyl)) * 100)).padStart(3, "0");
+  return `${abbr}-${sphCode}-${cylCode}`;
+}
+
 // ─── 产品级 SKU 过滤（无空格 = 产品级，有空格 = 处方级） ──────────────────────
 
 function getModelSkus(allSkus) {
@@ -479,6 +552,35 @@ function genCustomerId() {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const r = randomBytes(2).toString("hex").toUpperCase();
   return `CUS-${d}-${r}`;
+}
+
+// ─── 批量发货存储 ───────────────────────────────────────────────────────────
+const BULK_DIR = resolve(DRAFTS_DIR, "bulk");
+
+function genBulkNo() {
+  const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const r = randomBytes(3).toString("hex").toUpperCase();
+  return `BLK-${d}-${r}`;
+}
+
+function saveBulk(data) {
+  if (!existsSync(BULK_DIR)) mkdirSync(BULK_DIR, { recursive: true });
+  writeFileSync(resolve(BULK_DIR, `${data.blkNo}.json`), JSON.stringify(data, null, 2), "utf8");
+}
+
+function loadBulk(blkNo) {
+  const p = resolve(BULK_DIR, `${blkNo}.json`);
+  if (!existsSync(p)) return null;
+  try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; }
+}
+
+function listBulks({ agentId = "", status = "" } = {}) {
+  if (!existsSync(BULK_DIR)) return [];
+  return readdirSync(BULK_DIR)
+    .filter(f => f.endsWith(".json"))
+    .map(f => { try { return JSON.parse(readFileSync(resolve(BULK_DIR, f), "utf8")); } catch { return null; } })
+    .filter(d => d && (!agentId || d.agentId === agentId) && (!status || d.status === status))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 // ─── 草稿存储 ──────────────────────────────────────────────────────────────
@@ -612,12 +714,10 @@ async function processPendingDrafts() {
         }
       }
 
-      // 并行写入 Bitable
-      const [okOrder, okLens] = await Promise.all([
-        batchCreateRecords(TABLES.order, orderRecords),
-        lensRecords.length > 0 ? batchCreateRecords(TABLES.lens_detail, lensRecords) : Promise.resolve(true),
-      ]);
+      // 顺序写入：订单主表成功后才写镜片明细，避免部分写入导致幽灵记录
+      const okOrder = await batchCreateRecords(TABLES.order, orderRecords);
       if (!okOrder) throw new Error("写入订单主表失败");
+      const okLens = lensRecords.length > 0 ? await batchCreateRecords(TABLES.lens_detail, lensRecords) : true;
       if (!okLens) console.error(`  ⚠️ 镜片明细写入失败 ${orderNo}`);
 
       // 删除草稿文件
@@ -1213,12 +1313,56 @@ const server = createServer(async (req, res) => {
       serveStatic(res, resolve(__dirname, "public/batch-import.html"));
       return logReq(req, 200, start);
     }
+    if (pathname === "/batch-merge" || pathname === "/batch-merge.html") {
+      serveStatic(res, resolve(__dirname, "public/batch-merge.html"));
+      return logReq(req, 200, start);
+    }
     if (pathname === "/qr-gallery" || pathname === "/qr-gallery.html") {
       serveStatic(res, resolve(__dirname, "public/qr-gallery.html"));
       return logReq(req, 200, start);
     }
+    if (pathname === "/inventory-barcode" || pathname === "/inventory-barcode.html") {
+      serveStatic(res, resolve(__dirname, "public/inventory-barcode.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/inventory-inbound" || pathname === "/inventory-inbound.html") {
+      serveStatic(res, resolve(__dirname, "public/inventory-inbound.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/inventory-outbound" || pathname === "/inventory-outbound.html") {
+      serveStatic(res, resolve(__dirname, "public/inventory-outbound.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/bulk-order" || pathname === "/bulk-order.html") {
+      serveStatic(res, resolve(__dirname, "public/bulk-order.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/bulk-labels" || pathname === "/bulk-labels.html") {
+      serveStatic(res, resolve(__dirname, "public/bulk-labels.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/bulk-statement" || pathname === "/bulk-statement.html") {
+      serveStatic(res, resolve(__dirname, "public/bulk-statement.html"));
+      return logReq(req, 200, start);
+    }
     if (pathname === "/verify" || pathname === "/verify.html") {
       serveStatic(res, resolve(__dirname, "public/verify.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/summer" || pathname === "/summer.html") {
+      serveStatic(res, resolve(__dirname, "public/summer.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/summer-plan" || pathname === "/summer-plan.html") {
+      serveStatic(res, resolve(__dirname, "public/summer-plan.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/summer-stock" || pathname === "/summer-stock.html") {
+      serveStatic(res, resolve(__dirname, "public/summer-stock.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/distributor-dashboard" || pathname === "/distributor-dashboard.html") {
+      serveStatic(res, resolve(__dirname, "public/distributor-dashboard.html"));
       return logReq(req, 200, start);
     }
 
@@ -2042,25 +2186,42 @@ const server = createServer(async (req, res) => {
       // 模板缓存
       if (!_verifyTemplate) _verifyTemplate = readFileSync(resolve(__dirname, "public/verify.html"), "utf-8");
       let html = _verifyTemplate;
+      const isBulk = (orderInfo.orderNo || "").startsWith("BLK-");
       html = html.replace("{{FOUND}}", found ? "true" : "false");
       html = html.replace("{{HERO_CLASS}}", found ? "hero-ok" : "hero-fail");
       html = html.replace("{{LENS_CODE}}", escapeHtml(lensCode));
-      html = html.replace("{{ORDER_NO}}", escapeHtml(orderInfo.orderNo || ""));
-      html = html.replace("{{CUSTOMER_NAME}}", escapeHtml(orderInfo.customerName || ""));
+      // 批量单不向消费者暴露内部单号和代理商名
+      html = html.replace("{{ORDER_NO_DISPLAY}}", isBulk ? "display:none" : "");
+      html = html.replace("{{ORDER_NO}}", isBulk ? "" : escapeHtml(orderInfo.orderNo || ""));
+      html = html.replace("{{CUSTOMER_NAME}}", isBulk ? "" : escapeHtml(orderInfo.customerName || ""));
       html = html.replace("{{SKU_NAME}}", escapeHtml(orderInfo.skuName || ""));
 
-      const eyeRows = eyes.map(e => {
-        const cls = e.side.includes("左") ? "eye-L" : "eye-R";
-        return `<tr>
+      let eyeRows;
+      if (isBulk) {
+        // 批量单：不分眼别，直接展示处方一行
+        const e = eyes[0] || {};
+        eyeRows = `<tr>
+        <td></td>
+        <td class="rx-num">${escapeHtml(fmt(e.sph ?? ""))}</td>
+        <td class="rx-num">${escapeHtml(fmt(e.cyl ?? ""))}</td>
+        <td class="rx-num">—</td>
+      </tr>`;
+      } else {
+        eyeRows = eyes.map(e => {
+          const cls = e.side.includes("左") ? "eye-L" : "eye-R";
+          return `<tr>
         <td><span class="eye-tag ${cls}">${escapeHtml(e.side)}</span></td>
         <td class="rx-num">${escapeHtml(fmt(e.sph))}</td>
         <td class="rx-num">${escapeHtml(fmt(e.cyl))}</td>
         <td class="rx-num">${escapeHtml(fmtAxis(e.axis))}</td>
       </tr>`;
-      }).join("\n");
+        }).join("\n");
+      }
       html = html.replace("{{EYE_ROWS}}", eyeRows);
 
-      const codeHtml = eyes.map(e => `<span class="lens-code-item"><span class="lens-code-side">${escapeHtml(e.side)}</span> <span class="mono">${escapeHtml(e.lensCode)}</span></span>`).join("\n");
+      const codeHtml = isBulk
+        ? `<span class="lens-code-item"><span class="mono">${escapeHtml(lensCode)}</span></span>`
+        : eyes.map(e => `<span class="lens-code-item"><span class="lens-code-side">${escapeHtml(e.side)}</span> <span class="mono">${escapeHtml(e.lensCode)}</span></span>`).join("\n");
       html = html.replace("{{LENS_CODES}}", codeHtml);
       html = html.replace("{{NOW}}", escapeHtml(new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })));
 
@@ -2089,7 +2250,7 @@ const server = createServer(async (req, res) => {
       const filterFrom = url.searchParams.get("from") || "";
       const filterTo = url.searchParams.get("to") || "";
       const page = Math.max(1, parseInt(url.searchParams.get("page")) || 1);
-      const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize")) || 50));
+      const pageSize = Math.min(9999, Math.max(1, parseInt(url.searchParams.get("pageSize")) || 50));
 
       const allRecords = await listRecords(TABLES.order);
 
@@ -2464,6 +2625,14 @@ const server = createServer(async (req, res) => {
       const t3 = Date.now();
       console.log(`  batch-zip ${orderNos.length}单: 读取=${t1-t0}ms Excel=${t2-t1}ms 状态更新=${t3-t2}ms 总计=${t3-t0}ms`);
 
+      // 记录导出日志（异步，不阻塞响应）
+      const lensCodes = allDetails.map(d => d.fields["镜片码（唯一）"] || "").filter(Boolean);
+      logExport("factory", orderNos, {
+        lensCodes,
+        filename: excelName,
+        remark: `导出 ${orderNos.length} 单，${lensCodes.length} 片镜片`,
+      }).catch(e => console.error("记录工厂导出日志失败:", e.message));
+
       res.writeHead(200, {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(excelName)}`,
@@ -2471,6 +2640,155 @@ const server = createServer(async (req, res) => {
       });
       res.end(excelBuf);
       return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/statement — 代理商对账单
+    if (pathname === "/api/admin/statement" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const agentId = url.searchParams.get("agentId") || "";
+      const startTime = Number(url.searchParams.get("startTime")) || 0;
+      const endTime = Number(url.searchParams.get("endTime")) || Date.now();
+      if (!agentId) { jsonRes(res, 400, { error: "请提供 agentId" }); return logReq(req, 400, start); }
+
+      try {
+        // 查询该代理商在时间范围内已发货的订单
+        const filter = `AND(CurrentValue.[代理商ID]="${agentId}",CurrentValue.[订单状态]="已发货")`;
+        const allRecords = [];
+        let pageToken = "";
+        do {
+          const qs = `page_size=500&filter=${encodeURIComponent(filter)}${pageToken ? `&page_token=${pageToken}` : ""}`;
+          const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?${qs}`);
+          allRecords.push(...(d?.items || []));
+          pageToken = d?.has_more ? d.page_token : "";
+        } while (pageToken);
+
+        // 按发货时间过滤
+        const filtered = allRecords.filter(r => {
+          const shipTime = r.fields["发货时间"];
+          if (!shipTime) return false;
+          return shipTime >= startTime && shipTime <= endTime;
+        });
+
+        if (!filtered.length) {
+          jsonRes(res, 404, { error: "该时间段内无已发货订单" });
+          return logReq(req, 404, start);
+        }
+
+        // 获取镜片明细
+        const orderNos = [...new Set(filtered.map(r => r.fields["订单编号"]))];
+        const lensDetailsMap = {};
+        await Promise.all(orderNos.map(async (orderNo) => {
+          const details = await getLensDetailsByOrder(orderNo);
+          lensDetailsMap[orderNo] = details || [];
+        }));
+
+        // 构建对账数据
+        const statementRows = [];
+        for (const rec of filtered) {
+          const f = rec.fields;
+          const orderNo = f["订单编号"];
+          const customerName = f["顾客姓名"] || "";
+          const pairIndex = f["序号"] || 1;
+          const lensDetails = (lensDetailsMap[orderNo] || []).filter(r =>
+            (r.fields["顾客姓名"] || "") === customerName && Number(r.fields["序号"] || 1) === Number(pairIndex)
+          );
+
+          for (const lens of lensDetails) {
+            const lf = lens.fields;
+            statementRows.push({
+              orderNo,
+              customerName,
+              sku: f["产品型号"] || "",
+              eye: lf["眼别"] || "",
+              sph: lf["球镜SPH"] ?? "",
+              cyl: lf["柱镜CYL"] ?? "",
+              axis: lf["轴位AXIS"] ?? "",
+              lensCode: lf["镜片码（唯一）"] || "",
+              quantity: f["数量"] || 1,
+              shipDate: f["发货时间"] ? new Date(f["发货时间"]).toLocaleDateString("zh-CN") : "",
+              courierName: f["物流公司"] || "",
+              trackingNo: f["快递单号"] || "",
+              address: f["收货地址"] || "",
+            });
+          }
+        }
+
+        // 生成 Excel
+        const XLSX = await import("xlsx");
+        const wsData = [
+          ["订单编号", "客户姓名", "产品型号", "眼别", "球镜SPH", "柱镜CYL", "轴位AXIS", "镜片码", "数量", "发货日期", "物流公司", "快递单号", "收货地址"],
+          ...statementRows.map(r => [
+            r.orderNo, r.customerName, r.sku, r.eye, r.sph, r.cyl, r.axis, r.lensCode,
+            r.quantity, r.shipDate, r.courierName, r.trackingNo, r.address,
+          ]),
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "对账单");
+        const excelBuf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+
+        const agentName = filtered[0]?.fields["代理商名称"] || agentId;
+        const startDate = new Date(startTime).toISOString().slice(0, 10);
+        const endDate = new Date(endTime).toISOString().slice(0, 10);
+        const excelName = `对账单_${agentName}_${startDate}_${endDate}.xlsx`;
+
+        // 记录导出日志（异步，不阻塞响应）
+        logExport("statement", orderNos, {
+          filename: excelName,
+          remark: `${agentName} 对账单，${orderNos.length} 单，${statementRows.length} 片镜片，${startDate} 至 ${endDate}`,
+        }).catch(e => console.error("记录对账单导出日志失败:", e.message));
+
+        res.writeHead(200, {
+          "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "Content-Disposition": `attachment; filename="${encodeURIComponent(excelName)}"`,
+          "Access-Control-Allow-Origin": "*",
+        });
+        res.end(excelBuf);
+        return logReq(req, 200, start);
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+        return logReq(req, 500, start);
+      }
+    }
+
+    // GET /api/admin/export-logs — 查询导出记录
+    if (pathname === "/api/admin/export-logs" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const type = url.searchParams.get("type") || "";
+      const orderNo = url.searchParams.get("orderNo") || "";
+      const startTime = Number(url.searchParams.get("startTime")) || 0;
+      const endTime = Number(url.searchParams.get("endTime")) || 0;
+
+      try {
+        console.log(`  export-logs: TABLES.export_log = ${TABLES.export_log}`);
+        const logs = await listExportLogs({ type, orderNo, startTime: startTime || undefined, endTime: endTime || undefined });
+        jsonRes(res, 200, { logs });
+        return logReq(req, 200, start);
+      } catch (e) {
+        console.error(`  export-logs error:`, e.message, e.stack);
+        jsonRes(res, 500, { error: e.message });
+        return logReq(req, 500, start);
+      }
+    }
+
+    // GET /api/admin/export-status — 批量查询订单导出状态
+    if (pathname === "/api/admin/export-status" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const orderNosParam = url.searchParams.get("orderNos") || "";
+      if (!orderNosParam) { jsonRes(res, 400, { error: "请提供 orderNos" }); return logReq(req, 400, start); }
+
+      const orderNos = orderNosParam.split(",").map(s => s.trim()).filter(Boolean);
+      try {
+        const status = await getOrderExportStatus(orderNos);
+        jsonRes(res, 200, { status });
+        return logReq(req, 200, start);
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+        return logReq(req, 500, start);
+      }
     }
 
     // POST /api/admin/update-field — 内联更新订单字段（库存/供应商）
@@ -2695,7 +3013,7 @@ const server = createServer(async (req, res) => {
       if (!files?.length) { jsonRes(res, 400, { error: "请提供文件" }); return logReq(req, 400, start); }
       if (!agentId || !agentName) { jsonRes(res, 400, { error: "请提供代理商信息" }); return logReq(req, 400, start); }
 
-      const { extractAgentId, parseExcelFile, buildOrderRecords, contentHash } = batchImportMod;
+      const { extractAgentId, buildOrderRecords, contentHash } = batchImportMod;
       const results = [];
       let totalOrders = 0, totalLenses = 0;
       const allOrderRecords = [];
@@ -2705,7 +3023,7 @@ const server = createServer(async (req, res) => {
       for (const file of files) {
         try {
           const fileAgentId = extractAgentId(file.name) || agentId;
-          const parsed = parseExcelFile(file.name, file.data);
+          const parsed = await handleExcelUpload({ data: file.data });
           if (!parsed.patients.length) {
             results.push({ file: file.name, agentId: fileAgentId, ok: false, error: parsed.warnings?.[0] || "未解析到患者数据" });
             continue;
@@ -2775,6 +3093,92 @@ const server = createServer(async (req, res) => {
       }
 
       jsonRes(res, 200, { success: true, results, summary: { total: files.length, csv: csvLines.join("\n") }, orderCount: totalOrders, lensCount: totalLenses });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/batch-merge/parse — 解析多个Excel，返回预览数据
+    if (pathname === "/api/admin/batch-merge/parse" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req, 30 * 1024 * 1024);
+      const { files } = payload;
+      if (!files?.length) { jsonRes(res, 400, { error: "请提供文件" }); return logReq(req, 400, start); }
+
+      const orders = [];
+      const warnings = [];
+
+      for (const file of files) {
+        try {
+          const parsed = await handleExcelUpload({ data: file.data });
+          if (!parsed.patients.length) {
+            warnings.push(`${file.name}: 未解析到有效数据`);
+            continue;
+          }
+
+          const agentMatch = file.name.match(/AG(\d{3})/i);
+          const agentId = agentMatch ? `AG${agentMatch[1]}` : "";
+          const agents = await loadAgents();
+          const agentInfo = agentId && agents.find(a => a.id === agentId);
+          
+          orders.push({
+            file: file.name,
+            agentId: agentId || Object.keys(agentMap)[0] || "",
+            agentName: agentInfo?.name || "",
+            patients: parsed.patients,
+            contact: parsed.contact,
+            phone: parsed.phone,
+            address: parsed.address,
+            warnings: parsed.warnings,
+          });
+
+          if (parsed.warnings?.length) warnings.push(...parsed.warnings.map(w => `${file.name}: ${w}`));
+        } catch (e) {
+          warnings.push(`${file.name}: 解析失败 - ${e.message}`);
+        }
+      }
+
+      jsonRes(res, 200, { success: true, orders, warnings });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/batch-merge/confirm — 确认后写入Bitable
+    if (pathname === "/api/admin/batch-merge/confirm" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const payload = await readBody(req, 30 * 1024 * 1024);
+      const { orders } = payload;
+      if (!orders?.length) { jsonRes(res, 400, { error: "请提供订单数据" }); return logReq(req, 400, start); }
+
+      const allOrderRecords = [];
+      const allLensRecords = [];
+      let totalOrders = 0, totalLenses = 0;
+
+      for (const order of orders) {
+        const agentInfo = {
+          id: order.agentId,
+          name: order.agentName,
+          contact: order.contact || "",
+          phone: order.phone || "",
+          address: order.address || "",
+        };
+        const orderNo = genMergeOrderNo();
+        const orderRecords = buildMergeOrderRecords(order.patients, agentInfo, orderNo);
+        const lensRecords = buildMergeLensRecords(order.patients, agentInfo, orderNo);
+
+        allOrderRecords.push(...orderRecords);
+        allLensRecords.push(...lensRecords);
+        totalOrders += orderRecords.length;
+        totalLenses += lensRecords.length;
+      }
+
+      if (allOrderRecords.length > 0) {
+        const ok = await batchCreateRecords(TABLES.order, allOrderRecords);
+        if (!ok) { jsonRes(res, 500, { success: false, error: "订单主表写入失败" }); return logReq(req, 500, start); }
+      }
+      if (allLensRecords.length > 0) {
+        const ok = await batchCreateRecords(TABLES.lens_detail, allLensRecords);
+        if (!ok) { jsonRes(res, 500, { success: false, error: "镜片明细表写入失败" }); return logReq(req, 500, start); }
+      }
+
+      jsonRes(res, 200, { success: true, orderCount: totalOrders, lensCount: totalLenses });
       return logReq(req, 200, start);
     }
 
@@ -3013,6 +3417,15 @@ const server = createServer(async (req, res) => {
           address: rawVal(f0["收货地址"]),
           rows,
         });
+
+        // 记录通行单导出日志（异步，不阻塞响应）
+        const lensCodes = rows.map(r => r.lensCode).filter(Boolean);
+        logExport("slip", [orderNo], {
+          lensCodes,
+          filename: `通行单_${orderNo}`,
+          remark: `生成随货同行单，${lensCodes.length} 片镜片`,
+        }).catch(e => console.error("记录通行单导出日志失败:", e.message));
+
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(html);
         return logReq(req, 200, start);
@@ -3682,6 +4095,7 @@ h1{max-width:900px;margin:0 auto 24px;color:#1a1a2e;font-size:18pt}
       const customerName = payload.customerName || "";
       const pairIndex = payload.pairIndex || 0;
       const eye = payload.eye || "";
+      const force = payload.force === true; // 强制打印，跳过重复检查
       if (!orderNo) { jsonRes(res, 400, { error: "请提供 orderNo" }); return logReq(req, 400, start); }
 
       try {
@@ -3691,6 +4105,20 @@ h1{max-width:900px;margin:0 auto 24px;color:#1a1a2e;font-size:18pt}
         if (pairIndex) details = details.filter(r => Number(r.fields["序号"] || 1) === Number(pairIndex));
         if (eye) details = details.filter(r => (r.fields["眼别"] || "") === eye);
         if (!details.length) { jsonRes(res, 404, { error: "过滤后无匹配镜片" }); return logReq(req, 404, start); }
+
+        // 检查导出记录：是否已打印过
+        const lensCodes = details.map(r => r.fields["镜片码（唯一）"] || "").filter(Boolean);
+        if (!force && lensCodes.length > 0) {
+          const { exported } = await checkExportStatus([orderNo], "label");
+          if (exported.length > 0) {
+            jsonRes(res, 200, { 
+              ok: true, orderNo, lensCount: 0, jobIds: [], 
+              alreadyPrinted: true, 
+              message: `订单 ${orderNo} 已打印过标签，如需重新打印请勾选"强制打印"` 
+            });
+            return logReq(req, 200, start);
+          }
+        }
 
         // 检查订单状态：已在打标签/已发货说明标签已打印过
         const orderEnc = encodeURIComponent(`"${orderNo}"`);
@@ -3758,6 +4186,17 @@ h1{max-width:900px;margin:0 auto 24px;color:#1a1a2e;font-size:18pt}
                 await updateRecord(TABLES.order, rec.record_id, { "流程步骤": JSON.stringify(adv.wf), "订单状态": "打标签" });
               }
             }
+
+            // 记录标签打印导出日志
+            const lensCodes = [...printQueue.values()]
+              .filter(j => j.type === "zpl" && j.orderNo === job.orderNo && j.status === "done")
+              .map(j => j.lensCode)
+              .filter(Boolean);
+            logExport("label", [job.orderNo], {
+              lensCodes,
+              filename: `标签_${job.orderNo}`,
+              remark: `打印 ${lensCodes.length} 片镜片标签`,
+            }).catch(e => console.error("记录标签打印日志失败:", e.message));
           } catch (e) { console.error("⚠️ 工作流更新失败(labeled):", e.message); }
         }
       }
@@ -4643,6 +5082,213 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
       return logReq(req, 200, start);
     }
 
+    // ── 批量发货 API ──
+
+    // POST /api/bulk/preview — 库存预检（不写数据）
+    if (pathname === "/api/bulk/preview" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      if (!Array.isArray(body.lines) || !body.lines.length) {
+        jsonRes(res, 400, { error: "需要 lines 字段" }); return logReq(req, 400, start);
+      }
+      const results = await Promise.all(body.lines.map(async line => {
+        const info = await queryStockByRx(line.sku, line.sph, line.cyl);
+        const available = info ? Math.max(0, info.available) : 0;
+        const fulfillable = Math.min(Number(line.qty), available);
+        return { sku: line.sku, sph: line.sph, cyl: line.cyl, qty: Number(line.qty),
+          available, fulfillable, shortage: Number(line.qty) - fulfillable };
+      }));
+      jsonRes(res, 200, {
+        lines: results,
+        totalRequested: results.reduce((s, r) => s + r.qty, 0),
+        totalFulfillable: results.reduce((s, r) => s + r.fulfillable, 0),
+        totalShortage: results.reduce((s, r) => s + r.shortage, 0),
+      });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/bulk/submit — 创建批量单（预占库存+赋码+写lens_detail）
+    if (pathname === "/api/bulk/submit" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      if (!body.agentId || !Array.isArray(body.lines) || !body.lines.length) {
+        jsonRes(res, 400, { error: "需要 agentId 和 lines" }); return logReq(req, 400, start);
+      }
+      const blkNo = genBulkNo();
+      const lensRecords = [];
+      const lines = [];
+      for (const line of body.lines) {
+        const info = await queryStockByRx(line.sku, line.sph, line.cyl);
+        const available = info ? Math.max(0, info.available) : 0;
+        const fulfillable = Math.min(Number(line.qty), available);
+        const lensCodes = [];
+        if (fulfillable > 0) {
+          await reserveStock(line.sku, line.sph, line.cyl, fulfillable);
+          for (let i = 0; i < fulfillable; i++) {
+            const lensCode = randomBytes(8).toString("hex").toUpperCase();
+            lensCodes.push(lensCode);
+            lensRecords.push({ fields: {
+              "镜片码（唯一）": lensCode,
+              "订单编号": blkNo,
+              "产品型号": line.sku,
+              "球镜SPH": Number(line.sph),
+              "柱镜CYL": Number(line.cyl),
+              "眼别": "-",
+              "顾客姓名": body.agentName || body.agentId,
+              "订单状态": "待出库",
+              "序号": i + 1,
+            }});
+          }
+        }
+        lines.push({ sku: line.sku, sph: line.sph, cyl: line.cyl,
+          requestedQty: Number(line.qty), fulfilledQty: fulfillable,
+          shortage: Number(line.qty) - fulfillable, lensCodes });
+      }
+      if (lensRecords.length) {
+        const ok = await batchCreateRecords(TABLES.lens_detail, lensRecords);
+        if (!ok) { jsonRes(res, 500, { error: "镜片码写入失败" }); return logReq(req, 500, start); }
+        for (const r of lensRecords) {
+          generateQRPng(r.fields["镜片码（唯一）"]).catch(e => console.warn("  ⚠️ 批量QR:", e.message));
+        }
+      }
+      const bulk = {
+        blkNo, agentId: body.agentId, agentName: body.agentName || body.agentId,
+        createdAt: Date.now(), status: "待出库", note: body.note || "", lines,
+        totalRequested: lines.reduce((s, l) => s + l.requestedQty, 0),
+        totalFulfilled: lines.reduce((s, l) => s + l.fulfilledQty, 0),
+        trackingNo: "",
+      };
+      saveBulk(bulk);
+      console.log(`  批量单 ${blkNo}: ${bulk.totalFulfilled}/${bulk.totalRequested}片 (${body.agentId})`);
+      jsonRes(res, 200, { ok: true, blkNo, totalFulfilled: bulk.totalFulfilled,
+        totalRequested: bulk.totalRequested, lines });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/bulk/fulfill/:blkNo — 出库：扣库存+状态→已出库
+    const bulkFulfillMatch = pathname.match(/^\/api\/bulk\/fulfill\/([^/]+)$/);
+    if (bulkFulfillMatch && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const blkNo = decodeURIComponent(bulkFulfillMatch[1]);
+      const bulk = loadBulk(blkNo);
+      if (!bulk) { jsonRes(res, 404, { error: "批量单不存在" }); return logReq(req, 404, start); }
+      if (bulk.status !== "待出库") { jsonRes(res, 400, { error: `状态不符: ${bulk.status}` }); return logReq(req, 400, start); }
+      const docNo = `MOV-${new Date().toISOString().slice(0,10).replace(/-/g,"")}-${randomBytes(2).toString("hex").toUpperCase()}`;
+      const movRecs = [];
+      for (const line of bulk.lines) {
+        if (!line.fulfilledQty) continue;
+        await convertReservation(line.sku, line.sph, line.cyl, line.fulfilledQty);
+        movRecs.push({ fields: {
+          "单据号": docNo, "类型": "出库", "来源去向": "订单发货",
+          "SKU编号": line.sku, "SPH": Number(line.sph), "CYL": Number(line.cyl),
+          "数量": line.fulfilledQty, "关联单号": blkNo, "备注": "批量发货出库", "操作人": "admin",
+        }});
+      }
+      if (movRecs.length) await batchCreateRecords(TABLES.stock_movement, movRecs);
+      const details = await getLensDetailsByOrder(blkNo);
+      if (details.length) {
+        await batchUpdateRecords(TABLES.lens_detail, details.map(r => ({
+          record_id: r.record_id, fields: { "订单状态": "已出库" }
+        })));
+      }
+      saveBulk({ ...bulk, status: "已出库", stockMovementDocNo: docNo, fulfilledAt: Date.now() });
+      console.log(`  批量出库 ${blkNo}: ${docNo}`);
+      jsonRes(res, 200, { ok: true, blkNo, docNo });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/bulk/ship/:blkNo — 录快递单号→已发货
+    const bulkShipMatch = pathname.match(/^\/api\/bulk\/ship\/([^/]+)$/);
+    if (bulkShipMatch && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const blkNo = decodeURIComponent(bulkShipMatch[1]);
+      const bulk = loadBulk(blkNo);
+      if (!bulk) { jsonRes(res, 404, { error: "批量单不存在" }); return logReq(req, 404, start); }
+      if (bulk.status !== "已出库") { jsonRes(res, 400, { error: `状态不符: ${bulk.status}` }); return logReq(req, 400, start); }
+      const body = await readBody(req);
+      saveBulk({ ...bulk, status: "已发货", trackingNo: body.trackingNo || "", shippedAt: Date.now() });
+      jsonRes(res, 200, { ok: true, blkNo, trackingNo: body.trackingNo });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/bulk/list — 批量单列表
+    if (pathname === "/api/bulk/list" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const agentId = url.searchParams.get("agentId") || "";
+      const status = url.searchParams.get("status") || "";
+      const bulks = listBulks({ agentId, status }).map(b => ({
+        blkNo: b.blkNo, agentId: b.agentId, agentName: b.agentName,
+        createdAt: b.createdAt, status: b.status, trackingNo: b.trackingNo || "",
+        totalRequested: b.totalRequested, totalFulfilled: b.totalFulfilled,
+        lineCount: (b.lines || []).length, note: b.note || "",
+      }));
+      jsonRes(res, 200, { total: bulks.length, items: bulks });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/bulk/labels/:blkNo — 生成批量标签 HTML
+    const bulkLabelsMatch = pathname.match(/^\/api\/bulk\/labels\/([^/]+)$/);
+    if (bulkLabelsMatch && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const blkNo = decodeURIComponent(bulkLabelsMatch[1]);
+      const bulk = loadBulk(blkNo);
+      if (!bulk) { jsonRes(res, 404, { error: "批量单不存在" }); return logReq(req, 404, start); }
+      const details = await getLensDetailsByOrder(blkNo);
+      const labelRecords = details.map(r => ({ fields: r.fields, orderNo: blkNo }));
+      const html = await buildPrintPage(labelRecords);
+      if (!html) { jsonRes(res, 500, { error: "标签生成失败" }); return logReq(req, 500, start); }
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(html);
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/bulk/:blkNo — 批量单详情（必须在 list/labels 之后）
+    const bulkDetailMatch = pathname.match(/^\/api\/bulk\/(BLK-[^/]+)$/);
+    if (bulkDetailMatch && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const blkNo = decodeURIComponent(bulkDetailMatch[1]);
+      const bulk = loadBulk(blkNo);
+      if (!bulk) { jsonRes(res, 404, { error: "批量单不存在" }); return logReq(req, 404, start); }
+      jsonRes(res, 200, bulk);
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/inventory/sku/:barcode — 条码查SKU库存
+    const skuBarcodeMatch = pathname.match(/^\/api\/inventory\/sku\/([^/]+)$/);
+    if (skuBarcodeMatch && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const barcode = decodeURIComponent(skuBarcodeMatch[1]).toUpperCase();
+      const decoded = decodeBarcode(barcode);
+      if (!decoded) { jsonRes(res, 400, { error: "条码格式无效" }); return logReq(req, 400, start); }
+      const info = await queryStockByRx(decoded.sku, decoded.sph, decoded.cyl);
+      if (!info) { jsonRes(res, 404, { error: "库存记录不存在" }); return logReq(req, 404, start); }
+      jsonRes(res, 200, { barcode, sku: decoded.sku, sph: decoded.sph, cyl: decoded.cyl,
+        currentStock: info.stock, reserved: info.reserved, available: info.available, recordId: info.recordId });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/inventory/outbound-requirements/:orderNo — 订单出库需求
+    const outboundReqMatch = pathname.match(/^\/api\/inventory\/outbound-requirements\/([^/]+)$/);
+    if (outboundReqMatch && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const orderNo = decodeURIComponent(outboundReqMatch[1]);
+      const details = await getLensDetailsByOrder(orderNo);
+      if (!details.length) { jsonRes(res, 404, { error: "订单不存在或无镜片明细" }); return logReq(req, 404, start); }
+      const reqMap = new Map();
+      for (const r of details) {
+        const f = r.fields;
+        const sku = f["产品型号"] || "";
+        const sph = Number(f["球镜SPH"] ?? 0);
+        const cyl = Number(f["柱镜CYL"] ?? 0);
+        if (!sku) continue;
+        const barcode = encodeBarcode(sku, sph, cyl);
+        if (!reqMap.has(barcode)) reqMap.set(barcode, { sku, sph, cyl, barcode, qty: 0 });
+        reqMap.get(barcode).qty++;
+      }
+      jsonRes(res, 200, { orderNo, requirements: [...reqMap.values()] });
+      return logReq(req, 200, start);
+    }
+
     // GET /api/admin/production-orders — 排产工单列表
     if (pathname === "/api/admin/production-orders" && req.method === "GET") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
@@ -4774,6 +5420,327 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const limit = Math.min(Number(url.searchParams.get("limit") || 50), 200);
       jsonRes(res, 200, { total: _execLog.length, items: _execLog.slice(0, limit) });
+      return logReq(req, 200, start);
+    }
+
+    // ── 暑期计划 API ──────────────────────────────────────────────────────────
+
+    // GET /api/summer-plan?t=xxx — 查询该代理商的暑期计划
+    if (pathname === "/api/summer-plan" && req.method === "GET") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+      const encoded = encodeURIComponent(`"${token}"`);
+      const d = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.summer_target}/records?page_size=1&filter=CurrentValue.[distributor_token]=${encoded}`
+      );
+      const rec = (d?.items || [])[0];
+      if (!rec) { jsonRes(res, 200, { plan: null }); return logReq(req, 200, start); }
+      const f = rec.fields;
+      jsonRes(res, 200, {
+        plan: {
+          recordId: rec.record_id,
+          distributor_token: f.distributor_token || "",
+          distributor_name: f.distributor_name || "",
+          region: f.region || "",
+          target_ultra: Number(f.target_ultra || 0),
+          target_sky: Number(f.target_sky || 0),
+          target_storm: Number(f.target_storm || 0),
+          stock_ultra: Number(f.stock_ultra || 0),
+          stock_sky: Number(f.stock_sky || 0),
+          stock_storm: Number(f.stock_storm || 0),
+          stores: f.stores || "[]",
+          milestone_stock: f.milestone_stock || null,
+          milestone_first_order: f.milestone_first_order || null,
+          submitted_at: f.submitted_at || null,
+          status: f.status || "草稿",
+        }
+      });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/summer-plan?t=xxx — 创建或更新暑期计划
+    if (pathname === "/api/summer-plan" && req.method === "POST") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      const { targets, stores, milestone_stock, milestone_first_order, status, region } = body;
+      if (!targets) { jsonRes(res, 400, { error: "缺少 targets 字段" }); return logReq(req, 400, start); }
+
+      const fields = {
+        distributor_token: token,
+        distributor_name: agent.name || "",
+        region: region || "",
+        target_ultra: Number(targets.ultra || 0),
+        target_sky: Number(targets.sky || 0),
+        target_storm: Number(targets.storm || 0),
+        stores: typeof stores === "string" ? stores : JSON.stringify(stores || []),
+        submitted_at: Date.now(),
+        status: status || "已提交",
+      };
+      if (milestone_stock) fields.milestone_stock = milestone_stock;
+      if (milestone_first_order) fields.milestone_first_order = milestone_first_order;
+
+      // 查是否已有记录（upsert）
+      const encoded = encodeURIComponent(`"${token}"`);
+      const existing = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.summer_target}/records?page_size=1&filter=CurrentValue.[distributor_token]=${encoded}`
+      );
+      const existRec = (existing?.items || [])[0];
+      let result;
+      if (existRec) {
+        result = await updateRecord(TABLES.summer_target, existRec.record_id, fields);
+      } else {
+        result = await createRecord(TABLES.summer_target, fields);
+      }
+      if (!result) { jsonRes(res, 500, { error: "写入失败" }); return logReq(req, 500, start); }
+      jsonRes(res, 200, { ok: true, recordId: existRec?.record_id || result.record?.record_id });
+      return logReq(req, 200, start);
+    }
+
+    // PATCH /api/summer-plan/stock?t=xxx — 备库页写回库存字段
+    if (pathname === "/api/summer-plan/stock" && req.method === "PATCH") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      const { stock_ultra, stock_sky, stock_storm, skuDetail } = body;
+
+      const encoded = encodeURIComponent(`"${token}"`);
+      const existing = await feishuApi("GET",
+        `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.summer_target}/records?page_size=1&filter=CurrentValue.[distributor_token]=${encoded}`
+      );
+      const existRec = (existing?.items || [])[0];
+      if (!existRec) { jsonRes(res, 404, { error: "暑期计划不存在，请先填写计划" }); return logReq(req, 404, start); }
+
+      const fields = {};
+      if (stock_ultra !== undefined) fields.stock_ultra = Number(stock_ultra);
+      if (stock_sky !== undefined) fields.stock_sky = Number(stock_sky);
+      if (stock_storm !== undefined) fields.stock_storm = Number(stock_storm);
+      if (skuDetail !== undefined) fields.stock_sku_json = typeof skuDetail === 'string' ? skuDetail : JSON.stringify(skuDetail);
+      const result = await updateRecord(TABLES.summer_target, existRec.record_id, fields);
+      if (!result) { jsonRes(res, 500, { error: "写入失败" }); return logReq(req, 500, start); }
+      jsonRes(res, 200, { ok: true });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/summer-dashboard?t=xxx — 看板聚合数据
+    if (pathname === "/api/summer-dashboard" && req.method === "GET") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+
+      // 并行读三张表
+      const encodedToken = encodeURIComponent(`"${token}"`);
+      const [planData, orderData, stockData] = await Promise.all([
+        feishuApi("GET",
+          `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.summer_target}/records?page_size=1&filter=CurrentValue.[distributor_token]=${encodedToken}`
+        ),
+        feishuApi("GET",
+          `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=500&filter=CurrentValue.[代理商ID]=${encodeURIComponent('"' + agent.id + '"')}`
+        ),
+        feishuApi("GET",
+          `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.stock_detail}/records?page_size=200`
+        ),
+      ]);
+
+      const planRec = (planData?.items || [])[0];
+      const plan = planRec ? planRec.fields : null;
+
+      // 暑期订单（7月1日~10月8日）
+      const summerStart = new Date("2026-07-01").getTime();
+      const summerEnd = new Date("2026-10-08T23:59:59").getTime();
+      const orders = (orderData?.items || []).filter(r => {
+        const d = r.fields["下单日期"];
+        return d && d >= summerStart && d <= summerEnd;
+      });
+
+      // 各产品进货量（按SKU聚合）
+      const skuInMap = {};
+      for (const r of orders) {
+        const sku = r.fields["产品型号"] || "";
+        const qty = Number(r.fields["数量"] || 0);
+        skuInMap[sku] = (skuInMap[sku] || 0) + qty;
+      }
+      const ultraIn = (skuInMap["Ultra双效"] || 0);
+      const skyIn = Object.entries(skuInMap).filter(([k]) => k.startsWith("时空之眼")).reduce((s, [, v]) => s + v, 0);
+      const stormIn = (skuInMap["小旋风"] || 0);
+      const totalIn = ultraIn + skyIn + stormIn;
+
+      // 目标
+      const targetUltra = Number(plan?.target_ultra || 0);
+      const targetSky = Number(plan?.target_sky || 0);
+      const targetStorm = Number(plan?.target_storm || 0);
+      const totalTarget = targetUltra + targetSky + targetStorm;
+
+      // 月度趋势
+      const monthMap = {};
+      for (const r of orders) {
+        const d = r.fields["下单日期"];
+        if (!d) continue;
+        const dt = new Date(d);
+        const key = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}`;
+        monthMap[key] = (monthMap[key] || 0) + Number(r.fields["数量"] || 0);
+      }
+      const trend = Object.entries(monthMap).sort().map(([month, qty]) => ({ month, qty }));
+
+      // 库存列表（当前代理商下，取前20个相关SKU）
+      const stockItems = (stockData?.items || []).slice(0, 100).map(r => {
+        const f = r.fields;
+        return {
+          sku: f["SKU编号"] || "",
+          sph: f["SPH"],
+          cyl: f["CYL"],
+          stock: Number(f["当前库存"] || 0),
+          monthly_out: Number(f["最近出库"] || 0),
+        };
+      }).filter(i => i.sku);
+
+      // 待办提醒
+      const today = Date.now();
+      const alerts = [];
+      const SUMMER_START = new Date("2026-07-01").getTime();
+      const SUMMER_END = new Date("2026-10-08T23:59:59").getTime();
+      const elapsed = Math.max(0, today - SUMMER_START);
+      const total99 = SUMMER_END - SUMMER_START;
+      const timeProgress = Math.min(1, elapsed / total99);
+
+      for (const sku of stockItems.slice(0, 10)) {
+        const dailyRate = sku.monthly_out / 30;
+        if (dailyRate > 0 && sku.stock < dailyRate * 7) {
+          const daysLeft = Math.floor(sku.stock / dailyRate);
+          alerts.push({ level: "red", msg: `${sku.sku} 库存仅剩${sku.stock}片，预计${daysLeft}天断货` });
+        }
+      }
+      if (plan?.milestone_stock) {
+        const msDate = typeof plan.milestone_stock === "number" ? plan.milestone_stock : new Date(plan.milestone_stock).getTime();
+        const daysToStock = Math.ceil((msDate - today) / 86400000);
+        if (daysToStock > 0 && daysToStock <= 7) {
+          alerts.push({ level: "orange", msg: `备货承诺节点还有${daysToStock}天，请确认备货安排` });
+        }
+      }
+      if (totalTarget > 0 && timeProgress > 0.2) {
+        const achieveRate = totalIn / totalTarget;
+        if (achieveRate < timeProgress * 0.85) {
+          alerts.push({ level: "red", msg: `暑期进度偏慢，当前完成率${(achieveRate*100).toFixed(0)}%，时间消耗${(timeProgress*100).toFixed(0)}%` });
+        }
+      }
+      if (!plan) {
+        alerts.push({ level: "blue", msg: "尚未填写暑期计划，请先完成计划填报" });
+      }
+
+      jsonRes(res, 200, {
+        agent: { id: agent.id, name: agent.name },
+        plan: plan ? {
+          target_ultra: targetUltra, target_sky: targetSky, target_storm: targetStorm,
+          stock_ultra: Number(plan.stock_ultra || 0), stock_sky: Number(plan.stock_sky || 0), stock_storm: Number(plan.stock_storm || 0),
+          stores: plan.stores || "[]",
+          milestone_stock: plan.milestone_stock,
+          milestone_first_order: plan.milestone_first_order,
+          status: plan.status || "",
+        } : null,
+        summary: { totalIn, totalTarget, ultraIn, skyIn, stormIn, targetUltra, targetSky, targetStorm },
+        trend,
+        stock: stockItems.slice(0, 20),
+        alerts,
+      });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/summer-export?admin=xxx — 下载所有代理商暑期SKU排产Excel
+    if (pathname === "/api/admin/summer-export" && req.method === "GET") {
+      const adminToken = url.searchParams.get("admin") || req.headers["x-admin-token"] || "";
+      const ADMIN = process.env.ADMIN_TOKEN || "GaushOrderMock";
+      if (!timingSafeEqual(Buffer.from(adminToken), Buffer.from(ADMIN))) {
+        jsonRes(res, 401, { error: "无权限" }); return logReq(req, 401, start);
+      }
+
+      // 拉取全部暑期计划记录（分页，最多 500 条）
+      let allRecs = [];
+      let pageToken = "";
+      do {
+        const url = `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.summer_target}/records?page_size=500${pageToken ? `&page_token=${pageToken}` : ""}`;
+        const data = await feishuApi("GET", url);
+        allRecs = allRecs.concat(data?.items || []);
+        pageToken = data?.page_token || "";
+      } while (pageToken);
+
+      // 排产总表：按产品+SPH+CYL聚合，汇总各代理商数量
+      const skuMap = {};     // key = "产品|SPH|CYL" → { sku, sph, cyl, cls, total, agents:{name:qty} }
+      const agentSummary = {}; // agentName → { ultra, sky, storm, total }
+      const storeRows = [];  // 门店销售汇总
+
+      for (const rec of allRecs) {
+        const f = rec.fields;
+        const agentName = f.distributor_name || f.distributor_token || "未知代理商";
+        const status = f.status || "";
+        const rawJson = typeof f.stock_sku_json === "string" ? f.stock_sku_json : "";
+
+        let skuItems = [];
+        if (rawJson) {
+          try { skuItems = JSON.parse(rawJson); } catch (_) { skuItems = []; }
+        }
+
+        // 代理商汇总行
+        if (!agentSummary[agentName]) agentSummary[agentName] = { ultra: 0, sky: 0, storm: 0, total: 0, status };
+        agentSummary[agentName].status = status;
+
+        for (const item of skuItems) {
+          const qty = Number(item.qty || 0);
+          const key = `${item.sku}|${item.sph}|${item.cyl}`;
+          if (!skuMap[key]) skuMap[key] = { sku: item.sku, sph: item.sph, cyl: item.cyl, cls: item.cls || "", total: 0, agents: {} };
+          skuMap[key].total += qty;
+          skuMap[key].agents[agentName] = (skuMap[key].agents[agentName] || 0) + qty;
+
+          // 代理商产品小计
+          if (item.sku === "Ultra双效") agentSummary[agentName].ultra += qty;
+          else if (item.sku === "时空之眼") agentSummary[agentName].sky += qty;
+          else if (item.sku === "小旋风") agentSummary[agentName].storm += qty;
+          agentSummary[agentName].total += qty;
+        }
+
+        // 门店销售数据
+        let stores = [];
+        try { stores = JSON.parse(typeof f.stores === "string" ? f.stores : "[]"); } catch (_) { stores = []; }
+        for (const s of stores) {
+          storeRows.push({ agent: agentName, store: s.name || "", target: Number(s.target || 0), actual: Number(s.actual || 0) });
+        }
+      }
+
+      // 收集所有代理商名（用于列头）
+      const agentNames = [...new Set(allRecs.map(r => r.fields.distributor_name || r.fields.distributor_token || "未知"))];
+
+      // Sheet 1: 排产总表
+      const prodHeader = ["产品", "SPH", "CYL", "ABC分类", "合计数量", ...agentNames];
+      const prodRows = [prodHeader];
+      for (const v of Object.values(skuMap).sort((a, b) => a.sku.localeCompare(b.sku) || a.sph - b.sph || a.cyl - b.cyl)) {
+        prodRows.push([v.sku, v.sph, v.cyl, v.cls, v.total, ...agentNames.map(n => v.agents[n] || 0)]);
+      }
+      // 合计行
+      const colTotals = ["", "", "", "合计", Object.values(skuMap).reduce((s, v) => s + v.total, 0),
+        ...agentNames.map(n => Object.values(skuMap).reduce((s, v) => s + (v.agents[n] || 0), 0))];
+      prodRows.push(colTotals);
+
+      // Sheet 2: 代理商汇总
+      const agentRows = [["代理商", "状态", "Ultra双效", "时空之眼", "小旋风", "合计"]];
+      for (const [name, d] of Object.entries(agentSummary)) {
+        agentRows.push([name, d.status, d.ultra, d.sky, d.storm, d.total]);
+      }
+
+      // Sheet 3: 门店销售
+      const storeHeader = [["代理商", "门店名称", "暑期目标（片）", "实际销量（片）"]];
+      const storeData = storeHeader.concat(storeRows.map(s => [s.agent, s.store, s.target, s.actual]));
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(prodRows), "排产总表");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(agentRows), "代理商汇总");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(storeData), "门店销售");
+
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      const date = new Date().toISOString().slice(0, 10);
+      res.writeHead(200, {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(`暑期备库排产汇总_${date}`)}.xlsx`,
+        "Content-Length": buf.length,
+      });
+      res.end(buf);
       return logReq(req, 200, start);
     }
 

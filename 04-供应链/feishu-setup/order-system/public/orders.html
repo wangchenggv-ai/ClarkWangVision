@@ -606,12 +606,11 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
       <button onclick="setQuickDate('yesterday')">昨日</button>
       <button onclick="setQuickDate('week')">7天</button>
     </span>
-    <select id="filterStatus"><option value="">状态</option><option value="已下单">已下单</option><option value="待处理">待处理</option><option value="生产中">生产中</option><option value="打标签">打标签</option><option value="已发货">已发货</option></select>
-	    <select id="filterStock"><option value="">库存</option><option value="yes">有库存</option><option value="no">无库存</option></select>
+    <select id="filterStatus" onchange="activeStatusFilter='all';document.querySelectorAll('.stat-card').forEach(c=>c.classList.toggle('active',c.dataset.status==='all'));"><option value="">状态</option><option value="已下单">已下单</option><option value="待处理">待处理</option><option value="生产中">生产中</option><option value="打标签">打标签</option><option value="已发货">已发货</option></select>
     <select id="filterAssembly"><option value="">装配</option><option value="是">已装配</option><option value="否">未装配</option></select>
     <select id="filterSupplier"><option value="">供应商</option><option value="高清">高清</option><option value="圣普">圣普</option><option value="九次方">九次方</option><option value="五彩">五彩</option><option value="欧陆">欧陆</option><option value="圣谱">圣谱</option></select>
     <input type="text" id="filterQ" placeholder="订单号/顾客" style="width:100px">
-    <button class="btn btn-primary" onclick="loadOrders()">查询</button>
+    <button class="btn btn-primary" onclick="currentPage=1;loadOrders()">查询</button>
     <button class="btn btn-outline" onclick="resetFilter()">重置</button>
   </div>
 
@@ -647,9 +646,9 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
           <th>SKU</th>
           <th>数量</th>
           <th>装配</th>
-          <th>是否有库存</th>
           <th>供应商</th>
           <th>状态</th>
+          <th>导出状态</th>
           <th>下单日期</th>
           <th>天数</th>
           <th>备注</th>
@@ -679,6 +678,7 @@ let activeStatusFilter = "all";
 let activeQuickFilter = "all";
 let lastStats = {};
 let detailCache = {};
+let exportStatusMap = {}; // 导出状态缓存
 
 // ─── 时钟 ──────────────────────────────────────────────────────────
 
@@ -815,35 +815,25 @@ async function loadOrders() {
   const from = document.getElementById("filterFrom").value;
   const to = document.getElementById("filterTo").value;
 
-  // 快捷筛选模式
   if (activeQuickFilter === "overdue") {
-    // 超期：不传状态，让前端筛选
-  } else if (activeQuickFilter === "today") {
-    const todayStr = fmtDateISO(new Date());
-    params.set("from", todayStr);
-    params.set("to", todayStr);
-  } else if (activeQuickFilter === "week") {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    params.set("from", fmtDateISO(d));
+    // 超期：不传状态，全量拉取后前端筛选（分页会漏超期订单）
+    params.set("pageSize", 9999);
   } else {
     // 状态筛选：优先用筛选栏下拉，否则用统计卡片
     const statusVal = document.getElementById("filterStatus")?.value;
     if (statusVal) params.set("status", statusVal);
     else if (activeStatusFilter !== "all") params.set("status", activeStatusFilter);
+    if (from) params.set("from", from);
+    if (to) params.set("to", to);
+    params.set("page", currentPage);
+    params.set("pageSize", 50);
   }
 
   if (q) params.set("q", q);
   const assembly = document.getElementById("filterAssembly")?.value;
-  const stock = document.getElementById("filterStock")?.value;
   const supplier = document.getElementById("filterSupplier")?.value;
   if (assembly) params.set("assembly", assembly);
-  if (stock) params.set("stock", stock);
   if (supplier) params.set("supplier", supplier);
-  if (from && activeQuickFilter === "all") params.set("from", from);
-  if (to && activeQuickFilter === "all") params.set("to", to);
-  params.set("page", currentPage);
-  params.set("pageSize", 50);
 
   const data = await api(`/api/admin/orders?${params}`);
   allOrders = data.orders || [];
@@ -852,6 +842,18 @@ async function loadOrders() {
   // 超期筛选：客户端过滤
   if (activeQuickFilter === "overdue") {
     allOrders = allOrders.filter(o => isOverdue(o.status, getOrderDays(o.date)));
+  }
+
+  // 获取导出状态
+  if (allOrders.length > 0) {
+    const orderNos = [...new Set(allOrders.map(o => o.orderNo))];
+    try {
+      const exportData = await api(`/api/admin/export-status?orderNos=${orderNos.join(",")}`);
+      exportStatusMap = exportData.status || {};
+    } catch (e) {
+      console.error("获取导出状态失败:", e);
+      exportStatusMap = {};
+    }
   }
 
   // 更新统计
@@ -917,6 +919,7 @@ function renderOrders() {
     const rowId = `row-${i}`;
     const quickAction = getQuickAction(o);
     const overdue = isOverdue(o.status, getOrderDays(o.date));
+    const exportStatus = getExportStatus(o.orderNo);
     return `
     <tr class="data-row ${overdue ? 'overdue' : ''}" data-status="${o.status}" id="${rowId}">
       <td><input type="checkbox" data-order="${o.orderNo}" data-customer="${escapeHtml(o.customerName)}" data-pair-index="${o.pairIndex || 1}" ${selectedOrders.has(o.orderNo+'|'+o.customerName+'|'+(o.pairIndex||1))?'checked':''} onchange="toggleOrder('${o.orderNo}','${jsAttr(o.customerName)}',${o.pairIndex || 1})"></td>
@@ -928,10 +931,6 @@ function renderOrders() {
       <td>${o.sku}</td>
       <td>${o.quantity}</td>
       <td>${o.assembly === '是' ? '<span class="badge badge-instock">是</span>' : o.assembly === '否' ? '<span class="badge badge-done">否</span>' : '-'}</td>
-      <td><select class="inline-select" data-field="库存状态" data-record="${o.orderNo}|${jsAttr(o.customerName)}|${o.pairIndex||1}" onchange="inlineFieldUpdate(this)">
-        <option value="有库存" ${o.stockStatus==='有库存'?'selected':''}>有库存</option>
-        <option value="无库存" ${o.stockStatus==='无库存'?'selected':''}>无库存</option>
-      </select></td>
       <td><select class="inline-select" data-field="供应商厂家" data-record="${o.orderNo}|${jsAttr(o.customerName)}|${o.pairIndex||1}" onchange="inlineFieldUpdate(this)">
         <option value="高清" ${o.supplier==='高清'?'selected':''}>高清</option>
         <option value="圣普" ${o.supplier==='圣普'?'selected':''}>圣普</option>
@@ -940,6 +939,7 @@ function renderOrders() {
         <option value="欧陆" ${o.supplier==='欧陆'?'selected':''}>欧陆</option>
       </select></td>
       <td>${statusBadge(o.status)}</td>
+      <td>${exportStatus}</td>
       <td>${fmtDate(o.date)}</td>
       <td>${daysBadge(o.status, o.date)}</td>
       <td class="remark-cell" style="white-space:nowrap" title="${escapeHtml(o.remark || '')}">${o.remark ? `<span style="display:inline-block;max-width:100px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle">${escapeHtml(o.remark)}</span>` : '-'}</td>
@@ -950,6 +950,17 @@ function renderOrders() {
   }).join("");
   updateSelectedCount();
   updateContextualActions();
+}
+
+function getExportStatus(orderNo) {
+  const status = exportStatusMap[orderNo] || {};
+  const parts = [];
+  if (status.factory) parts.push('<span style="color:#0958d9;font-size:10px" title="已导出工厂">工厂</span>');
+  if (status.label) parts.push('<span style="color:#531dab;font-size:10px" title="已打印标签">标签</span>');
+  if (status.slip) parts.push('<span style="color:#722ed1;font-size:10px" title="已生成通行单">通行单</span>');
+  if (status.statement) parts.push('<span style="color:#389e0d;font-size:10px" title="已生成对账单">对账单</span>');
+  if (parts.length === 0) return '<span style="color:#ccc;font-size:10px">-</span>';
+  return parts.join(' ');
 }
 
 function getQuickAction(o) {
@@ -1192,7 +1203,6 @@ function resetFilter() {
   document.getElementById("filterQ").value = "";
   if (document.getElementById("filterAssembly")) document.getElementById("filterAssembly").value = "";
   if (document.getElementById("filterStatus")) document.getElementById("filterStatus").value = "";
-  if (document.getElementById("filterStock")) document.getElementById("filterStock").value = "";
   if (document.getElementById("filterSupplier")) document.getElementById("filterSupplier").value = "";
   document.getElementById("filterFrom").value = "";
   document.getElementById("filterTo").value = "";
@@ -1270,7 +1280,7 @@ async function confirmOrders() {
   // 收集所有 orderNo（去重），一次性提交后端并行处理
   const orderNos = [...new Set(keys.map(k => parseKey(k).orderNo))];
   const btn = document.querySelector(".act-confirm-btn");
-  if (btn) { btn.disabled = true; btn.textContent = "确认中..."; }
+  if (btn) { btn.disabled = true; btn.textContent = `确认中 (${orderNos.length} 单)...`; }
   // 乐观更新：立即改本地状态并重渲染
   const keySet = new Set(keys);
   const targets = allOrders.filter(o => keySet.has(o.orderNo + "|" + o.customerName + "|" + (o.pairIndex || 1)) && o.status === "已下单");

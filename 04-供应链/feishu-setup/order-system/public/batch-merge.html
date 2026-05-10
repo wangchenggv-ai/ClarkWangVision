@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视高清 · 合并下单</title>
+<link rel="stylesheet" href="/css/common.css?v=2">
+<style>
+.container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+.status-bar { background: var(--gold-light); border: 1px solid var(--gold); border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 16px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s;
+  background: var(--card); margin-bottom: 16px;
+}
+.drop-zone:hover, .drop-zone.drag-over { border-color: var(--brand); background: var(--brand-light); }
+.drop-zone .icon { font-size: 48px; margin-bottom: 8px; }
+.drop-zone .text { font-size: 16px; color: var(--text-muted); }
+.drop-zone .sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+
+.file-list { margin-bottom: 16px; }
+.file-item {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  background: var(--card); border-radius: var(--radius-xs);
+  margin-bottom: 4px; font-size: 13px;
+}
+.file-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-item .agent { color: var(--brand); font-weight: 600; }
+.file-item .remove { cursor: pointer; color: var(--text-muted); padding: 2px 6px; }
+.file-item .remove:hover { color: var(--error); }
+
+.btn-primary {
+  background: var(--brand); color: #fff; border: none; padding: 10px 28px;
+  border-radius: var(--radius-xs); font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: background 0.2s;
+}
+.btn-primary:hover { background: var(--brand-dark); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary {
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 10px 28px;
+  border-radius: var(--radius-xs); font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: background 0.2s;
+}
+.btn-secondary:hover { background: var(--border); }
+
+.controls { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+
+.progress-wrap {
+  background: var(--card); border-radius: var(--radius); padding: 20px;
+  margin-bottom: 16px; display: none;
+}
+.progress-bar-bg { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 8px 0; }
+.progress-bar-fill { height: 100%; background: var(--brand); border-radius: 4px; transition: width 0.3s; width: 0%; }
+.progress-text { font-size: 13px; color: var(--text-muted); display: flex; justify-content: space-between; }
+
+.preview-wrap {
+  background: var(--card); border-radius: var(--radius); padding: 20px;
+  margin-bottom: 16px; display: none;
+}
+.preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.preview-header h3 { margin: 0; font-size: 16px; }
+.preview-stats { font-size: 13px; color: var(--text-muted); }
+
+.preview-table-wrap { overflow-x: auto; max-height: 600px; overflow-y: auto; }
+.preview-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.preview-table th { 
+  text-align: left; padding: 8px; border-bottom: 2px solid var(--border); 
+  color: var(--text-muted); font-weight: 600; position: sticky; top: 0; background: var(--card);
+}
+.preview-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.preview-table tr:hover { background: var(--bg); }
+.preview-table input, .preview-table select {
+  width: 100%; padding: 4px 6px; border: 1px solid var(--border); border-radius: 4px;
+  font-size: 13px; background: var(--card);
+}
+.preview-table input:focus, .preview-table select:focus { border-color: var(--brand); outline: none; }
+.preview-table .col-file { min-width: 120px; }
+.preview-table .col-agent { min-width: 150px; }
+.preview-table .col-customer { min-width: 100px; }
+.preview-table .col-sku { min-width: 120px; }
+.preview-table .col-eye { min-width: 80px; }
+.preview-table .col-rx { min-width: 70px; }
+.preview-table .col-qty { min-width: 50px; }
+.preview-table .col-remark { min-width: 100px; }
+.preview-table .col-action { min-width: 40px; text-align: center; }
+.preview-table .btn-delete { 
+  background: none; border: none; color: var(--text-muted); cursor: pointer; 
+  font-size: 16px; padding: 2px 6px;
+}
+.preview-table .btn-delete:hover { color: var(--error); }
+
+.result-wrap {
+  background: var(--card); border-radius: var(--radius); padding: 20px;
+  margin-bottom: 16px; display: none;
+}
+.result-stats { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+.stat-item { text-align: center; padding: 12px 20px; background: var(--bg); border-radius: var(--radius-sm); min-width: 100px; }
+.stat-item .num { font-size: 24px; font-weight: 700; font-family: var(--font-num); color: var(--brand); }
+.stat-item .label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+.warning-list { margin-top: 8px; font-size: 12px; color: var(--warning); }
+.warning-item { padding: 2px 0; }
+
+.step-indicator { display: flex; gap: 24px; margin-bottom: 20px; }
+.step { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-muted); }
+.step.active { color: var(--brand); font-weight: 600; }
+.step .num { width: 24px; height: 24px; border-radius: 50%; background: var(--border); display: flex; align-items: center; justify-content: center; font-size: 12px; }
+.step.active .num { background: var(--brand); color: #fff; }
+.step.done .num { background: var(--success); color: #fff; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="brand-logo"><span class="gaush">GAUSH</span><span class="sep">·</span><span class="clear">CLEAR</span></div>
+  <h1>合并下单</h1>
+  <span class="agent-name" id="agentName"></span>
+</div>
+
+<div class="container">
+  <div class="step-indicator">
+    <div class="step active" id="step1"><span class="num">1</span> 上传文件</div>
+    <div class="step" id="step2"><span class="num">2</span> 预览确认</div>
+    <div class="step" id="step3"><span class="num">3</span> 导入完成</div>
+  </div>
+
+  <div class="status-bar" id="statusBar">&#9432; 将代理商发来的多个 Excel 文件拖入下方区域，系统会自动解析并合并成一张大表。每个文件对应一个订单。</div>
+
+  <div id="uploadSection">
+    <div class="drop-zone" id="dropZone">
+      <div class="icon">&#128194;</div>
+      <div class="text">拖拽 Excel 文件到此处，或点击选择</div>
+      <div class="sub">支持 .xlsx / .xls 格式，可一次选择多个文件</div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" multiple style="display:none">
+    <div class="file-list" id="fileList"></div>
+    <div class="controls">
+      <button class="btn-primary" id="btnParse" disabled onclick="startParse()">开始解析</button>
+    </div>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-text"><span id="progressLabel">解析中...</span><span id="progressCount">0/0</span></div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+  </div>
+
+  <div class="preview-wrap" id="previewWrap">
+    <div class="preview-header">
+      <h3>预览订单数据</h3>
+      <div class="preview-stats" id="previewStats"></div>
+    </div>
+    <div class="preview-table-wrap">
+      <table class="preview-table" id="previewTable">
+        <thead>
+          <tr>
+            <th class="col-file">文件名</th>
+            <th class="col-agent">代理商</th>
+            <th class="col-customer">客户姓名</th>
+            <th class="col-sku">产品型号</th>
+            <th class="col-eye">右眼SPH</th>
+            <th class="col-eye">右眼CYL</th>
+            <th class="col-eye">右眼AXIS</th>
+            <th class="col-eye">左眼SPH</th>
+            <th class="col-eye">左眼CYL</th>
+            <th class="col-eye">左眼AXIS</th>
+            <th class="col-qty">数量</th>
+            <th class="col-remark">备注</th>
+            <th class="col-action">操作</th>
+          </tr>
+        </thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+    <div class="warning-list" id="warningList"></div>
+    <div class="controls" style="margin-top: 16px;">
+      <button class="btn-secondary" onclick="resetAll()">重新上传</button>
+      <button class="btn-primary" id="btnConfirm" onclick="confirmImport()">确认导入</button>
+    </div>
+  </div>
+
+  <div class="result-wrap" id="resultWrap">
+    <div class="result-stats" id="resultStats"></div>
+    <div style="margin-top: 12px;">
+      <button class="btn-primary" onclick="resetAll()">继续导入下一批</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedFiles = [];
+let agentMap = {};
+let parsedData = [];
+
+async function loadAgents() {
+  try {
+    const r = await fetch('/api/agents');
+    const d = await r.json();
+    if (d.agents) {
+      agentMap = {};
+      for (const a of d.agents) {
+        agentMap[a.id] = a;
+      }
+    }
+  } catch {}
+}
+loadAgents();
+
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  addFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', () => {
+  addFiles(Array.from(fileInput.files));
+  fileInput.value = '';
+});
+
+function addFiles(files) {
+  const xlsxFiles = files.filter(f => /\.xlsx?$/i.test(f.name));
+  selectedFiles = [...selectedFiles, ...xlsxFiles];
+  renderFileList();
+}
+
+function removeFile(idx) {
+  selectedFiles.splice(idx, 1);
+  renderFileList();
+}
+
+function renderFileList() {
+  const el = document.getElementById('fileList');
+  if (!selectedFiles.length) { 
+    el.innerHTML = ''; 
+    document.getElementById('btnParse').disabled = true; 
+    return; 
+  }
+  el.innerHTML = selectedFiles.map((f, i) => {
+    const agentMatch = f.name.match(/AG\d{3}/i);
+    const agentTag = agentMatch ? `<span class="agent">${agentMatch[0].toUpperCase()}</span>` : '';
+    return `<div class="file-item">
+      <span class="name">${esc(f.name)} ${agentTag}</span>
+      <span class="remove" onclick="removeFile(${i})">&#10005;</span>
+    </div>`;
+  }).join('');
+  document.getElementById('btnParse').disabled = false;
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function startParse() {
+  if (!selectedFiles.length) return;
+  
+  document.getElementById('btnParse').disabled = true;
+  document.getElementById('btnParse').textContent = '解析中...';
+  document.getElementById('progressWrap').style.display = 'block';
+  document.getElementById('previewWrap').style.display = 'none';
+  
+  const total = selectedFiles.length;
+  updateProgress(0, total, '读取文件中...');
+
+  const filesData = [];
+  for (let i = 0; i < selectedFiles.length; i++) {
+    const f = selectedFiles[i];
+    const data = await readFileAsBase64(f);
+    filesData.push({ name: f.name, data: data.split(',')[1] });
+    updateProgress(i + 1, total, `已读取 ${i + 1}/${total} 个文件`);
+  }
+
+  try {
+    const admin = new URLSearchParams(location.search).get('admin') || '';
+    const res = await fetch(`/api/admin/batch-merge/parse?admin=${admin}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files: filesData }),
+    });
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error || '解析失败');
+    
+    parsedData = result.orders;
+    showPreview(result);
+  } catch (e) {
+    alert('解析失败: ' + e.message);
+    document.getElementById('progressWrap').style.display = 'none';
+    document.getElementById('btnParse').disabled = false;
+    document.getElementById('btnParse').textContent = '开始解析';
+  }
+}
+
+function updateProgress(done, total, label) {
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressCount').textContent = `${done}/${total}`;
+  if (label) document.getElementById('progressLabel').textContent = label;
+}
+
+function showPreview(result) {
+  document.getElementById('uploadSection').style.display = 'none';
+  document.getElementById('progressWrap').style.display = 'none';
+  document.getElementById('previewWrap').style.display = 'block';
+  
+  setStep(2);
+
+  const { orders, warnings } = result;
+  let totalPatients = 0, totalEyes = 0;
+  for (const o of orders) {
+    totalPatients += o.patients.length;
+    for (const p of o.patients) totalEyes += p.eyes.length;
+  }
+  document.getElementById('previewStats').textContent = `${orders.length} 个订单，${totalPatients} 个客户，${totalEyes} 只镜片`;
+
+  if (warnings?.length) {
+    document.getElementById('warningList').innerHTML = warnings.map(w => `<div class="warning-item">&#9888; ${esc(w)}</div>`).join('');
+  }
+
+  renderPreviewTable(orders);
+}
+
+function renderPreviewTable(orders) {
+  const tbody = document.getElementById('previewBody');
+  const rows = [];
+
+  for (let oi = 0; oi < orders.length; oi++) {
+    const order = orders[oi];
+    for (let pi = 0; pi < order.patients.length; pi++) {
+      const p = order.patients[pi];
+      const rightEye = p.eyes.find(e => e.side === '右眼') || {};
+      const leftEye = p.eyes.find(e => e.side === '左眼') || {};
+      
+      rows.push(`
+        <tr data-order="${oi}" data-patient="${pi}">
+          <td class="col-file" title="${esc(order.file)}">${esc(order.file.substring(0, 20))}</td>
+          <td class="col-agent">
+            <select onchange="updateAgent(${oi}, ${pi}, this.value)">
+              ${Object.entries(agentMap).map(([id, a]) => 
+                `<option value="${id}" ${id === order.agentId ? 'selected' : ''}>${a.id} - ${a.name}</option>`
+              ).join('')}
+            </select>
+          </td>
+          <td class="col-customer"><input type="text" value="${esc(p.customerName)}" onchange="updateField(${oi}, ${pi}, 'customerName', this.value)"></td>
+          <td class="col-sku">
+            <select onchange="updateField(${oi}, ${pi}, 'sku', this.value)">
+              ${getSkuOptions(p.sku)}
+            </select>
+          </td>
+          <td class="col-eye"><input type="text" value="${rightEye.sph || ''}" onchange="updateEye(${oi}, ${pi}, '右眼', 'sph', this.value)"></td>
+          <td class="col-eye"><input type="text" value="${rightEye.cyl || ''}" onchange="updateEye(${oi}, ${pi}, '右眼', 'cyl', this.value)"></td>
+          <td class="col-eye"><input type="text" value="${rightEye.axis || ''}" onchange="updateEye(${oi}, ${pi}, '右眼', 'axis', this.value)"></td>
+          <td class="col-eye"><input type="text" value="${leftEye.sph || ''}" onchange="updateEye(${oi}, ${pi}, '左眼', 'sph', this.value)"></td>
+          <td class="col-eye"><input type="text" value="${leftEye.cyl || ''}" onchange="updateEye(${oi}, ${pi}, '左眼', 'cyl', this.value)"></td>
+          <td class="col-eye"><input type="text" value="${leftEye.axis || ''}" onchange="updateEye(${oi}, ${pi}, '左眼', 'axis', this.value)"></td>
+          <td class="col-qty"><input type="number" value="${p.quantity || 1}" min="1" onchange="updateField(${oi}, ${pi}, 'quantity', this.value)"></td>
+          <td class="col-remark"><input type="text" value="${esc(p.remark || '')}" onchange="updateField(${oi}, ${pi}, 'remark', this.value)"></td>
+          <td class="col-action"><button class="btn-delete" onclick="deletePatient(${oi}, ${pi})">&#10005;</button></td>
+        </tr>
+      `);
+    }
+  }
+  tbody.innerHTML = rows.join('');
+}
+
+const SKU_CATALOG = ['Ultra双效', 'D8', '时空之眼A', '时空之眼B', '时空之眼PRO', '时空之眼MAX', '小旋风'];
+
+function getSkuOptions(current) {
+  return SKU_CATALOG.map(s => `<option value="${s}" ${s === current ? 'selected' : ''}>${s}</option>`).join('');
+}
+
+function updateAgent(oi, pi, agentId) {
+  const a = agentMap[agentId];
+  if (!a) return;
+  parsedData[oi].agentId = agentId;
+  parsedData[oi].agentName = a.name;
+}
+
+function updateField(oi, pi, field, value) {
+  const p = parsedData[oi].patients[pi];
+  if (field === 'quantity') p[field] = Number(value) || 1;
+  else p[field] = value;
+}
+
+function updateEye(oi, pi, side, field, value) {
+  const p = parsedData[oi].patients[pi];
+  let eye = p.eyes.find(e => e.side === side);
+  if (!eye) {
+    eye = { side, sph: '0', cyl: '0', axis: '0' };
+    p.eyes.push(eye);
+  }
+  eye[field] = value;
+}
+
+function deletePatient(oi, pi) {
+  parsedData[oi].patients.splice(pi, 1);
+  if (parsedData[oi].patients.length === 0) {
+    parsedData.splice(oi, 1);
+  }
+  renderPreviewTable(parsedData);
+}
+
+async function confirmImport() {
+  const btn = document.getElementById('btnConfirm');
+  btn.disabled = true;
+  btn.textContent = '导入中...';
+
+  try {
+    const admin = new URLSearchParams(location.search).get('admin') || '';
+    const res = await fetch(`/api/admin/batch-merge/confirm?admin=${admin}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: parsedData }),
+    });
+    const result = await res.json();
+    if (!result.success) throw new Error(result.error || '导入失败');
+    
+    showResult(result);
+  } catch (e) {
+    alert('导入失败: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '确认导入';
+  }
+}
+
+function showResult(result) {
+  document.getElementById('previewWrap').style.display = 'none';
+  document.getElementById('resultWrap').style.display = 'block';
+  
+  setStep(3);
+
+  const { orderCount, lensCount } = result;
+  document.getElementById('resultStats').innerHTML = `
+    <div class="stat-item"><div class="num">${orderCount || 0}</div><div class="label">订单数</div></div>
+    <div class="stat-item"><div class="num">${lensCount || 0}</div><div class="label">镜片数</div></div>
+    <div class="stat-item"><div class="num">已下单</div><div class="label">状态</div></div>
+  `;
+}
+
+function resetAll() {
+  selectedFiles = [];
+  parsedData = [];
+  document.getElementById('uploadSection').style.display = 'block';
+  document.getElementById('progressWrap').style.display = 'none';
+  document.getElementById('previewWrap').style.display = 'none';
+  document.getElementById('resultWrap').style.display = 'none';
+  document.getElementById('fileList').innerHTML = '';
+  document.getElementById('btnParse').disabled = true;
+  document.getElementById('btnParse').textContent = '开始解析';
+  document.getElementById('btnConfirm').disabled = false;
+  document.getElementById('btnConfirm').textContent = '确认导入';
+  setStep(1);
+}
+
+function setStep(n) {
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById(`step${i}`);
+    el.className = i < n ? 'step done' : i === n ? 'step active' : 'step';
+  }
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>
