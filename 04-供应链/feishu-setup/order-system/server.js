@@ -40,6 +40,7 @@ import { buildFactoryExcel, buildZipBuffer, buildLabelExportExcel } from "./lib/
 import * as batchImportMod from "./lib/batch-import.js";
 import { genOrderNo as genMergeOrderNo, buildMergeOrderRecords, buildMergeLensRecords } from "./lib/batch-merge.js";
 import { checkExportStatus, logExport, getOrderExportStatus, listExportLogs } from "./lib/export-log.js";
+import { getAgentAnnualVolume, calculateStarTrail, calculateStarTier, getECPLeaderboard } from "./lib/starmap-aggregator.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
@@ -138,7 +139,7 @@ if (!APP_TOKEN) {
 
 // ─── 模块导入 ──────────────────────────────────────────────────────────
 
-const { feishuApi, listRecords, filterRecords, createRecord, batchCreateRecords, updateRecord, batchUpdateRecords, getFeishuToken } = feishuMod;
+const { feishuApi, listRecords, filterRecords, searchRecords, createRecord, batchCreateRecords, updateRecord, batchUpdateRecords, getFeishuToken } = feishuMod;
 const { loadPrinterConfig, savePrinterConfig, buildZpl, buildTestZpl, sendTcpZpl, sendZplToPrinter } = printerMod;
 const { sendNotify, sendFeishuCard, shipCard, deliveredCard } = notifyMod;
 const { getStockMap, clearStockCache, deductStockDetail, reserveStock, releaseReservation, convertReservation, getAgentStockMap, estimateDeliveryByRx, deductAgentStock, queryStockByRx } = stockMod;
@@ -404,6 +405,7 @@ async function loadAgents() {
         phone: r.fields["手机号"] || "",
         address: r.fields["地址"] || "",
         crm_id: r.fields["CRM_ID"] || "",
+        yearly_target: Number(r.fields["年度目标"] || 0),
       }));
     _agentsCacheTime = Date.now();
     return _agentsCache;
@@ -836,6 +838,11 @@ let _verifyTemplate = null;
 const _lensCache = new Map(); // lensCode → { orderNo, customer, sku, pairIndex, side, sph, cyl, axis }
 let _lensCacheReady = false;
 
+// 订单列表缓存（全表扫描结果，60秒 TTL）
+let _ordersCache = { data: null, ts: 0 };
+const ORDERS_CACHE_TTL = 60000;
+function invalidateOrdersCache() { _ordersCache = { data: null, ts: 0 }; }
+
 async function warmLensCache() {
   try {
     const items = [];
@@ -1020,14 +1027,48 @@ function toRoman(n) {
   return r;
 }
 
+// ─── bin_map 地址→仓位匹配 ───────────────────────────────────────────────
+let binMapEntries = []; // [{ binCode, keywords: [str], remark }]
+let _tempBinCounter = 0;
+const _tempBinMap = new Map(); // addrClean → tempBinCode
+
+async function loadBinMap() {
+  try {
+    const res = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.bin_map}/records?page_size=100`);
+    const items = res?.items || [];
+    binMapEntries = items.map(r => ({
+      binCode: rawVal(r.fields["仓位编号"]) || "",
+      keywords: String(rawVal(r.fields["地址关键词"]) || "").split(/[,，]/).map(s => s.trim()).filter(Boolean),
+      remark: rawVal(r.fields["备注"]) || "",
+    })).filter(b => b.binCode && b.keywords.length);
+    console.log(`✅ 仓位映射已加载: ${binMapEntries.length} 条`);
+  } catch (e) {
+    console.warn("⚠️ 加载仓位映射失败:", e.message);
+    binMapEntries = [];
+  }
+}
+
+function matchBin(address) {
+  if (!address) return "";
+  const addrClean = address.replace(/\s+/g, "");
+  for (const entry of binMapEntries) {
+    if (entry.keywords.some(kw => addrClean.includes(kw))) return entry.binCode;
+  }
+  if (!_tempBinMap.has(addrClean)) {
+    _tempBinCounter++;
+    _tempBinMap.set(addrClean, `T-${String(_tempBinCounter).padStart(3, "0")}`);
+  }
+  return _tempBinMap.get(addrClean);
+}
+
 // ─── 工作流步骤 ──────────────────────────────────────────────────────────
 
-const STEP_ORDER = ["submitted", "confirmed", "producing", "labeled", "shipped"];
+const STEP_ORDER = ["submitted", "confirmed", "producing", "labeled", "shipped", "delivered"];
 const STEP_LABELS = {
   submitted: "已下单", confirmed: "待处理", producing: "生产中",
-  labeled: "打标签", shipped: "已发货",
+  labeled: "打标签", shipped: "已发货", delivered: "已签收",
 };
-const STATUS_STEP_KEY = { "已下单": "submitted", "待处理": "confirmed", "生产中": "producing", "打标签": "labeled", "已发货": "shipped" };
+const STATUS_STEP_KEY = { "已下单": "submitted", "待处理": "confirmed", "生产中": "producing", "打标签": "labeled", "已发货": "shipped", "已签收": "delivered" };
 
 function parseWorkflow(jsonStr) {
   try { return JSON.parse(jsonStr || "{}"); }
@@ -1359,6 +1400,18 @@ const server = createServer(async (req, res) => {
     }
     if (pathname === "/summer-stock" || pathname === "/summer-stock.html") {
       serveStatic(res, resolve(__dirname, "public/summer-stock.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/summer-stock-tool" || pathname === "/summer-stock-tool.html") {
+      serveStatic(res, resolve(__dirname, "public/summer-stock-tool.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/starmap" || pathname === "/starmap.html") {
+      serveStatic(res, resolve(__dirname, "public/starmap-combined.html"));
+      return logReq(req, 200, start);
+    }
+    if (pathname === "/ecp-board" || pathname === "/ecp-board.html") {
+      serveStatic(res, resolve(__dirname, "public/ecp-board.html"));
       return logReq(req, 200, start);
     }
     if (pathname === "/distributor-dashboard" || pathname === "/distributor-dashboard.html") {
@@ -2245,34 +2298,44 @@ const server = createServer(async (req, res) => {
       const filterSku = url.searchParams.get("sku") || "";
       const filterAssembly = url.searchParams.get("assembly") || "";
       const filterSupplier = url.searchParams.get("supplier") || "";
+      const filterStock = url.searchParams.get("stock") || "";
       const filterQ = url.searchParams.get("q") || "";
       const filterFrom = url.searchParams.get("from") || "";
       const filterTo = url.searchParams.get("to") || "";
       const page = Math.max(1, parseInt(url.searchParams.get("page")) || 1);
       const pageSize = Math.min(9999, Math.max(1, parseInt(url.searchParams.get("pageSize")) || 50));
 
-      const allRecords = await listRecords(TABLES.order);
-
-      let orders = allRecords.map(r => {
-        const f = r.fields;
-        return {
-          orderNo: f["订单编号"] || "",
-          customerName: f["顾客姓名"] || "",
-          agentName: f["代理商名称"] || "",
-          agentId: f["代理商ID"] || "",
-          sku: f["产品型号"] || "",
-          quantity: Number(f["数量"]) || 1,
-          status: f["订单状态"] || "",
-          date: f["下单日期"] || f["同步时间"] || null,
-          lensCode: f["镜片码（唯一）"] || "",
-          assembly: f["是否装配"] || "",
-          remark: f["备注"] || "",
-          pairIndex: f["序号"] || 1,
-          deliveryType: f["交期类型"] || "",
-          supplier: f["供应商厂家"] || "",
-          stockStatus: f["库存状态"] || "",
-        };
-      });
+      // 命中缓存则跳过全表扫描
+      let orders;
+      if (_ordersCache.data && Date.now() - _ordersCache.ts < ORDERS_CACHE_TTL) {
+        orders = _ordersCache.data;
+      } else {
+        const allRecords = await listRecords(TABLES.order);
+        orders = allRecords.map(r => {
+          const f = r.fields;
+          const address = f["收货地址"] || "";
+          return {
+            orderNo: f["订单编号"] || "",
+            customerName: f["顾客姓名"] || "",
+            agentName: f["代理商名称"] || "",
+            agentId: f["代理商ID"] || "",
+            sku: f["产品型号"] || "",
+            quantity: Number(f["数量"]) || 1,
+            status: f["订单状态"] || "",
+            date: f["下单日期"] || f["同步时间"] || null,
+            lensCode: f["镜片码（唯一）"] || "",
+            assembly: f["是否装配"] || "",
+            remark: f["备注"] || "",
+            pairIndex: f["序号"] || 1,
+            deliveryType: f["交期类型"] || "",
+            supplier: f["供应商厂家"] || "",
+            stockStatus: f["库存状态"] || "",
+            binCode: matchBin(address),
+            address,
+          };
+        });
+        _ordersCache = { data: orders, ts: Date.now() };
+      }
 
       // 统计
       const agents = [...new Set(orders.map(o => o.agentName).filter(Boolean))].sort();
@@ -2290,12 +2353,126 @@ const server = createServer(async (req, res) => {
       orders = applyOrderFilters(orders, { filterStatus, filterAgent, filterSku, filterFrom, filterTo, filterQ });
       if (filterAssembly) orders = orders.filter(o => o.assembly === filterAssembly);
       if (filterSupplier) orders = orders.filter(o => o.supplier === filterSupplier);
+      if (filterStock) {
+        const want = filterStock === "yes" ? "有库存" : filterStock === "no" ? "无库存" : filterStock;
+        orders = orders.filter(o => (o.stockStatus || "") === want);
+      }
 
       orders.sort((a, b) => (b.date || 0) - (a.date || 0));
       const totalPages = Math.ceil(orders.length / pageSize) || 1;
       const paged = orders.slice((page - 1) * pageSize, page * pageSize);
 
       jsonRes(res, 200, { orders: paged, stats, agents, suppliers, page, pageSize, totalPages, totalFiltered: orders.length });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/orders-fast — 快速订单列表（飞书服务端筛选，不拉全表）
+    if (pathname === "/api/admin/orders-fast") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+
+      const filterStatus = url.searchParams.get("status") || "";
+      const filterAgent = url.searchParams.get("agent") || "";
+      const filterSku = url.searchParams.get("sku") || "";
+      const filterAssembly = url.searchParams.get("assembly") || "";
+      const filterSupplier = url.searchParams.get("supplier") || "";
+      const filterStock = url.searchParams.get("stock") || "";
+      const filterQ = url.searchParams.get("q") || "";
+      const filterFrom = url.searchParams.get("from") || "";
+      const filterTo = url.searchParams.get("to") || "";
+      const page = Math.max(1, parseInt(url.searchParams.get("page")) || 1);
+      const pageSize = Math.min(9999, Math.max(1, parseInt(url.searchParams.get("pageSize")) || 50));
+
+      // 构建飞书 filter 条件
+      const conditions = [];
+      if (filterStatus) conditions.push({ field_name: "订单状态", operator: "is", value: [filterStatus] });
+      if (filterAgent) conditions.push({ field_name: "代理商名称", operator: "is", value: [filterAgent] });
+      if (filterSku) conditions.push({ field_name: "产品型号", operator: "is", value: [filterSku] });
+      if (filterAssembly) conditions.push({ field_name: "是否装配", operator: "is", value: [filterAssembly] });
+      if (filterSupplier) conditions.push({ field_name: "供应商厂家", operator: "is", value: [filterSupplier] });
+      if (filterStock) {
+        const want = filterStock === "yes" ? "有库存" : filterStock === "no" ? "无库存" : filterStock;
+        conditions.push({ field_name: "库存状态", operator: "is", value: [want] });
+      }
+      if (filterFrom) conditions.push({ field_name: "下单日期", operator: "isGreaterEqual", value: [filterFrom] });
+      if (filterTo) conditions.push({ field_name: "下单日期", operator: "isLessEqual", value: [filterTo + "T23:59:59"] });
+
+      const filter = conditions.length > 0
+        ? { conjunction: "and", conditions }
+        : undefined;
+
+      try {
+        const allRecords = await searchRecords(TABLES.order, {
+          filter,
+          sort: [{ field_name: "下单日期", desc: true }],
+          pageSize: 500,
+        });
+
+        let orders = allRecords.map(r => {
+          const f = r.fields;
+          const address = rawVal(f["收货地址"]) || "";
+          return {
+            orderNo: rawVal(f["订单编号"]) || "",
+            customerName: rawVal(f["顾客姓名"]) || "",
+            agentName: rawVal(f["代理商名称"]) || "",
+            agentId: rawVal(f["代理商ID"]) || "",
+            sku: rawVal(f["产品型号"]) || "",
+            quantity: Number(f["数量"]) || 1,
+            status: rawVal(f["订单状态"]) || "",
+            date: f["下单日期"] || f["同步时间"] || null,
+            lensCode: rawVal(f["镜片码（唯一）"]) || "",
+            assembly: rawVal(f["是否装配"]) || "",
+            remark: rawVal(f["备注"]) || "",
+            pairIndex: f["序号"] || 1,
+            deliveryType: rawVal(f["交期类型"]) || "",
+            supplier: rawVal(f["供应商厂家"]) || "",
+            stockStatus: rawVal(f["库存状态"]) || "",
+            binCode: matchBin(address),
+            address,
+          };
+        });
+
+        // 关键词搜索（飞书 filter 不支持 OR 跨字段，需客户端补筛）
+        if (filterQ) {
+          const s = filterQ.trim().toLowerCase();
+          orders = orders.filter(o =>
+            o.orderNo.toLowerCase().includes(s) ||
+            (o.customerName || "").toLowerCase().includes(s)
+          );
+        }
+
+        // 统计（用缓存的全量数据，避免每次重新查）
+        let stats;
+        if (_ordersCache.data && Date.now() - _ordersCache.ts < ORDERS_CACHE_TTL) {
+          const all = _ordersCache.data;
+          stats = {
+            total: all.length,
+            ordered: all.filter(o => o.status === "已下单").length,
+            pending: all.filter(o => o.status === "待处理").length,
+            producing: all.filter(o => o.status === "生产中").length,
+            labeled: all.filter(o => o.status === "打标签").length,
+            shipped: all.filter(o => o.status === "已发货").length,
+          };
+        } else {
+          // 无缓存时用当前结果的统计（不准确但不影响功能）
+          stats = {
+            total: orders.length,
+            ordered: orders.filter(o => o.status === "已下单").length,
+            pending: orders.filter(o => o.status === "待处理").length,
+            producing: orders.filter(o => o.status === "生产中").length,
+            labeled: orders.filter(o => o.status === "打标签").length,
+            shipped: orders.filter(o => o.status === "已发货").length,
+          };
+        }
+
+        const agents = [...new Set(orders.map(o => o.agentName).filter(Boolean))].sort();
+        const suppliers = [...new Set(orders.map(o => o.supplier).filter(Boolean))].sort();
+        const totalPages = Math.ceil(orders.length / pageSize) || 1;
+        const paged = orders.slice((page - 1) * pageSize, page * pageSize);
+
+        jsonRes(res, 200, { orders: paged, stats, agents, suppliers, page, pageSize, totalPages, totalFiltered: orders.length });
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+      }
       return logReq(req, 200, start);
     }
 
@@ -2489,9 +2666,15 @@ const server = createServer(async (req, res) => {
 
       if (!allDetails.length) { jsonRes(res, 404, { error: "所选订单无镜片数据（可能未确认或已过滤）" }); return logReq(req, 404, start); }
 
+      // 从 labelInfoMap 中的地址推算仓位编号
+      const binCodeMap = {};
+      for (const [key, info] of Object.entries(labelInfoMap)) {
+        if (info.address) binCodeMap[key] = matchBin(info.address);
+      }
+
       const excelName = orderNos.length > 1 ? `标签数据_${orderNos.length}单.xlsx` : `标签数据_${orderNos[0]}.xlsx`;
       const asciiName = orderNos.length > 1 ? `labels-${orderNos.length}.xlsx` : `${orderNos[0]}-labels.xlsx`;
-      const excelBuf = buildFactoryExcel(allDetails, orderNos.join("+"), labelInfoMap, dateMap);
+      const excelBuf = buildFactoryExcel(allDetails, orderNos.join("+"), labelInfoMap, dateMap, binCodeMap);
 
       res.writeHead(200, {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -2807,6 +2990,7 @@ const server = createServer(async (req, res) => {
         const res2 = await updateRecord(TABLES.order, rec.record_id, { [field]: value || "" });
         if (res2) updated++;
       }
+      invalidateOrdersCache();
       jsonRes(res, 200, { ok: true, updated });
       return logReq(req, 200, start);
     }
@@ -2881,14 +3065,12 @@ const server = createServer(async (req, res) => {
         return { orderNo, records: orderData?.items || [], lensDetails };
       }));
 
-      const orderResults = await Promise.all(orderReads.map(async ({ orderNo, records: rawRecords, lensDetails }) => {
+      // 阶段1：校验+读取+库存检查（必须同步，用于确定目标状态）
+      const prepared = await Promise.all(orderReads.map(async ({ orderNo, records: rawRecords, lensDetails }) => {
         try {
-          const t0 = Date.now();
           let records = rawRecords;
           if (!records.length) return { orderNo, ok: false, error: "未找到" };
-          const t1 = Date.now();
 
-          // 按客户名+序号过滤
           if (customerName) {
             records = records.filter(r => (r.fields["顾客姓名"] || "") === customerName);
             if (!records.length) return { orderNo, ok: false, error: `未找到客户 "${customerName}"` };
@@ -2898,21 +3080,18 @@ const server = createServer(async (req, res) => {
             if (!records.length) return { orderNo, ok: false, error: `未找到第${pairIndex}副` };
           }
 
-          // 状态守卫：仅"已下单"可确认
           const badConfirm = records.filter(r => (r.fields["订单状态"] || "") !== "已下单");
           if (badConfirm.length) {
             const badStatus = [...new Set(badConfirm.map(r => r.fields["订单状态"] || "未知"))].join(",");
             return { orderNo, ok: false, error: `当前状态"${badStatus}"，仅"已下单"可确认` };
           }
 
-          // 筛选匹配的镜片明细（复用上面已读的 lensDetails，不再重复查询）
           let matchedLens = lensDetails.filter(r => {
             if (customerName && (r.fields["顾客姓名"] || "") !== customerName) return false;
             if (pairIndex && Number(r.fields["序号"] || 1) !== Number(pairIndex)) return false;
             return true;
           });
 
-          // 自动查库存 → 路由目标状态
           const lensForStock = matchedLens.map(r => ({
             sku: rawVal(r.fields["产品型号"]) || "",
             sph: Number(r.fields["球镜SPH"]),
@@ -2922,7 +3101,6 @@ const server = createServer(async (req, res) => {
 
           let confirmTargetStatus, confirmWfStep, deliveryType;
           if (stockStatus) {
-            // 助理手动覆盖库存状态
             confirmTargetStatus = stockStatus === "有库存" ? "打标签" : "待处理";
             confirmWfStep = stockStatus === "有库存" ? "labeled" : "confirmed";
             deliveryType = stockStatus === "有库存" ? "有货1-2天" : "排产5-7天";
@@ -2934,162 +3112,203 @@ const server = createServer(async (req, res) => {
           }
           const effectiveStock = stockStatus || (stockResults.every(r => r.inStock) ? "有库存" : "无库存");
 
-          // 生成镜片码 + 更新状态（合并为单次遍历，用 batchUpdate 替代逐条写入）
-          const lensCodes = [];
-          const lensUpdates = [];
-          // 生成镜片码 + 并行生成 QR
-          const qrPromises = [];
-          for (const rec of matchedLens) {
-            let code = rec.fields["镜片码（唯一）"];
-            if (!code) {
-              code = genLensCode();
-              qrPromises.push(generateQRPng(code));
-              console.log(`  镜片码生成: ${orderNo} → ${code}`);
-            }
-            lensCodes.push(code);
-            lensUpdates.push({ record_id: rec.record_id, fields: { "镜片码（唯一）": code, "订单状态": confirmTargetStatus } });
-          }
-          if (qrPromises.length) await Promise.all(qrPromises);
-          const t2 = Date.now();
-          if (lensUpdates.length > 0) await batchUpdateRecords(TABLES.lens_detail, lensUpdates);
-          const t3 = Date.now();
-
-          // 同步写入镜片缓存（确保新码首次扫码走内存，不回退 Bitable API）
-          for (const rec of matchedLens) {
-            const lc = rec.fields["镜片码（唯一）"];
-            if (!lc) continue;
-            _lensCache.set(lc, {
-              orderNo,
-              customer: rec.fields["顾客姓名"] || customerName,
-              sku: rec.fields["产品型号"] || "",
-              pairIndex: Number(rec.fields["序号"] || 1),
-              side: rec.fields["眼别"] || "",
-              sph: rec.fields["球镜SPH"] ?? "",
-              cyl: rec.fields["柱镜CYL"] ?? "",
-              axis: rec.fields["轴位AXIS"] ?? "",
-            });
-          }
-
-          // 批量更新订单主表（状态 + 镜片码 + 交期 + 工作流 + 库存状态 + 供应商）
-          const orderUpdates = records.map(rec => {
-            const existingCodes = String(rec.fields["镜片码"] || "").split(",").filter(Boolean);
-            const mergedCodes = [...new Set([...existingCodes, ...lensCodes])];
-            const wf = parseWorkflow(rec.fields["流程步骤"]);
-            advanceWorkflow(wf, confirmWfStep);
-            return {
-              record_id: rec.record_id,
-              fields: {
-                "订单状态": confirmTargetStatus,
-                ...(mergedCodes.length > 0 ? { "镜片码": mergedCodes.join(",") } : {}),
-                ...(deliveryType ? { "交期类型": deliveryType } : {}),
-                ...(effectiveStock ? { "库存状态": effectiveStock } : {}),
-                ...(supplier ? { "供应商厂家": supplier } : {}),
-                "流程步骤": JSON.stringify(wf),
-              },
-            };
-          });
-          await batchUpdateRecords(TABLES.order, orderUpdates);
-          const t4 = Date.now();
-          console.log(`  confirm ${orderNo}: 读取=${t1-t0}ms 准备=${t2-t1}ms 镜片写=${t3-t2}ms 订单写=${t4-t3}ms 总计=${t4-t0}ms`);
-
-          return { orderNo, ok: true, lensCodes, targetStatus: confirmTargetStatus };
+          return { orderNo, ok: true, records, matchedLens, confirmTargetStatus, confirmWfStep, deliveryType, effectiveStock };
         } catch (e) {
           return { orderNo, ok: false, error: e.message };
         }
       }));
-      results.push(...orderResults);
+
+      // 立即返回响应
+      for (const p of prepared) {
+        if (!p.ok) results.push({ orderNo: p.orderNo, ok: false, error: p.error });
+        else results.push({ orderNo: p.orderNo, ok: true, async: true, targetStatus: p.confirmTargetStatus });
+      }
       jsonRes(res, 200, { results });
-      return logReq(req, 200, start);
+      logReq(req, 200, start);
+
+      // 阶段2：后台执行赋码+写入（不阻塞响应）
+      for (const p of prepared) {
+        if (!p.ok) continue;
+        const { orderNo, records, matchedLens, confirmTargetStatus, confirmWfStep, deliveryType, effectiveStock } = p;
+        (async () => {
+          try {
+            const t0 = Date.now();
+            const lensCodes = [];
+            const lensUpdates = [];
+            const qrPromises = [];
+            for (const rec of matchedLens) {
+              let code = rec.fields["镜片码（唯一）"];
+              if (!code) {
+                code = genLensCode();
+                qrPromises.push(generateQRPng(code));
+                console.log(`  镜片码生成: ${orderNo} → ${code}`);
+              }
+              lensCodes.push(code);
+              lensUpdates.push({ record_id: rec.record_id, fields: { "镜片码（唯一）": code, "订单状态": confirmTargetStatus } });
+            }
+            if (qrPromises.length) await Promise.all(qrPromises);
+            const t1 = Date.now();
+            if (lensUpdates.length > 0) await batchUpdateRecords(TABLES.lens_detail, lensUpdates);
+            const t2 = Date.now();
+
+            for (const rec of matchedLens) {
+              const lc = rec.fields["镜片码（唯一）"];
+              if (!lc) continue;
+              _lensCache.set(lc, {
+                orderNo,
+                customer: rec.fields["顾客姓名"] || customerName,
+                sku: rec.fields["产品型号"] || "",
+                pairIndex: Number(rec.fields["序号"] || 1),
+                side: rec.fields["眼别"] || "",
+                sph: rec.fields["球镜SPH"] ?? "",
+                cyl: rec.fields["柱镜CYL"] ?? "",
+                axis: rec.fields["轴位AXIS"] ?? "",
+              });
+            }
+
+            const orderUpdates = records.map(rec => {
+              const existingCodes = String(rec.fields["镜片码"] || "").split(",").filter(Boolean);
+              const mergedCodes = [...new Set([...existingCodes, ...lensCodes])];
+              const wf = parseWorkflow(rec.fields["流程步骤"]);
+              advanceWorkflow(wf, confirmWfStep);
+              return {
+                record_id: rec.record_id,
+                fields: {
+                  "订单状态": confirmTargetStatus,
+                  ...(mergedCodes.length > 0 ? { "镜片码": mergedCodes.join(",") } : {}),
+                  ...(deliveryType ? { "交期类型": deliveryType } : {}),
+                  ...(effectiveStock ? { "库存状态": effectiveStock } : {}),
+                  ...(supplier ? { "供应商厂家": supplier } : {}),
+                  "流程步骤": JSON.stringify(wf),
+                },
+              };
+            });
+            await batchUpdateRecords(TABLES.order, orderUpdates);
+            const t3 = Date.now();
+            console.log(`  confirm ${orderNo} [async]: 准备=${t1-t0}ms 镜片写=${t2-t1}ms 订单写=${t3-t2}ms 总计=${t3-t0}ms`);
+            invalidateOrdersCache();
+          } catch (e) {
+            console.error(`  confirm ${orderNo} [async] 失败:`, e.message);
+          }
+        })();
+      }
+      return;
     }
 
-    // POST /api/admin/batch-import — 批量导入 Excel + 赋码 + Bitable 写入
+    // POST /api/admin/batch-import — 批量赋码：解析 Excel → 写入镜片明细表 → 返回 Excel
     if (pathname === "/api/admin/batch-import" && req.method === "POST") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const payload = await readBody(req, 30 * 1024 * 1024);
-      const { files, agentId, agentName } = payload;
+      const { files } = payload;
       if (!files?.length) { jsonRes(res, 400, { error: "请提供文件" }); return logReq(req, 400, start); }
-      if (!agentId || !agentName) { jsonRes(res, 400, { error: "请提供代理商信息" }); return logReq(req, 400, start); }
 
-      const { extractAgentId, buildOrderRecords, contentHash } = batchImportMod;
-      const results = [];
-      let totalOrders = 0, totalLenses = 0;
-      const allOrderRecords = [];
-      const allLensRecords = [];
+      const allRows = [];
+      const bitableRecords = [];
 
-      // 1. 解析所有文件，构建记录
+      const findIdx = (headers, ...names) => {
+        for (const name of names) {
+          const nl = name.toLowerCase();
+          const idx = headers.findIndex(h => h.toLowerCase() === nl || h.toLowerCase().startsWith(nl) || h.toLowerCase().includes(nl));
+          if (idx >= 0) return idx;
+        }
+        return -1;
+      };
+
       for (const file of files) {
         try {
-          const fileAgentId = extractAgentId(file.name) || agentId;
-          const parsed = await handleExcelUpload({ data: file.data });
-          if (!parsed.patients.length) {
-            results.push({ file: file.name, agentId: fileAgentId, ok: false, error: parsed.warnings?.[0] || "未解析到患者数据" });
-            continue;
+          const buffer = Buffer.from(file.data, "base64");
+          const workbook = XLSX.read(buffer, { type: "buffer" });
+          const sheet = workbook.Sheets[workbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
+          if (rows.length < 2) continue;
+
+          // 找表头行（包含 球镜/SPH/产品型号 等关键词）
+          let headerIdx = rows.findIndex(r => r.some(c => /球镜|SPH|产品型号|型号/i.test(String(c))));
+          if (headerIdx < 0) headerIdx = 0;
+
+          const headers = rows[headerIdx].map(c => String(c || "").trim());
+          const iSph = findIdx(headers, "球镜SPH", "球镜", "SPH", "sph", "近视", "度数");
+          const iCyl = findIdx(headers, "柱镜CYL", "柱镜", "CYL", "cyl", "散光");
+          const iAxis = findIdx(headers, "轴位AXIS", "轴位", "AXIS", "axis");
+          const iSku = findIdx(headers, "产品型号", "型号", "产品", "SKU");
+          const iQty = findIdx(headers, "数量", "数量(片)", "数量（副）", "片数", "副数", "qty");
+
+          if (iSph < 0 && iCyl < 0) continue;
+
+          const toNum = (v) => { const n = Number(v); return isNaN(n) ? 0 : Math.round(n * 4) / 4; };
+
+          for (let r = headerIdx + 1; r < rows.length; r++) {
+            const row = rows[r];
+            if (!row.some(c => c != null && String(c).trim() !== "")) continue;
+
+            const sph = iSph >= 0 ? row[iSph] : "";
+            const cyl = iCyl >= 0 ? row[iCyl] : "";
+            const axis = iAxis >= 0 ? row[iAxis] : "";
+            const sku = iSku >= 0 ? String(row[iSku] || "").trim() : "";
+            const qty = iQty >= 0 ? Math.max(1, Number(row[iQty]) || 1) : 1;
+
+            if (sph === "" && cyl === "" && axis === "") continue;
+
+            // 每个数量生成一个独立镜片码
+            for (let q = 0; q < qty; q++) {
+              const code = genLensCode();
+
+              allRows.push({
+                "产品型号": sku,
+                "球镜SPH": sph !== "" ? toNum(sph).toFixed(2) : "",
+                "柱镜CYL": cyl !== "" ? toNum(cyl).toFixed(2) : "",
+                "轴位AXIS": axis !== "" ? Math.min(180, Math.max(0, Math.round(Number(axis)))) : "",
+                "数量": qty,
+                "镜片码": code,
+                "验真网址": `https://lab.gaushclear.com/verify/${code}`,
+              });
+
+              bitableRecords.push({
+                fields: {
+                  "镜片码（唯一）": code,
+                  "订单编号": genOrderNo(),
+                  "球镜SPH": toNum(sph),
+                  "柱镜CYL": toNum(cyl),
+                  "轴位AXIS": Number(axis) || 0,
+                  "产品型号": sku,
+                  "序号": 1,
+                  "订单状态": "生产中",
+                },
+              });
+            }
           }
-
-          const orderNo = genOrderNo();
-          const agentInfo = {
-            id: agentId,
-            name: agentName,
-            contact: parsed.contact,
-            phone: parsed.phone,
-            address: parsed.address,
-            customerId: "",
-            terminalCustomer: "",
-          };
-          const { orderRecords, lensRecords } = buildOrderRecords(parsed.patients, agentInfo, orderNo);
-
-          // 去重检查：按文件内容 hash 标记
-          const hash = contentHash(parsed.patients);
-          orderRecords[0].fields["镜片码"] = lensRecords.map(r => r.fields["镜片码（唯一）"]).join(",");
-
-
-          allOrderRecords.push(...orderRecords);
-          allLensRecords.push(...lensRecords);
-          totalOrders += orderRecords.length;
-          totalLenses += lensRecords.length;
-
-          results.push({
-            file: file.name, agentId: fileAgentId, ok: true,
-            orderCount: orderRecords.length, lensCount: lensRecords.length,
-            warnings: parsed.warnings,
-          });
         } catch (e) {
-          results.push({ file: file.name, agentId: agentId, ok: false, error: e.message });
+          console.error(`  解析失败: ${file.name} - ${e.message}`);
         }
       }
 
-      // 2. 写入 Bitable
-      if (allOrderRecords.length > 0) {
-        const ok = await batchCreateRecords(TABLES.order, allOrderRecords);
-        if (!ok) {
-          jsonRes(res, 500, { success: false, error: "订单主表写入失败" });
-          return logReq(req, 500, start);
-        }
-      }
-      if (allLensRecords.length > 0) {
-        const ok = await batchCreateRecords(TABLES.lens_detail, allLensRecords);
-        if (!ok) {
-          jsonRes(res, 500, { success: false, error: "镜片明细表写入失败" });
-          return logReq(req, 500, start);
-        }
+      if (!allRows.length) {
+        jsonRes(res, 400, { error: "未解析到镜片数据" });
+        return logReq(req, 400, start);
       }
 
-      // 3. 生成 QR 码图片
-      const qrPromises = [];
-      for (const rec of allLensRecords) {
-        const code = rec.fields["镜片码（唯一）"];
-        if (code) qrPromises.push(generateQRPng(code));
-      }
-      await Promise.all(qrPromises);
-      console.log(`  生成了 ${qrPromises.length} 个 QR 码图片`);
-
-      // 4. 生成汇总 CSV
-      const csvLines = ["文件名,代理商,订单数,镜片数,状态,说明"];
-      for (const r of results) {
-        csvLines.push(`${csvEscape(r.file)},${r.agentId},${r.orderCount||0},${r.lensCount||0},${r.ok?"成功":"失败"},${csvEscape(r.error||(r.warnings?.join("; ")||""))}`);
+      // 写入镜片明细表
+      if (bitableRecords.length > 0) {
+        const ok = await batchCreateRecords(TABLES.lens_detail, bitableRecords);
+        if (!ok) console.error("  镜片明细表写入失败");
+        else console.log(`  写入镜片明细表: ${bitableRecords.length} 条`);
       }
 
-      jsonRes(res, 200, { success: true, results, summary: { total: files.length, csv: csvLines.join("\n") }, orderCount: totalOrders, lensCount: totalLenses });
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(allRows);
+      ws["!cols"] = [
+        { wch: 20 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
+        { wch: 6 }, { wch: 18 }, { wch: 50 },
+      ];
+      XLSX.utils.book_append_sheet(wb, ws, "批量赋码");
+      const buf = Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
+
+      res.writeHead(200, {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": `attachment; filename="batch-codes-${new Date().toISOString().slice(0,10)}.xlsx"`,
+        "Content-Length": buf.length,
+      });
+      res.end(buf);
       return logReq(req, 200, start);
     }
 
@@ -3279,6 +3498,7 @@ const server = createServer(async (req, res) => {
           results.push({ orderNo, ok: false, error: e.message });
         }
       }
+      invalidateOrdersCache();
       jsonRes(res, 200, { results });
       return logReq(req, 200, start);
     }
@@ -3412,6 +3632,7 @@ const server = createServer(async (req, res) => {
           courierName: rawVal(f0["物流公司"]),
           trackingNo: rawVal(f0["快递单号"]),
           address: rawVal(f0["收货地址"]),
+          binCode: matchBin(rawVal(f0["收货地址"]) || ""),
           rows,
         });
 
@@ -3429,12 +3650,12 @@ const server = createServer(async (req, res) => {
       } catch (e) { jsonRes(res, 500, { error: e.message }); return logReq(req, 500, start); }
     }
 
-    // GET /api/admin/slip-batch — 批量随货同行单（按收货地址分组，同地址一张单）
+    // GET /api/admin/slip-batch — 批量随货同行单（按仓位分组）
     if (pathname === "/api/admin/slip-batch" && req.method === "GET") {
       if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
       const adminToken = url.searchParams.get("admin") || "";
       const orderNosParam = url.searchParams.get("orderNos") || "";
-      const addrKey = url.searchParams.get("addr") || ""; // 单地址直出
+      const binFilter = url.searchParams.get("bin") || "";
       try {
         let records;
         if (orderNosParam) {
@@ -3456,27 +3677,26 @@ const server = createServer(async (req, res) => {
         }
         if (!records.length) { jsonRes(res, 404, { error: "无打标签或已发货订单" }); return logReq(req, 404, start); }
 
-        // 按收货地址分组（同地址一张单）
+        // 按仓位分组（同仓位一张单）
         const groupMap = {};
         for (const r of records) {
           const f = r.fields;
-          const addr = rawVal(f["收货地址"]) || "未知地址";
-          const addrKeyNorm = addr.replace(/\s+/g, "").replace(/[，,。.、/\\\-_]/g, "");
-          if (!groupMap[addrKeyNorm]) groupMap[addrKeyNorm] = {
-            address: addr, addrKey: addrKeyNorm,
+          const addr = rawVal(f["收货地址"]) || "";
+          const binCode = matchBin(addr);
+          if (!groupMap[binCode]) groupMap[binCode] = {
+            binCode, address: addr,
             trackingNo: rawVal(f["快递单号"]) || "", courierName: rawVal(f["物流公司"]) || "",
             shipDate: f["发货时间"] ? new Date(f["发货时间"]).toLocaleDateString("zh-CN") : new Date().toLocaleDateString("zh-CN"),
             records: [],
           };
-          // 避免同一订单号重复加
           const orderNo = rawVal(f["订单编号"]) || "";
-          if (!groupMap[addrKeyNorm].records.find(rr => rawVal(rr.fields["订单编号"]) === orderNo)) {
-            groupMap[addrKeyNorm].records.push(r);
+          if (!groupMap[binCode].records.find(rr => rawVal(rr.fields["订单编号"]) === orderNo)) {
+            groupMap[binCode].records.push(r);
           }
         }
-        let groups = Object.values(groupMap).sort((a, b) => a.addrKey.localeCompare(b.addrKey));
-        if (addrKey) groups = groups.filter(g => g.addrKey === addrKey);
-        if (!groups.length) { jsonRes(res, 404, { error: "无匹配地址" }); return logReq(req, 404, start); }
+        let groups = Object.values(groupMap).sort((a, b) => a.binCode.localeCompare(b.binCode));
+        if (binFilter) groups = groups.filter(g => g.binCode === binFilter);
+        if (!groups.length) { jsonRes(res, 404, { error: "无匹配仓位" }); return logReq(req, 404, start); }
 
         // 单地址直接返回同行单
         if (groups.length === 1) {
@@ -3506,7 +3726,7 @@ const server = createServer(async (req, res) => {
           });
           const firstF = g.records[0].fields;
           const html = slipHTML({
-            orderNos, address: g.address,
+            orderNos, address: g.address, binCode: g.binCode,
             agentName: rawVal(firstF["代理商名称"]) || "", agentId: rawVal(firstF["代理商ID"]) || "",
             shipDate: g.shipDate, courierName: g.courierName, trackingNo: g.trackingNo, rows,
           });
@@ -3515,7 +3735,7 @@ const server = createServer(async (req, res) => {
           return logReq(req, 200, start);
         }
 
-        // 多地址：汇总页
+        // 多仓位：汇总页
         const title = orderNosParam ? "选中订单" : "待发货";
         const listHtml = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>随货同行单汇总</title>
 <style>body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;padding:40px;background:#f5f5f5}
@@ -3528,13 +3748,13 @@ h1{max-width:900px;margin:0 auto 24px;color:#1a1a2e;font-size:18pt}
 .btn{display:inline-block;padding:8px 20px;background:#c0392b;color:#fff;border:none;border-radius:6px;font-size:11pt;text-decoration:none}
 .btn:hover{opacity:.9}
 .empty{text-align:center;padding:60px;color:#ccc}</style></head><body>
-<h1>随货同行单 — ${title}（${groups.length} 个地址）</h1><div class="cards">`;
+<h1>随货同行单 — ${title}（${groups.length} 个仓位）</h1><div class="cards">`;
         const cards = groups.map(g => {
           const orderNos = [...new Set(g.records.map(r => rawVal(r.fields["订单编号"])))];
-          const addrShort = g.address.length > 30 ? g.address.slice(0, 30) + "…" : g.address;
+          const binLabel = g.binCode.startsWith("T-") ? `${g.binCode} ${g.address}` : `仓位 ${g.binCode}`;
           const customerNames = [...new Set(g.records.map(r => rawVal(r.fields["顾客姓名"]) || "—"))].join("、");
-          const url = `/api/admin/slip-batch?addr=${encodeURIComponent(g.addrKey)}&orderNos=${encodeURIComponent(orderNos.join(","))}&admin=${adminToken}`;
-          return `<div class="card"><div><h3>&#128205; ${addrShort}</h3><p>${customerNames} · ${g.records.length} 副 · 订单 ${orderNos.join(", ")}</p></div><a class="btn" href="${url}" target="_blank">打印同行单</a></div>`;
+          const url = `/api/admin/slip-batch?bin=${encodeURIComponent(g.binCode)}&orderNos=${encodeURIComponent(orderNos.join(","))}&admin=${adminToken}`;
+          return `<div class="card"><div><h3>&#128205; ${binLabel}</h3><p>${customerNames} · ${g.records.length} 副 · 订单 ${orderNos.join(", ")}</p></div><a class="btn" href="${url}" target="_blank">打印同行单</a></div>`;
         }).join("");
         const html = listHtml + cards + `</div></body></html>`;
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -3726,6 +3946,7 @@ h1{max-width:900px;margin:0 auto 24px;color:#1a1a2e;font-size:18pt}
           results.push({ orderNo, ok: false, error: e.message });
         }
       }
+      invalidateOrdersCache();
       jsonRes(res, 200, { results });
       return logReq(req, 200, start);
     }
@@ -3759,12 +3980,53 @@ h1{max-width:900px;margin:0 auto 24px;color:#1a1a2e;font-size:18pt}
             if (!records.length) { results.push({ orderNo, ok: false, error: `未找到第${pairIndex}副` }); continue; }
           }
 
-          // 已发货是终态，deliver 端点已废弃（待签收/已签收状态已移除）
-          results.push({ orderNo, ok: false, error: "已发货为终态，无需签收确认操作" });
+          // 校验：只有"已发货"状态才能签收
+          const notShipped = records.filter(r => (r.fields["订单状态"] || "") !== "已发货");
+          if (notShipped.length === records.length) {
+            results.push({ orderNo, ok: false, error: "当前状态不可签收，需为已发货" }); continue;
+          }
+          const toSign = records.filter(r => (r.fields["订单状态"] || "") === "已发货");
+          if (!toSign.length) { results.push({ orderNo, ok: false, error: "无已发货记录" }); continue; }
+
+          // 写入订单主表：签收时间 + 状态 + 物流状态 + 工作流
+          const orderUpdates = toSign.map(rec => {
+            const wf = parseWorkflow(rec.fields["流程步骤"]);
+            advanceWorkflow(wf, "delivered");
+            return {
+              record_id: rec.record_id,
+              fields: { "订单状态": "已签收", "签收时间": now, "物流状态": "已签收", "流程步骤": JSON.stringify(wf) },
+            };
+          });
+          await batchUpdateRecords(TABLES.order, orderUpdates);
+
+          // 同步镜片明细表
+          const lensDetails = await getLensDetailsByOrder(orderNo);
+          let filteredLens = customerName
+            ? lensDetails.filter(r => (r.fields["顾客姓名"] || "") === customerName)
+            : lensDetails;
+          if (pairIndex) filteredLens = filteredLens.filter(r => Number(r.fields["序号"] || 1) === Number(pairIndex));
+          const lensUpdates = filteredLens
+            .filter(r => (r.fields["订单状态"] || "") === "已发货")
+            .map(r => ({ record_id: r.record_id, fields: { "订单状态": "已签收" } }));
+          if (lensUpdates.length) await batchUpdateRecords(TABLES.lens_detail, lensUpdates);
+
+          // 飞书签收卡片
+          const f0 = toSign[0].fields;
+          const signedAt = new Date(now).toLocaleString("zh-CN");
+          sendFeishuCard(deliveredCard({
+            orderNo,
+            customerName: rawVal(f0["顾客姓名"]) || "",
+            sku: rawVal(f0["产品型号"]) || "",
+            agentName: rawVal(f0["代理商名称"]) || "",
+            signedAt,
+          })).catch(e => console.error("签收通知失败:", e.message));
+
+          results.push({ orderNo, ok: true, signedAt });
         } catch (e) {
           results.push({ orderNo, ok: false, error: e.message });
         }
       }
+      invalidateOrdersCache();
       jsonRes(res, 200, { results });
       return logReq(req, 200, start);
     }
@@ -5420,6 +5682,165 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
       return logReq(req, 200, start);
     }
 
+    // ── 库存消耗 & 生产建议 API ────────────────────────────────────────────────
+
+    // GET /api/admin/consumption-summary — 每周库存消耗汇总
+    if (pathname === "/api/admin/consumption-summary" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const daysBack = Number(url.searchParams.get("days") || 7);
+      const filterSku = url.searchParams.get("sku") || "";
+      const startDateStr = url.searchParams.get("startDate");
+      const endDateStr = url.searchParams.get("endDate");
+      const DAY = 24 * 60 * 60 * 1000;
+      let curStart, curEnd;
+      if (startDateStr && endDateStr) {
+        curStart = new Date(startDateStr + "T00:00:00+08:00").getTime();
+        curEnd = new Date(endDateStr + "T23:59:59+08:00").getTime();
+      } else {
+        const now = Date.now();
+        curEnd = now;
+        curStart = now - daysBack * DAY;
+      }
+      const span = curEnd - curStart;
+      const prevEnd = curStart;
+      const prevStart = curStart - span;
+
+      const [orders, lenses, stockRows] = await Promise.all([
+        listRecords(TABLES.order, ["订单编号", "订单状态", "发货时间"]),
+        listRecords(TABLES.lens_detail, ["订单编号", "产品型号", "球镜SPH", "柱镜CYL"]),
+        listRecords(TABLES.stock_detail, ["SKU编号", "SPH", "CYL", "当前库存", "安全库存", "序列号", "货位编号", "ABC分类"]),
+      ]);
+
+      const locMap = {};
+      for (const r of stockRows) {
+        const key = `${Number(r.fields["SPH"]||0).toFixed(2)}|${Number(r.fields["CYL"]||0).toFixed(2)}`;
+        if (!locMap[key]) locMap[key] = { serialNo: r.fields["序列号"]||"", location: r.fields["货位编号"]||"", abc: r.fields["ABC分类"]||"" };
+      }
+
+      function aggregate(orders, lenses, start, end) {
+        const shippedNos = new Set();
+        let orderCount = 0;
+        for (const r of orders) {
+          const f = r.fields;
+          const st = f["订单状态"];
+          const shipTime = f["发货时间"];
+          if ((st === "已发货" || st === "已签收") && shipTime >= start && shipTime < end) {
+            shippedNos.add(f["订单编号"]);
+            orderCount++;
+          }
+        }
+        const bySku = {};
+        const byDegree = {};
+        let totalLenses = 0;
+        for (const r of lenses) {
+          const f = r.fields;
+          if (!shippedNos.has(f["订单编号"])) continue;
+          const sku = f["产品型号"] || "未知";
+          if (filterSku && sku !== filterSku) continue;
+          const sph = Number(f["球镜SPH"] || 0);
+          const cyl = Number(f["柱镜CYL"] || 0);
+          bySku[sku] = (bySku[sku] || 0) + 1;
+          const degKey = `${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`;
+          byDegree[degKey] = (byDegree[degKey] || 0) + 1;
+          totalLenses++;
+        }
+        return { bySku, byDegree, totalLenses, orderCount };
+      }
+
+      const current = aggregate(orders, lenses, curStart, curEnd);
+      const previous = aggregate(orders, lenses, prevStart, prevEnd);
+
+      const skuStockMap = {};
+      for (const r of stockRows) {
+        const sku = r.fields["SKU编号"] || "未知";
+        if (!skuStockMap[sku]) skuStockMap[sku] = { stock: 0, safety: 0, rows: 0 };
+        skuStockMap[sku].stock += Number(r.fields["当前库存"] || 0);
+        skuStockMap[sku].safety += Number(r.fields["安全库存"] || 0);
+        skuStockMap[sku].rows++;
+      }
+
+      jsonRes(res, 200, { current, previous, skuStockMap, locMap, daysBack });
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/production-suggestions — 生产补货建议（缺口 - 在途）
+    if (pathname === "/api/admin/production-suggestions" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const [stockRows, prodRows] = await Promise.all([
+        listRecords(TABLES.stock_detail, ["SKU编号", "SPH", "CYL", "当前库存", "安全库存", "序列号", "货位编号", "ABC分类"]),
+        listRecords(TABLES.production, ["产品型号", "SPH", "CYL", "建议产量", "状态"]).catch(() => []),
+      ]);
+
+      const inTransitMap = {};
+      for (const r of prodRows) {
+        const st = r.fields["状态"];
+        if (st !== "待确认" && st !== "生产中") continue;
+        const key = `${r.fields["产品型号"]}|${Number(r.fields["SPH"] || 0).toFixed(2)}|${Number(r.fields["CYL"] || 0).toFixed(2)}`;
+        inTransitMap[key] = (inTransitMap[key] || 0) + Number(r.fields["建议产量"] || 0);
+      }
+
+      const suggestions = [];
+      for (const r of stockRows) {
+        const f = r.fields;
+        const sku = f["SKU编号"] || "未知";
+        const sph = Number(f["SPH"] || 0);
+        const cyl = Number(f["CYL"] || 0);
+        const currentStock = Number(f["当前库存"] || 0);
+        const safetyStock = Number(f["安全库存"] || 0);
+        const gap = Math.max(safetyStock - currentStock, 0);
+        if (gap <= 0) continue;
+        const key = `${sku}|${sph.toFixed(2)}|${cyl.toFixed(2)}`;
+        const inTransit = inTransitMap[key] || 0;
+        const netGap = Math.max(gap - inTransit, 0);
+        if (netGap <= 0) continue;
+        suggestions.push({ sku, sph, cyl, currentStock, safetyStock, gap, inTransit, netGap, serialNo: f["序列号"] || "", location: f["货位编号"] || "", abc: f["ABC分类"] || "" });
+      }
+      suggestions.sort((a, b) => b.netGap - a.netGap);
+      jsonRes(res, 200, { total: suggestions.length, suggestions });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/production-orders/batch-create — 批量创建排产工单
+    if (pathname === "/api/admin/production-orders/batch-create" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const body = await readBody(req);
+      const items = body.items;
+      if (!Array.isArray(items) || !items.length) { jsonRes(res, 400, { error: "需要 items 数组" }); return logReq(req, 400, start); }
+
+      const existingProd = await listRecords(TABLES.production, ["产品型号", "SPH", "CYL", "状态"]).catch(() => []);
+      const activeKeys = new Set();
+      for (const r of existingProd) {
+        const st = r.fields["状态"];
+        if (st === "待确认" || st === "生产中") {
+          activeKeys.add(`${r.fields["产品型号"]}|${Number(r.fields["SPH"] || 0).toFixed(2)}|${Number(r.fields["CYL"] || 0).toFixed(2)}`);
+        }
+      }
+
+      const today = new Date();
+      const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, "0")}${String(today.getDate()).padStart(2, "0")}`;
+      const toCreate = [];
+      let skipped = 0;
+      const seen = new Set();
+      for (const it of items) {
+        const key = `${it.sku}|${Number(it.sph).toFixed(2)}|${Number(it.cyl).toFixed(2)}`;
+        if (activeKeys.has(key) || seen.has(key)) { skipped++; continue; }
+        seen.add(key);
+        toCreate.push({ fields: {
+          "工单号": `${key}|${dateStr}`,
+          "产品型号": it.sku,
+          "SPH": Number(it.sph),
+          "CYL": Number(it.cyl),
+          "建议产量": Number(it.qty) || 1,
+          "状态": "待确认",
+          "生产类型": "备货生产",
+          "触发原因": "手动补货建议",
+        }});
+      }
+      if (toCreate.length) await batchCreateRecords(TABLES.production, toCreate);
+      jsonRes(res, 200, { created: toCreate.length, skipped });
+      return logReq(req, 200, start);
+    }
+
     // ── 暑期计划 API ──────────────────────────────────────────────────────────
 
     // GET /api/summer-plan?t=xxx — 查询该代理商的暑期计划
@@ -5785,6 +6206,52 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
       return logReq(req, 200, start);
     }
 
+    // ── 星图 API ──────────────────────────────────────────────────────────
+
+    // GET /api/starmap/star-trail?t=xxx — 星轨模块：年度进度
+    if (pathname === "/api/starmap/star-trail" && req.method === "GET") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+      try {
+        const currentVolume = await getAgentAnnualVolume(agent.id, feishuMod);
+        const trail = calculateStarTrail(agent, currentVolume, new Date());
+        jsonRes(res, 200, trail);
+      } catch (e) {
+        console.error("star-trail error:", e.message);
+        jsonRes(res, 500, { error: "数据获取失败" });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/starmap/star-tier?t=xxx — 星级模块：返利档位
+    if (pathname === "/api/starmap/star-tier" && req.method === "GET") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+      try {
+        const currentVolume = await getAgentAnnualVolume(agent.id, feishuMod);
+        const tier = calculateStarTier(agent, currentVolume);
+        jsonRes(res, 200, tier);
+      } catch (e) {
+        console.error("star-tier error:", e.message);
+        jsonRes(res, 500, { error: "数据获取失败" });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/starmap/ecp-board?t=xxx — 星耀榜：ECP榜单
+    if (pathname === "/api/starmap/ecp-board" && req.method === "GET") {
+      const agent = await findAgent(token);
+      if (!agent) { jsonRes(res, 401, { error: "无效链接" }); return logReq(req, 401, start); }
+      try {
+        const board = await getECPLeaderboard(agent.name, feishuMod);
+        jsonRes(res, 200, board);
+      } catch (e) {
+        console.error("ecp-board error:", e.message);
+        jsonRes(res, 500, { error: "数据获取失败" });
+      }
+      return logReq(req, 200, start);
+    }
+
     // ── 404 ──
     jsonRes(res, 404, { error: "Not found" });
     logReq(req, 404, start);
@@ -5850,6 +6317,7 @@ server.listen(PORT, () => {
   getStockMap().then(m => console.log(`   库存缓存预热完成: ${m.size} 条`)).catch(e => console.warn("⚠️ 库存缓存预热失败:", e.message));
   // 预热镜片缓存，验真零 API 调用
   warmLensCache().then(() => setInterval(warmLensCache, 10 * 60 * 1000)).catch(e => console.warn("⚠️ 镜片缓存预热失败:", e.message));
+  loadBinMap().catch(e => console.warn("⚠️ 仓位映射加载失败:", e.message));
   ensureField("供应商厂家", { type: 3, property: { options: [{ name: "高清" }, { name: "圣普" }, { name: "九次方" }, { name: "五彩" }, { name: "欧陆" }] } }).catch(e => console.warn("⚠️ 供应商厂家字段检查失败:", e.message));
   ensureField("库存状态", { type: 3, property: { options: [{ name: "有库存" }, { name: "无库存" }] } }).catch(e => console.warn("⚠️ 库存状态字段检查失败:", e.message));
   // 确保"订单状态"字段包含"已下单"选项

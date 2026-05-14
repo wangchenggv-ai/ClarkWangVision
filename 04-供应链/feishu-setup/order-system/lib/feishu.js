@@ -73,6 +73,24 @@ export async function listRecords(tableId, fieldNames) {
   return records;
 }
 
+export async function searchRecords(tableId, { filter, sort, fieldNames, pageSize = 500 } = {}) {
+  const records = [];
+  let pageToken = "";
+  while (true) {
+    const body = { page_size: pageSize };
+    if (filter) body.filter = filter;
+    if (sort) body.sort = sort;
+    if (fieldNames) body.field_names = fieldNames;
+    if (pageToken) body.page_token = pageToken;
+    const data = await feishuApi("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records/search`, body);
+    if (!data) break;
+    if (data.items) records.push(...data.items);
+    if (!data.has_more) break;
+    pageToken = data.page_token;
+  }
+  return records;
+}
+
 export async function createRecord(tableId, fields) {
   return feishuApi("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records`, { fields });
 }

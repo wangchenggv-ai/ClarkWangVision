@@ -465,60 +465,6 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
   .admin-table { overflow-x: auto; }
 }
 
-/* ─── 工作流 Stepper ─── */
-.step-track {
-  display: flex;
-  align-items: center;
-  padding: 14px 0 10px;
-  gap: 0;
-}
-.step-node {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700;
-  position: relative;
-  flex-shrink: 0;
-  cursor: default;
-}
-.step-node.done { background: #52c41a; color: #fff; }
-.step-node.current { background: #1677ff; color: #fff; animation: stepPulse 1.5s infinite; }
-.step-node.pending { background: #f0f0f0; color: #bbb; border: 2px solid #d9d9d9; }
-.step-node .step-tip {
-  display: none;
-  position: absolute;
-  bottom: 36px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #333;
-  color: #fff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  white-space: nowrap;
-  z-index: 10;
-  font-weight: 400;
-}
-.step-node:hover .step-tip { display: block; }
-.step-line { flex: 1; height: 3px; background: #e8e8e8; min-width: 8px; }
-.step-line.done { background: #52c41a; }
-.step-labels {
-  display: flex;
-  padding: 0 0 4px;
-}
-.step-label {
-  flex: 1;
-  text-align: center;
-  font-size: 9px;
-  color: #999;
-  white-space: nowrap;
-}
-.step-label.done { color: #52c41a; }
-.step-label.current { color: #1677ff; font-weight: 600; }
-@keyframes stepPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(22,127,255,0.4); }
-  50% { box-shadow: 0 0 0 6px rgba(22,127,255,0); }
-}
 
 </style>
 </head>
@@ -835,7 +781,16 @@ async function loadOrders() {
   if (assembly) params.set("assembly", assembly);
   if (supplier) params.set("supplier", supplier);
 
-  const data = await api(`/api/admin/orders?${params}`);
+  // 超期用老端点（需全量），其余用 fast 端点（飞书服务端筛选）
+  const endpoint = activeQuickFilter === "overdue" ? "/api/admin/orders" : "/api/admin/orders-fast";
+  let data;
+  try {
+    data = await api(`${endpoint}?${params}`);
+  } catch (e) {
+    // fast 端点失败时 fallback 到老端点
+    if (endpoint === "/api/admin/orders-fast") data = await api(`/api/admin/orders?${params}`);
+    else throw e;
+  }
   allOrders = data.orders || [];
   allOrdersRaw = allOrders;
 
@@ -1049,29 +1004,9 @@ function renderDetail(panel, data) {
   const stockVal = o.stockStatus || "";
   const supplierVal = o.supplier || "";
 
-  // 过滤掉无处方数据的迁移记录（无眼别+无SPH）
-  const validLenses = data.lenses.filter(l => l.eye || l.sph !== '' && l.sph != null && l.sph !== '');
-  const lensesToShow = validLenses.length > 0 ? validLenses : data.lenses;
-
-  let html = `
-    <div style="overflow-x:auto">
-    <table style="table-layout:auto;width:100%;min-width:440px">
-      <thead><tr><th style="white-space:nowrap">眼别</th><th style="white-space:nowrap">SPH</th><th style="white-space:nowrap">CYL</th><th style="white-space:nowrap">AXIS</th><th style="white-space:nowrap">镜片码</th>${isPending ? '<th style="white-space:nowrap">库存</th>' : ''}</tr></thead>
-      <tbody>${lensesToShow.map((l, li) => `
-        <tr>
-          <td style="white-space:nowrap">${l.eye || '-'}</td>
-          <td style="white-space:nowrap">${l.sph !== '' && l.sph != null ? Number(l.sph).toFixed(2) : '-'}</td>
-          <td style="white-space:nowrap">${l.cyl !== '' && l.cyl != null ? Number(l.cyl).toFixed(2) : '-'}</td>
-          <td style="white-space:nowrap">${l.axis !== '' && l.axis != null ? l.axis : '-'}</td>
-          <td class="lens-code" style="white-space:nowrap">${l.lensCode || '-'}</td>
-          ${isPending ? `<td id="lens-stock-${key}-${li}" style="font-size:11px;color:#999;white-space:nowrap">...</td>` : ''}
-        </tr>
-      `).join("")}</tbody>
-    </table>
-    </div>`;
-
+  let html = '';
   if (isPending || stockVal || supplierVal) {
-    html += '<div style="display:flex;gap:16px;margin-top:10px;padding:10px 12px;background:#fafafa;border-radius:6px;align-items:center;flex-wrap:wrap">';
+    html += '<div style="display:flex;gap:16px;padding:10px 12px;background:#fafafa;border-radius:6px;align-items:center;flex-wrap:wrap">';
     html += '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#666">库存状态</span>';
     html += `<select id="detail-stock-${key}" style="padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px" ${isPending ? '' : 'disabled'}>`;
     html += '<option value="">未选择</option>';
@@ -1089,6 +1024,8 @@ function renderDetail(panel, data) {
     html += '</select></div>';
     html += `<div id="detail-stock-note-${key}" style="font-size:11px;color:#999"></div>`;
     html += '</div>';
+  } else {
+    html = '<div style="padding:8px 0;font-size:12px;color:#bbb">无待处理操作</div>';
   }
 
   panel.innerHTML = html;
@@ -1237,7 +1174,6 @@ async function quickConfirm(orderNo, customerName, pairIndex) {
   targets.forEach(o => o.status = "待处理");
   updateStats(-targets.length, targets.length);
   renderOrders();
-  syncWorkflowSteppers();
   try {
     const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName, pairIndex: pi });
     const r = data.results[0];
@@ -1289,7 +1225,6 @@ async function confirmOrders() {
   targets.forEach(o => o.status = "待处理");
   updateStats(-n, n);
   renderOrders();
-  syncWorkflowSteppers();
   try {
     const data = await adminApi("/api/admin/confirm", { orderNos });
     const results = data.results || [];
@@ -1512,102 +1447,6 @@ function showShipModal(count) {
   });
 }
 
-// ─── 工作流 Stepper 渲染 ──────────────────────────────────────────────
-
-const STEP_KEYS = ["submitted","confirmed","producing","labeled","shipped"];
-const STEP_NAMES = ["已下单","待处理","生产中","打标签","已发货"];
-
-function renderWorkflow(container, wfData) {
-  if (!wfData || !wfData.steps) {
-    container.innerHTML = '<div style="padding:8px 0;font-size:12px;color:#bbb">暂无流程数据</div>';
-    return;
-  }
-  const steps = wfData.steps || {};
-  const currentIdx = wfData.current || 0;
-
-  let trackHtml = '<div class="step-track">';
-  let labelsHtml = '<div class="step-labels">';
-
-  for (let i = 0; i < STEP_KEYS.length; i++) {
-    const key = STEP_KEYS[i];
-    const name = STEP_NAMES[i];
-    const stepData = steps[key];
-    const hasThis = !!steps[key];
-    const hasNext = i < STEP_KEYS.length - 1 && !!steps[STEP_KEYS[i + 1]];
-    // 最后一个已完成的步骤为 current（蓝色高亮），其余已完成为 done（绿色）
-    const isCurrentStep = hasThis && !hasNext;
-
-    let cls = "pending";
-    if (hasThis) cls = isCurrentStep ? "current" : "done";
-
-    const tipText = stepData?.ts
-      ? `${name}\n${new Date(stepData.ts).toLocaleString("zh-CN")}`
-      : name;
-
-    trackHtml += `<div class="step-node ${cls}" title="${tipText}">${i + 1}<div class="step-tip">${tipText.replace('\n','<br>')}</div></div>`;
-
-    if (i < STEP_KEYS.length - 1) {
-      trackHtml += `<div class="step-line${hasThis ? ' done' : ''}"></div>`;
-    }
-
-    let labelCls = "";
-    if (hasThis) labelCls = isCurrentStep ? "current" : "done";
-    labelsHtml += `<div class="step-label ${labelCls}">${name}</div>`;
-  }
-
-  trackHtml += '</div>';
-  labelsHtml += '</div>';
-  container.innerHTML = trackHtml + labelsHtml;
-}
-
-// 增强 renderDetail：在处方表下方加工作流 stepper
-const _origRenderDetail = renderDetail;
-renderDetail = function(panel, data) {
-  _origRenderDetail(panel, data);
-  // 添加工作流容器
-  const wfDiv = document.createElement("div");
-  wfDiv.className = "workflow-section";
-  wfDiv.innerHTML = '<div style="font-size:12px;font-weight:600;color:#666;margin-top:10px;padding-top:8px;border-top:1px solid #f0f0f0">流程进度</div>';
-  const trackDiv = document.createElement("div");
-  trackDiv.innerHTML = '<div style="font-size:11px;color:#ccc;padding:4px 0">加载中...</div>';
-  wfDiv.appendChild(trackDiv);
-  panel.appendChild(wfDiv);
-  // 异步加载工作流
-  const on = panel.dataset.orderNo;
-  if (on) {
-    api(`/api/admin/workflow/${encodeURIComponent(on)}`).then(wfData => {
-      trackDiv._wfData = wfData;
-      renderWorkflow(trackDiv, wfData);
-    }).catch(() => {
-      trackDiv.innerHTML = '<div style="font-size:11px;color:#ccc">流程数据加载失败</div>';
-    });
-  }
-};
-
-// 根据订单状态推算 workflow 数据（乐观更新用）
-const STATUS_TO_WF = { "已下单": 0, "待处理": 1, "生产中": 2, "打标签": 3, "已发货": 4 };
-function syncWorkflowSteppers() {
-  document.querySelectorAll(".detail-panel").forEach(panel => {
-    const on = panel.dataset.orderNo;
-    if (!on) return;
-    const order = allOrders.find(o => o.orderNo === on);
-    if (!order) return;
-    const trackDiv = panel.querySelector(".workflow-section > div:nth-child(2)");
-    if (!trackDiv) return;
-    const targetIdx = STATUS_TO_WF[order.status];
-    if (targetIdx == null) return;
-    // 合并已有 wfData 的步骤时间戳，补充新步骤
-    const prev = trackDiv._wfData || { steps: {} };
-    const steps = {};
-    for (let i = 0; i <= targetIdx; i++) {
-      const key = STEP_KEYS[i];
-      steps[key] = prev.steps?.[key] || { ts: null };
-    }
-    const wfData = { current: targetIdx, steps };
-    trackDiv._wfData = wfData;
-    renderWorkflow(trackDiv, wfData);
-  });
-}
 
 // ─── 初始化 ─────────────────────────────────────────────────────────
 

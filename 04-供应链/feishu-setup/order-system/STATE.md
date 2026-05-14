@@ -1,6 +1,6 @@
 # 系统当前状态
 
-> 更新：2026-05-10 v3 | 完整历史见 CHANGELOG.md
+> 更新：2026-05-14 v9 | 完整历史见 CHANGELOG.md
 
 ---
 
@@ -14,8 +14,8 @@
 | 生产容器 | order-app:3210（主服务）+ mock-shuang:3220 |
 | 测试容器 | order-app-test:3211 + mock-shuang-test:3221 |
 | 测试 Bitable | APP_TOKEN: `CtXObqwAHaCXYssBBfkcXmrlnUe` |
-| 本次待部署 | ✅ 批量导入系统（batch-import + 自动赋码 + QR 验真码）— 已部署 |
-| 涉及文件 | server.js, lib/batch-import.js, public/batch-import.html, public/qr-gallery.html |
+| 本次待部署 | ✅ 已全部部署（筛选优化+页面精简+订单补码） |
+| 涉及文件 | server.js, lib/feishu.js, lib/export-log.js, public/orders.html |
 
 部署命令：
 ```bash
@@ -40,7 +40,7 @@ ssh -i "$KEY" root@113.44.175.221 \
 
 ---
 
-## 当前状态机（2026-04-29 草稿缓冲）
+## 当前状态机（2026-05-13 签收激活）
 
 ```
                           ┌─ 编辑/取消可改 ─┐
@@ -52,17 +52,18 @@ ssh -i "$KEY" root@113.44.175.221 \
 
 **Bitable 内状态流转**（草稿同步后，与原流程一致）：
 ```
-已下单 → 待处理 → 生产中 ─┬→ 打标签 → 已发货（终态）
-                  └→ 打标签（有库存）  └→ 已发货（供应商直发）
+已下单 → 待处理 → 生产中 ─┬→ 打标签 → 已发货 → 已签收（终态）
+                  └→ 打标签（有库存）  └→ 已发货（供应商直发）↗
 ```
 
 - **提交改为本地草稿**：~50ms 返回，不再阻塞 Bitable 写入
 - **30 分钟编辑窗口**：代理商在追踪页可编辑/取消
 - **后台自动同步**：写 Bitable(已下单) + 预占库存 + 生成镜片码
 - **Docker volume 持久化**：`/opt/gaush-lab/drafts/` 挂载，重启不丢
-- **镜片码**：点「待确认」时生成（不在提交时）
+- **镜片码**：点「待确认」时生成（不在提交时），确认异步化（立即返回，后台赋码+写入）
 - **退回**：已下单/待处理/生产中/打标签均可退回；打标签统一退到已下单
-- **废弃**：~~待签收~~ ~~已签收~~（已从所有代码、前端、API移除）
+- **签收**：已发货→已签收（顺丰 webhook 自动或助理手动），已签收即终态
+- **有库存快路径**：行内设"有库存"→确认时直接跳到"打标签"，跳过待处理+生产中
 
 详见 `订单流程图-权威版.md`
 
@@ -70,6 +71,20 @@ ssh -i "$KEY" root@113.44.175.221 \
 
 ## 已知问题 / 待办
 
+- [x] **筛选性能优化**：新增 `/api/admin/orders-fast` 端点，用飞书 `records/search` API 带 filter（服务端筛选，不拉全表），首次筛选从 ~5s 降到 ~1s。`export-log.js` 给 `getOrderExportStatus` 加 60s 缓存。前端 orders.html 筛选默认走 fast 端点，超期走老端点，fast 失败自动 fallback。涉及文件：`server.js` + `lib/feishu.js` + `lib/export-log.js` + `public/orders.html` ✅ 已部署 ECS（2026-05-14）
+- [x] **订单管理页精简**：orders.html 展开详情去掉镜片处方表和流程进度 stepper，只保留库存/供应商选择器。删除 stepper CSS ~50 行 + JS ~100 行。涉及文件：`public/orders.html` ✅ 已部署 ECS（2026-05-14）
+- [x] **订单补码**：ORD-20260514-AAF16A70 状态被 update-field 直接改到"打标签"但未赋码，直接调飞书 API 生成镜片码 8355795E862C512E 并写入两表
+- [x] **暑期备库模拟器**：独立网页工具，输入备库总数+A/B/C比例 → 25×9热力图建议（最大余额法精确分配）→ 下载Excel（备库订单+ABC参考两个Sheet）。纯前端单HTML文件，xlsx走CDN，无服务器依赖。路由 `/summer-stock-tool`。涉及文件：`public/summer-stock-tool.html` + `server.js` ✅ 已部署 ECS（2026-05-14）
+- [x] **E2E 测试 — 三个新功能验证**：签收终态✅ + 仓位赋码✅ + 标签SKU条码✅，13/13 全部通过。修复 orders API 不返回 binCode 的 bug。涉及文件：`server.js` ✅ 已部署 ECS（2026-05-14）
+- [x] **order.html 四项改造**：①AXIS/SPH/CYL/数量输入框禁用滚轮（`onwheel="this.blur()"`），②确认弹窗和Excel预览中SPH/CYL正度数显示+号（新增`fmt()`函数），③终端客户+地址改为可下拉+可手输模式（datalist，选中后自动填充联系人/电话/地址），④新增首单标签（`GET /api/agent-order-count`端点+前端橙色badge）。涉及文件：`public/order.html` + `server.js` + `public/css/common.css` ✅ 已部署 ECS（2026-05-13）
+- [x] **签收功能激活**：状态机扩展为6态（已签收即终态），deliver端点恢复实际逻辑（写签收时间+状态+工作流+飞书卡片），logistics.js webhook/simulateDelivery恢复写入Bitable，labels-print.html已发货行加确认签收按钮。涉及文件：`server.js` + `logistics.js` + `public/labels-print.html` + `CLAUDE.md` + `ARCHITECTURE.md` ✅ 已部署 ECS（2026-05-13）
+- [x] **标签加SKU条码**：标签左下角新增CODE128条形码，编码格式`TKAP-250-125`（型号缩写-SPH×100-CYL×100），工厂扫码可直接看型号+度数。factory-export.js两个Excel导出均新增"SKU条码"列。涉及文件：`lib/templates.js` + `lib/factory-export.js` ✅ 已部署 ECS（2026-05-13）
+- [x] **订单管理5项优化**：①去掉stepper流程条，②confirm端点异步化（校验+读取后立即返回，赋码+写入后台执行~3s），③修复库存筛选（server补读stock参数+yes→有库存映射），④订单列表60s缓存（冷287ms→命中32ms），⑤有库存确认直接变打标签（quickConfirm/confirmOrders自动传stockStatus）。涉及文件：`server.js` + `public/labels-clean.html` ✅ 已部署 ECS（2026-05-13）
+- [x] **批量赋码系统重构**：只需 SKU + 度数（SPH/CYL/AXIS）+ 数量，无需顾客姓名、眼别、代理商。上传 Excel → 识别 SKU → 每行按数量生成对应数量的镜片码 → 写入 `lens_detail` 表（验真可用）→ 导出 Excel。前端页面精简为拖拽上传+一键生成。涉及文件：`public/batch-import.html` + `server.js` + `lib/batch-import.js` ✅ 已部署 ECS（2026-05-12）
+- [x] **标签打印导出自动流转**：`exportExcelSelected()` 批量导出后自动调 `update-field` 将订单状态改为「打标签」，与单条导出行为一致。涉及文件：`public/labels-print.html` ✅ 已部署 ECS（2026-05-12）
+- [x] **工厂导出 Excel 列顺序调整**：`buildFactoryExcel` 列顺序改为「顾客→产品型号→眼别→球镜SPH→柱镜CYL→轴位AXIS→镜片码→验真网址→日期→数量→订单号→是否装配→联系人→联系电话→收货地址→备注」。涉及文件：`lib/factory-export.js` ✅ 已部署 ECS（2026-05-12）
+- [x] **标签内容缩放80%**：标签纸 75×40mm 不变，内容用 `.label-inner` + `transform:scale(0.8)` 缩到 80%，整体右移 4mm，去除表格字体加粗。涉及文件：`lib/templates.js` + `public/labels-print.html` + `print_labels.js` + `lib/printer.js` ✅ 已部署 ECS（2026-05-11）
+- [x] **仓位自动赋码系统**：取消扫码分仓，改为打标签时按收货地址自动匹配仓位编号（A1/A2/B1...）。新建 Bitable 仓位映射表 `tblTbiUtWHpjKfUm`（仓位编号+地址关键词+备注），启动时加载到内存，新增 `GET /api/admin/bin-map/reload` 刷新缓存。scan-print/confirm/print-queue-done 三个路径均自动赋仓位，labels-print.html 删除分仓模式、新增仓位列。涉及文件：`shared/tables.js` + `server.js` + `public/labels-print.html` + `ARCHITECTURE.md` ✅ 已部署 ECS（2026-05-11）
 - [x] **导出记录系统**：新增导出记录表（export_log），记录工厂导出/标签打印/通行单/对账单的导出历史，防重复导出。新增 `lib/export-log.js` + 改造 batch-zip/print-queue/slip 端点 + 新增对账单 API + 前端导出状态列 ✅ 已部署 ECS（2026-05-10）
 - [x] **合并下单系统**：助理汇总多个代理商散单 → 合并成一张大表 → 可编辑预览 → 确认后写入Bitable（状态"已下单"）。新增 `lib/batch-merge.js` + `public/batch-merge.html` + 2个API端点。与批量导入区别：多代理商、状态已下单、不生成镜片码、有预览确认环节 ✅ 已部署 ECS（2026-05-10）
 - [x] **成品入库扫码系统**：条码格式 `ULT-300-075`（型号缩写-SPH-CYL），3个新页面（inventory-barcode/inbound/outbound），2个新API端点，复用现有 stock-movement 端点写库存 ✅ 已部署（2026-05-10）

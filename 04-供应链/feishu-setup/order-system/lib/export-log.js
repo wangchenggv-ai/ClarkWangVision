@@ -90,6 +90,7 @@ export async function logExport(exportType, orderNos, options = {}) {
 
   const tableId = getTableId();
   await batchCreateRecords(tableId, [{ fields }]);
+  invalidateExportCache();
 
   return batchNo;
 }
@@ -135,9 +136,21 @@ export async function listExportLogs(filters = {}) {
  * @param {string[]} orderNos - 订单号列表
  * @returns {Promise<object>} { orderNo: { factory: batchNo, label: batchNo, ... } }
  */
+let _exportCache = { data: null, ts: 0 };
+const EXPORT_CACHE_TTL = 60000;
+export function invalidateExportCache() { _exportCache = { data: null, ts: 0 }; }
+
 export async function getOrderExportStatus(orderNos) {
   const tableId = getTableId();
-  const records = await listRecords(tableId);
+
+  let records;
+  if (_exportCache.data && Date.now() - _exportCache.ts < EXPORT_CACHE_TTL) {
+    records = _exportCache.data;
+  } else {
+    records = await listRecords(tableId);
+    _exportCache = { data: records, ts: Date.now() };
+  }
+
   const statusMap = {};
 
   for (const no of orderNos) {
