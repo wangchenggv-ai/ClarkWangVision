@@ -1418,6 +1418,10 @@ const server = createServer(async (req, res) => {
       serveStatic(res, resolve(__dirname, "public/distributor-dashboard.html"));
       return logReq(req, 200, start);
     }
+    if (pathname === "/diagnose" || pathname === "/diagnose.html") {
+      serveStatic(res, resolve(__dirname, "public/diagnose.html"));
+      return logReq(req, 200, start);
+    }
 
     // ── 静态资源 ──
     if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/qrcodes/")) {
@@ -2470,6 +2474,99 @@ const server = createServer(async (req, res) => {
         const paged = orders.slice((page - 1) * pageSize, page * pageSize);
 
         jsonRes(res, 200, { orders: paged, stats, agents, suppliers, page, pageSize, totalPages, totalFiltered: orders.length });
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/admin/diagnose — 订单诊断
+    if (pathname === "/api/admin/diagnose") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const orderNo = url.searchParams.get("orderNo") || "";
+      if (!orderNo) { jsonRes(res, 400, { error: "请提供 orderNo" }); return logReq(req, 400, start); }
+
+      try {
+        // 查订单主表
+        const encoded = encodeURIComponent(`"${orderNo}"`);
+        const orderData = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+        const orderRecords = orderData?.items || [];
+
+        // 查镜片明细
+        const lensDetails = await getLensDetailsByOrder(orderNo);
+
+        // 查草稿
+        const draftPath = resolve(DRAFTS_DIR, `${orderNo}.json`);
+        const failedDraftPath = draftPath + ".failed";
+        let draft = null;
+        if (existsSync(draftPath)) {
+          try { draft = JSON.parse(readFileSync(draftPath, "utf8")); } catch {}
+        } else if (existsSync(failedDraftPath)) {
+          try { draft = { ...JSON.parse(readFileSync(failedDraftPath, "utf8")), failed: true }; } catch {}
+        }
+
+        // 自动诊断
+        const issues = [];
+        const info = [];
+
+        if (orderRecords.length === 0 && !draft) {
+          issues.push("订单不存在且无草稿");
+        }
+
+        if (draft) {
+          info.push(`草稿存在${draft.failed ? "（已失败）" : "（待同步）"}, 创建于 ${new Date(draft.createdAt).toLocaleString("zh-CN")}, 重试 ${draft.retryCount || 0} 次`);
+          if (draft.lastError) info.push(`最后错误: ${draft.lastError}`);
+        }
+
+        if (orderRecords.length > 0) {
+          const orderStatus = orderRecords[0].fields["订单状态"] || "";
+          const orderLensCode = orderRecords[0].fields["镜片码"] || "";
+          info.push(`订单状态: ${orderStatus}, 镜片码字段: ${orderLensCode || "(空)"}`);
+
+          if (lensDetails.length === 0) {
+            issues.push("镜片明细为空 — 草稿同步时未创建 lens_detail 记录");
+          }
+
+          for (const lens of lensDetails) {
+            const lensCode = lens.fields["镜片码（唯一）"] || "";
+            const lensStatus = lens.fields["订单状态"] || "";
+            const eye = lens.fields["眼别"] || "";
+            info.push(`镜片明细 ${eye}: 状态=${lensStatus}, 镜片码=${lensCode || "(空)"}`);
+
+            if (orderStatus === "打标签" && !lensCode) {
+              issues.push(`${eye} 状态已是"打标签"但无镜片码 — 可能通过 update-field 直接改状态，跳过了 confirm 赋码`);
+            }
+            if (lensCode && !orderLensCode) {
+              issues.push(`${eye} 有镜片码 ${lensCode} 但订单主表镜片码字段为空 — 码未回写到订单表`);
+            }
+            if (lensStatus !== orderStatus && lensStatus && orderStatus) {
+              issues.push(`${eye} 镜片状态"${lensStatus}"与订单状态"${orderStatus}"不一致`);
+            }
+          }
+
+          // 检查 QR 图片
+          for (const lens of lensDetails) {
+            const lc = lens.fields["镜片码（唯一）"] || "";
+            if (lc) {
+              const qrPath = resolve(QR_DIR, `${lc}.png`);
+              if (!existsSync(qrPath)) {
+                issues.push(`镜片码 ${lc} 的 QR 图片缺失`);
+              }
+            }
+          }
+        }
+
+        jsonRes(res, 200, {
+          orderNo,
+          found: orderRecords.length > 0,
+          orderCount: orderRecords.length,
+          lensCount: lensDetails.length,
+          draftExists: !!draft,
+          draftFailed: draft?.failed || false,
+          info,
+          issues,
+          status: issues.length === 0 ? "正常" : "有问题",
+        });
       } catch (e) {
         jsonRes(res, 500, { error: e.message });
       }

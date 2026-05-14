@@ -1,6 +1,6 @@
 # 系统当前状态
 
-> 更新：2026-05-14 v9 | 完整历史见 CHANGELOG.md
+> 更新：2026-05-14 v10 | 完整历史见 CHANGELOG.md
 
 ---
 
@@ -14,8 +14,8 @@
 | 生产容器 | order-app:3210（主服务）+ mock-shuang:3220 |
 | 测试容器 | order-app-test:3211 + mock-shuang-test:3221 |
 | 测试 Bitable | APP_TOKEN: `CtXObqwAHaCXYssBBfkcXmrlnUe` |
-| 本次待部署 | ✅ 已全部部署（筛选优化+页面精简+订单补码） |
-| 涉及文件 | server.js, lib/feishu.js, lib/export-log.js, public/orders.html |
+| 本次待部署 | ✅ 已全部部署（筛选优化+页面精简+订单补码+诊断工具） |
+| 涉及文件 | server.js, lib/feishu.js, lib/export-log.js, public/orders.html, public/diagnose.html |
 
 部署命令：
 ```bash
@@ -71,6 +71,7 @@ ssh -i "$KEY" root@113.44.175.221 \
 
 ## 已知问题 / 待办
 
+- [x] **订单诊断工具**：`/diagnose?admin=GaushOrderMock` 输入订单号自动诊断：订单/镜片明细是否存在、镜片码是否生成、状态是否一致、QR 图片是否缺失、草稿是否待同步/失败、update-field 直接改状态跳过赋码。涉及文件：`server.js` + `public/diagnose.html` ✅ 已部署 ECS（2026-05-14）
 - [x] **筛选性能优化**：新增 `/api/admin/orders-fast` 端点，用飞书 `records/search` API 带 filter（服务端筛选，不拉全表），首次筛选从 ~5s 降到 ~1s。`export-log.js` 给 `getOrderExportStatus` 加 60s 缓存。前端 orders.html 筛选默认走 fast 端点，超期走老端点，fast 失败自动 fallback。涉及文件：`server.js` + `lib/feishu.js` + `lib/export-log.js` + `public/orders.html` ✅ 已部署 ECS（2026-05-14）
 - [x] **订单管理页精简**：orders.html 展开详情去掉镜片处方表和流程进度 stepper，只保留库存/供应商选择器。删除 stepper CSS ~50 行 + JS ~100 行。涉及文件：`public/orders.html` ✅ 已部署 ECS（2026-05-14）
 - [x] **订单补码**：ORD-20260514-AAF16A70 状态被 update-field 直接改到"打标签"但未赋码，直接调飞书 API 生成镜片码 8355795E862C512E 并写入两表

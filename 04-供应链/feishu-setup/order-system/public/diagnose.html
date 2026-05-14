@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>订单诊断</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+.container { max-width: 720px; margin: 0 auto; }
+h1 { font-size: 20px; margin-bottom: 16px; }
+.search-box { display: flex; gap: 8px; margin-bottom: 20px; }
+.search-box input { flex: 1; padding: 10px 14px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; }
+.search-box button { padding: 10px 20px; background: #1677ff; color: #fff; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; }
+.search-box button:hover { background: #0958d9; }
+.search-box button:disabled { background: #ccc; cursor: not-allowed; }
+.result { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.section { margin-bottom: 16px; }
+.section-title { font-size: 13px; font-weight: 600; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.info-item { padding: 6px 0; font-size: 13px; color: #555; border-bottom: 1px solid #f5f5f5; }
+.info-item:last-child { border-bottom: none; }
+.issue-item { padding: 8px 12px; margin-bottom: 6px; background: #fff2f0; border: 1px solid #ffccc7; border-radius: 4px; font-size: 13px; color: #cf1322; }
+.ok-item { padding: 8px 12px; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 4px; font-size: 13px; color: #389e0d; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.badge-ok { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+.badge-err { background: #fff2f0; color: #cf1322; border: 1px solid #ffccc7; }
+.badge-warn { background: #fffbe6; color: #d48806; border: 1px solid #ffe58f; }
+.meta { font-size: 12px; color: #999; margin-top: 12px; }
+.empty { text-align: center; padding: 40px; color: #bbb; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>订单诊断</h1>
+  <div class="search-box">
+    <input id="orderInput" placeholder="输入订单号，如 ORD-20260514-AAF16A70" autofocus>
+    <button id="btnDiag" onclick="diagnose()">诊断</button>
+  </div>
+  <div id="result"></div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const adminToken = params.get("admin") || "";
+
+if (!adminToken) {
+  document.getElementById("result").innerHTML = '<div class="issue-item">请在 URL 中加 ?admin=GaushOrderMock 参数后访问</div>';
+}
+
+document.getElementById("orderInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") diagnose();
+});
+
+async function diagnose() {
+  if (!adminToken) {
+    document.getElementById("result").innerHTML = '<div class="issue-item">缺少 admin 参数，请用 ?admin=GaushOrderMock 访问</div>';
+    return;
+  }
+  const orderNo = document.getElementById("orderInput").value.trim();
+  if (!orderNo) return;
+  const btn = document.getElementById("btnDiag");
+  const resultDiv = document.getElementById("result");
+  btn.disabled = true;
+  btn.textContent = "诊断中...";
+  resultDiv.innerHTML = '<div class="empty">正在查询...</div>';
+
+  try {
+    const r = await fetch(`/api/admin/diagnose?admin=${adminToken}&orderNo=${encodeURIComponent(orderNo)}`);
+    const d = await r.json();
+    if (d.error) {
+      resultDiv.innerHTML = `<div class="issue-item">请求失败: ${d.error}</div>`;
+      return;
+    }
+    renderResult(d);
+  } catch (e) {
+    resultDiv.innerHTML = `<div class="issue-item">网络错误: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "诊断";
+  }
+}
+
+function renderResult(d) {
+  let html = '<div class="result">';
+
+  // 状态总览
+  html += '<div class="section">';
+  html += `<div class="section-title">诊断结果 <span class="badge ${d.status === "正常" ? "badge-ok" : "badge-err"}">${d.status}</span></div>`;
+  html += `<div class="info-item">订单号: <strong>${d.orderNo}</strong></div>`;
+  html += `<div class="info-item">订单记录: ${d.orderCount} 条 | 镜片明细: ${d.lensCount} 条 | 草稿: ${d.draftExists ? (d.draftFailed ? "已失败" : "待同步") : "无"}</div>`;
+  html += '</div>';
+
+  // 问题
+  if (d.issues.length > 0) {
+    html += '<div class="section">';
+    html += '<div class="section-title">发现的问题</div>';
+    for (const issue of d.issues) {
+      html += `<div class="issue-item">${issue}</div>`;
+    }
+    html += '</div>';
+  }
+
+  // 详细信息
+  if (d.info.length > 0) {
+    html += '<div class="section">';
+    html += '<div class="section-title">详细信息</div>';
+    for (const info of d.info) {
+      html += `<div class="info-item">${info}</div>`;
+    }
+    html += '</div>';
+  }
+
+  if (d.issues.length === 0 && d.info.length === 0) {
+    html += '<div class="ok-item">一切正常，未发现异常</div>';
+  }
+
+  html += `<div class="meta">诊断时间: ${new Date().toLocaleString("zh-CN")}</div>`;
+  html += '</div>';
+
+  document.getElementById("result").innerHTML = html;
+}
+
+// URL 带 orderNo 参数时自动诊断
+const autoOrder = params.get("orderNo") || "";
+if (autoOrder) {
+  document.getElementById("orderInput").value = autoOrder;
+  diagnose();
+}
+</script>
+</body>
+</html>
