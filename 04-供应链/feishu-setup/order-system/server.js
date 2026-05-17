@@ -41,6 +41,7 @@ import * as batchImportMod from "./lib/batch-import.js";
 import { genOrderNo as genMergeOrderNo, buildMergeOrderRecords, buildMergeLensRecords } from "./lib/batch-merge.js";
 import { checkExportStatus, logExport, getOrderExportStatus, listExportLogs } from "./lib/export-log.js";
 import { getAgentAnnualVolume, calculateStarTrail, calculateStarTier, getECPLeaderboard } from "./lib/starmap-aggregator.js";
+import { lookupBySphCyl, lookupBySerial, getAllEntries, getSupportedSkus } from "./lib/sku-serial.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
@@ -1414,6 +1415,10 @@ const server = createServer(async (req, res) => {
       serveStatic(res, resolve(__dirname, "public/ecp-board.html"));
       return logReq(req, 200, start);
     }
+    if (pathname === "/biz-dashboard" || pathname === "/biz-dashboard.html") {
+      serveStatic(res, resolve(__dirname, "public/biz-dashboard.html"));
+      return logReq(req, 200, start);
+    }
     if (pathname === "/distributor-dashboard" || pathname === "/distributor-dashboard.html") {
       serveStatic(res, resolve(__dirname, "public/distributor-dashboard.html"));
       return logReq(req, 200, start);
@@ -2400,9 +2405,40 @@ const server = createServer(async (req, res) => {
       if (filterFrom) conditions.push({ field_name: "下单日期", operator: "isGreaterEqual", value: [filterFrom] });
       if (filterTo) conditions.push({ field_name: "下单日期", operator: "isLessEqual", value: [filterTo + "T23:59:59"] });
 
+      // 关键词搜索：订单号走订单编号 contains，其他走顾客姓名 contains
+      if (filterQ) {
+        const q = filterQ.trim();
+        if (/^ord-/i.test(q)) {
+          conditions.push({ field_name: "订单编号", operator: "contains", value: [q] });
+        } else {
+          conditions.push({ field_name: "顾客姓名", operator: "contains", value: [q] });
+        }
+      }
+
       const filter = conditions.length > 0
         ? { conjunction: "and", conditions }
         : undefined;
+
+      // 无筛选时优先走缓存（复用 /api/admin/orders 的缓存）
+      if (conditions.length === 0 &&
+          _ordersCache.data && Date.now() - _ordersCache.ts < ORDERS_CACHE_TTL) {
+        let orders = _ordersCache.data;
+        const stats = {
+          total: orders.length,
+          ordered: orders.filter(o => o.status === "已下单").length,
+          pending: orders.filter(o => o.status === "待处理").length,
+          producing: orders.filter(o => o.status === "生产中").length,
+          labeled: orders.filter(o => o.status === "打标签").length,
+          shipped: orders.filter(o => o.status === "已发货").length,
+        };
+        orders.sort((a, b) => (b.date || 0) - (a.date || 0));
+        const agents = [...new Set(orders.map(o => o.agentName).filter(Boolean))].sort();
+        const suppliers = [...new Set(orders.map(o => o.supplier).filter(Boolean))].sort();
+        const totalPages = Math.ceil(orders.length / pageSize) || 1;
+        const paged = orders.slice((page - 1) * pageSize, page * pageSize);
+        jsonRes(res, 200, { orders: paged, stats, agents, suppliers, page, pageSize, totalPages, totalFiltered: orders.length });
+        return logReq(req, 200, start);
+      }
 
       try {
         const allRecords = await searchRecords(TABLES.order, {
@@ -2434,6 +2470,11 @@ const server = createServer(async (req, res) => {
             address,
           };
         });
+
+        // 写入缓存（与 /api/admin/orders 共享，无筛选时为全量数据）
+        if (!filter && !filterQ) {
+          _ordersCache = { data: orders, ts: Date.now() };
+        }
 
         // 关键词搜索（飞书 filter 不支持 OR 跨字段，需客户端补筛）
         if (filterQ) {
@@ -3597,6 +3638,119 @@ const server = createServer(async (req, res) => {
       }
       invalidateOrdersCache();
       jsonRes(res, 200, { results });
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/modify-rx — 改单：修改处方（SPH/CYL/AXIS），自动退回已下单
+    if (pathname === "/api/admin/modify-rx" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const { orderNo, customerName, pairIndex, lenses } = await readBody(req);
+      if (!orderNo || !Array.isArray(lenses) || !lenses.length) { jsonRes(res, 400, { error: "请提供 orderNo 和 lenses" }); return logReq(req, 400, start); }
+      try {
+        const encoded = encodeURIComponent(`"${orderNo}"`);
+        const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+        let records = (d?.items || []).filter(r => {
+          if (customerName && (r.fields["顾客姓名"] || "") !== customerName) return false;
+          if (pairIndex && Number(r.fields["序号"] || 1) !== Number(pairIndex)) return false;
+          return true;
+        });
+        if (!records.length) { jsonRes(res, 404, { error: "未找到订单" }); return logReq(req, 404, start); }
+        const currentStatus = records[0].fields["订单状态"] || "";
+        if (currentStatus === "已发货" || currentStatus === "已签收" || currentStatus === "已退货") {
+          jsonRes(res, 400, { error: `"${currentStatus}"状态不可改单` }); return logReq(req, 400, start);
+        }
+        if (currentStatus !== "已下单") {
+          for (const rec of records) {
+            const wf = parseWorkflow(rec.fields["流程步骤"]);
+            delete wf.steps?.confirmed; delete wf.steps?.producing; delete wf.steps?.labeled;
+            wf.current = Math.min(wf.current || 0, STEP_ORDER.indexOf("submitted"));
+            await updateRecord(TABLES.order, rec.record_id, { "订单状态": "已下单", "镜片码": "", "流程步骤": JSON.stringify(wf) });
+          }
+          const allLens0 = await getLensDetailsByOrder(orderNo);
+          for (const lens of allLens0) {
+            if (customerName && (lens.fields["顾客姓名"] || "") !== customerName) continue;
+            if (pairIndex && Number(lens.fields["序号"] || 1) !== Number(pairIndex)) continue;
+            await updateRecord(TABLES.lens_detail, lens.record_id, { "订单状态": "已下单" });
+          }
+        }
+        const allLens = await getLensDetailsByOrder(orderNo);
+        for (const lens of allLens) {
+          if (customerName && (lens.fields["顾客姓名"] || "") !== customerName) continue;
+          if (pairIndex && Number(lens.fields["序号"] || 1) !== Number(pairIndex)) continue;
+          const eye = lens.fields["眼别"] || "";
+          const newRx = lenses.find(l => l.eye === eye);
+          if (!newRx) continue;
+          const upd = {};
+          if (newRx.sph !== undefined && newRx.sph !== "") upd["球镜SPH"] = Number(newRx.sph);
+          if (newRx.cyl !== undefined && newRx.cyl !== "") upd["柱镜CYL"] = Number(newRx.cyl);
+          if (newRx.axis !== undefined && newRx.axis !== "") upd["轴位AXIS"] = Number(newRx.axis);
+          if (Object.keys(upd).length) await updateRecord(TABLES.lens_detail, lens.record_id, upd);
+        }
+        invalidateOrdersCache();
+        jsonRes(res, 200, { ok: true, orderNo, revertedFrom: currentStatus !== "已下单" ? currentStatus : null });
+      } catch (e) { jsonRes(res, 500, { error: e.message }); }
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/wrong-shipment — 发错货标记（备注打标，状态不变）
+    if (pathname === "/api/admin/wrong-shipment" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const { orderNo, customerName, pairIndex, note } = await readBody(req);
+      if (!orderNo) { jsonRes(res, 400, { error: "请提供 orderNo" }); return logReq(req, 400, start); }
+      try {
+        const encoded = encodeURIComponent(`"${orderNo}"`);
+        const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+        let records = (d?.items || []).filter(r => {
+          if (customerName && (r.fields["顾客姓名"] || "") !== customerName) return false;
+          if (pairIndex && Number(r.fields["序号"] || 1) !== Number(pairIndex)) return false;
+          return true;
+        });
+        if (!records.length) { jsonRes(res, 404, { error: "未找到订单" }); return logReq(req, 404, start); }
+        const dateStr = new Date().toISOString().slice(5, 10).replace("-", "/");
+        const tag = note ? `【发错货 ${dateStr}】${note}` : `【发错货 ${dateStr}】`;
+        for (const rec of records) {
+          const existing = String(rec.fields["备注"] || "").trim();
+          await updateRecord(TABLES.order, rec.record_id, { "备注": existing ? `${existing}\n${tag}` : tag });
+        }
+        invalidateOrdersCache();
+        jsonRes(res, 200, { ok: true, orderNo, tag });
+      } catch (e) { jsonRes(res, 500, { error: e.message }); }
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/return-order — 退货（已发货/已签收→已退货）
+    if (pathname === "/api/admin/return-order" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const { orderNo, customerName, pairIndex, reason } = await readBody(req);
+      if (!orderNo) { jsonRes(res, 400, { error: "请提供 orderNo" }); return logReq(req, 400, start); }
+      try {
+        const encoded = encodeURIComponent(`"${orderNo}"`);
+        const d = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=100&filter=CurrentValue.[订单编号]=${encoded}`);
+        let records = (d?.items || []).filter(r => {
+          if (customerName && (r.fields["顾客姓名"] || "") !== customerName) return false;
+          if (pairIndex && Number(r.fields["序号"] || 1) !== Number(pairIndex)) return false;
+          return true;
+        });
+        if (!records.length) { jsonRes(res, 404, { error: "未找到订单" }); return logReq(req, 404, start); }
+        const currentStatus = records[0].fields["订单状态"] || "";
+        if (currentStatus !== "已发货" && currentStatus !== "已签收") {
+          jsonRes(res, 400, { error: `仅已发货/已签收可退货，当前"${currentStatus}"` }); return logReq(req, 400, start);
+        }
+        const dateStr = new Date().toISOString().slice(5, 10).replace("-", "/");
+        const tag = reason ? `【退货 ${dateStr}】${reason}` : `【退货 ${dateStr}】`;
+        for (const rec of records) {
+          const existing = String(rec.fields["备注"] || "").trim();
+          await updateRecord(TABLES.order, rec.record_id, { "订单状态": "已退货", "备注": existing ? `${existing}\n${tag}` : tag });
+        }
+        const lensDetails = await getLensDetailsByOrder(orderNo);
+        for (const lens of lensDetails) {
+          if (customerName && (lens.fields["顾客姓名"] || "") !== customerName) continue;
+          if (pairIndex && Number(lens.fields["序号"] || 1) !== Number(pairIndex)) continue;
+          await updateRecord(TABLES.lens_detail, lens.record_id, { "订单状态": "已退货" });
+        }
+        invalidateOrdersCache();
+        jsonRes(res, 200, { ok: true, orderNo, from: currentStatus });
+      } catch (e) { jsonRes(res, 500, { error: e.message }); }
       return logReq(req, 200, start);
     }
 
@@ -6303,6 +6457,32 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
       return logReq(req, 200, start);
     }
 
+    // GET /api/admin/sku-serial-map — 序列号⇔SPH/CYL⇔货位 映射表（多型号）
+    // ?sku=Ultra双效               → 该型号全量
+    // ?sku=Ultra双效&serial=003    → 序列号查询
+    // ?sku=Ultra双效&sph=-1&cyl=0  → 度数查询
+    // 无参数                        → 返回已支持型号列表
+    if (pathname === "/api/admin/sku-serial-map" && req.method === "GET") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const skuParam    = url.searchParams.get("sku");
+      const serialParam = url.searchParams.get("serial");
+      const sphParam    = url.searchParams.get("sph");
+      const cylParam    = url.searchParams.get("cyl");
+      if (!skuParam) {
+        jsonRes(res, 200, { supportedSkus: getSupportedSkus() });
+      } else if (serialParam) {
+        const entry = lookupBySerial(skuParam, serialParam);
+        jsonRes(res, entry ? 200 : 404, entry ?? { error: "序列号不存在" });
+      } else if (sphParam != null && cylParam != null) {
+        const entry = lookupBySphCyl(skuParam, sphParam, cylParam);
+        jsonRes(res, entry ? 200 : 404, entry ?? { error: "度数无对应序列号（尚未录入）" });
+      } else {
+        const entries = getAllEntries(skuParam);
+        jsonRes(res, 200, { sku: skuParam, total: entries.length, entries });
+      }
+      return logReq(req, 200, start);
+    }
+
     // ── 星图 API ──────────────────────────────────────────────────────────
 
     // GET /api/starmap/star-trail?t=xxx — 星轨模块：年度进度
@@ -6349,6 +6529,325 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
       return logReq(req, 200, start);
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 业务看板 API
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // GET /api/biz-dashboard/overview — 公司看板概览
+    if (pathname === "/api/biz-dashboard/overview" && req.method === "GET") {
+      try {
+        const startDate = url.searchParams.get("start") || "2026-01-01";
+        const endDate = url.searchParams.get("end") || new Date().toISOString().slice(0, 10);
+
+        // 读取所有订单
+        const allOrders = await getAllOrders();
+        const filtered = allOrders.filter(o => {
+          const d = o.dateStr;
+          return d && d >= startDate && d <= endDate;
+        });
+
+        // 聚合统计
+        const totalOrders = filtered.length;
+        const totalQty = filtered.reduce((s, o) => s + (o.quantity || 1), 0);
+
+        // 按月统计
+        const monthly = {};
+        filtered.forEach(o => {
+          const m = (o.dateStr || "").slice(0, 7);
+          if (!monthly[m]) monthly[m] = { orders: 0, qty: 0 };
+          monthly[m].orders++;
+          monthly[m].qty += (o.quantity || 1);
+        });
+
+        // 按SKU统计
+        const skuDist = {};
+        filtered.forEach(o => {
+          const sku = o.sku || "未知";
+          if (!skuDist[sku]) skuDist[sku] = 0;
+          skuDist[sku] += (o.quantity || 1);
+        });
+
+        // 按代理商统计
+        const agentDist = {};
+        filtered.forEach(o => {
+          const agent = o.agentName || "未知";
+          if (!agentDist[agent]) agentDist[agent] = { orders: 0, qty: 0 };
+          agentDist[agent].orders++;
+          agentDist[agent].qty += (o.quantity || 1);
+        });
+
+        // 按状态统计
+        const statusDist = {};
+        filtered.forEach(o => {
+          const s = o.status || "未知";
+          if (!statusDist[s]) statusDist[s] = 0;
+          statusDist[s]++;
+        });
+
+        // 活跃代理商数
+        const activeAgents = Object.keys(agentDist).length;
+
+        // TOP10代理商
+        const topAgents = Object.entries(agentDist)
+          .map(([name, data]) => ({ name, ...data }))
+          .sort((a, b) => b.qty - a.qty)
+          .slice(0, 10);
+
+        jsonRes(res, 200, {
+          period: { start: startDate, end: endDate },
+          summary: { totalOrders, totalQty, activeAgents },
+          monthly: Object.entries(monthly).map(([month, data]) => ({ month, ...data })).sort((a, b) => a.month.localeCompare(b.month)),
+          skuDist: Object.entries(skuDist).map(([sku, qty]) => ({ sku, qty })).sort((a, b) => b.qty - a.qty),
+          topAgents,
+          statusDist: Object.entries(statusDist).map(([status, count]) => ({ status, count })),
+        });
+      } catch (e) {
+        console.error("biz-dashboard overview error:", e.message);
+        jsonRes(res, 500, { error: "数据获取失败" });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/biz-dashboard/agent/:name — 代理商看板
+    if (pathname.match(/^\/api\/biz-dashboard\/agent\//) && req.method === "GET") {
+      try {
+        const agentName = decodeURIComponent(pathname.split("/api/biz-dashboard/agent/")[1]);
+        const startDate = url.searchParams.get("start") || "2026-01-01";
+        const endDate = url.searchParams.get("end") || new Date().toISOString().slice(0, 10);
+
+        const allOrders = await getAllOrders();
+        const agentOrders = allOrders.filter(o => {
+          const d = o.dateStr;
+          return o.agentName === agentName && d && d >= startDate && d <= endDate;
+        });
+
+        const totalOrders = agentOrders.length;
+        const totalQty = agentOrders.reduce((s, o) => s + (o.quantity || 1), 0);
+
+        // 按月统计
+        const monthly = {};
+        agentOrders.forEach(o => {
+          const m = (o.dateStr || "").slice(0, 7);
+          if (!monthly[m]) monthly[m] = { orders: 0, qty: 0 };
+          monthly[m].orders++;
+          monthly[m].qty += (o.quantity || 1);
+        });
+
+        // 按SKU统计
+        const skuDist = {};
+        agentOrders.forEach(o => {
+          const sku = o.sku || "未知";
+          if (!skuDist[sku]) skuDist[sku] = 0;
+          skuDist[sku] += (o.quantity || 1);
+        });
+
+        // 按终端客户统计（大客户分析）
+        const customerDist = {};
+        agentOrders.forEach(o => {
+          const customer = o.customerName || "未知";
+          if (!customerDist[customer]) customerDist[customer] = { orders: 0, qty: 0 };
+          customerDist[customer].orders++;
+          customerDist[customer].qty += (o.quantity || 1);
+        });
+
+        const topCustomers = Object.entries(customerDist)
+          .map(([name, data]) => ({ name, ...data }))
+          .sort((a, b) => b.qty - a.qty);
+
+        jsonRes(res, 200, {
+          agent: agentName,
+          period: { start: startDate, end: endDate },
+          summary: { totalOrders, totalQty },
+          monthly: Object.entries(monthly).map(([month, data]) => ({ month, ...data })).sort((a, b) => a.month.localeCompare(b.month)),
+          skuDist: Object.entries(skuDist).map(([sku, qty]) => ({ sku, qty })).sort((a, b) => b.qty - a.qty),
+          topCustomers,
+        });
+      } catch (e) {
+        console.error("biz-dashboard agent error:", e.message);
+        jsonRes(res, 500, { error: "数据获取失败" });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/biz-dashboard/manager/:name — 经理看板
+    if (pathname.match(/^\/api\/biz-dashboard\/manager\//) && req.method === "GET") {
+      try {
+        const managerName = decodeURIComponent(pathname.split("/api/biz-dashboard/manager/")[1]);
+        const startDate = url.searchParams.get("start") || "2026-01-01";
+        const endDate = url.searchParams.get("end") || new Date().toISOString().slice(0, 10);
+
+        // 获取该经理负责的代理商列表
+        let managedAgents = [];
+        try {
+          const managerRecords = await listRecords(TABLES.sales_manager);
+          const manager = managerRecords.find(r => (r.fields["经理姓名"] || "") === managerName);
+          if (manager) {
+            const agentList = manager.fields["负责代理商"] || "";
+            managedAgents = agentList.split(",").map(s => s.trim()).filter(Boolean);
+          }
+        } catch (e) {
+          console.warn("读取销售经理表失败:", e.message);
+        }
+
+        if (!managedAgents.length) {
+          jsonRes(res, 200, {
+            manager: managerName,
+            period: { start: startDate, end: endDate },
+            summary: { totalOrders: 0, totalQty: 0, agentCount: 0 },
+            monthly: [],
+            agentBreakdown: [],
+          });
+          return logReq(req, 200, start);
+        }
+
+        const allOrders = await getAllOrders();
+        const managerOrders = allOrders.filter(o => {
+          const d = o.dateStr;
+          return managedAgents.includes(o.agentName) && d && d >= startDate && d <= endDate;
+        });
+
+        const totalOrders = managerOrders.length;
+        const totalQty = managerOrders.reduce((s, o) => s + (o.quantity || 1), 0);
+
+        // 按月统计
+        const monthly = {};
+        managerOrders.forEach(o => {
+          const m = (o.dateStr || "").slice(0, 7);
+          if (!monthly[m]) monthly[m] = { orders: 0, qty: 0 };
+          monthly[m].orders++;
+          monthly[m].qty += (o.quantity || 1);
+        });
+
+        // 按代理商统计
+        const agentDist = {};
+        managerOrders.forEach(o => {
+          const agent = o.agentName || "未知";
+          if (!agentDist[agent]) agentDist[agent] = { orders: 0, qty: 0 };
+          agentDist[agent].orders++;
+          agentDist[agent].qty += (o.quantity || 1);
+        });
+
+        const agentBreakdown = Object.entries(agentDist)
+          .map(([name, data]) => ({ name, ...data }))
+          .sort((a, b) => b.qty - a.qty);
+
+        jsonRes(res, 200, {
+          manager: managerName,
+          period: { start: startDate, end: endDate },
+          summary: { totalOrders, totalQty, agentCount: managedAgents.length },
+          monthly: Object.entries(monthly).map(([month, data]) => ({ month, ...data })).sort((a, b) => a.month.localeCompare(b.month)),
+          agentBreakdown,
+        });
+      } catch (e) {
+        console.error("biz-dashboard manager error:", e.message);
+        jsonRes(res, 500, { error: "数据获取失败" });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/biz-dashboard/key-accounts — 大客户看板
+    if (pathname === "/api/biz-dashboard/key-accounts" && req.method === "GET") {
+      try {
+        const startDate = url.searchParams.get("start") || "2026-01-01";
+        const endDate = url.searchParams.get("end") || new Date().toISOString().slice(0, 10);
+
+        // 获取大客户列表
+        let keyAccounts = [];
+        try {
+          const kaRecords = await listRecords(TABLES.key_account);
+          keyAccounts = kaRecords.map(r => ({
+            name: r.fields["客户名称"] || "",
+            agent: r.fields["所属代理商"] || "",
+            remark: r.fields["备注"] || "",
+          })).filter(ka => ka.name);
+        } catch (e) {
+          console.warn("读取大客户表失败:", e.message);
+        }
+
+        if (!keyAccounts.length) {
+          jsonRes(res, 200, {
+            period: { start: startDate, end: endDate },
+            summary: { totalOrders: 0, totalQty: 0, keyAccountCount: 0 },
+            keyAccounts: [],
+          });
+          return logReq(req, 200, start);
+        }
+
+        const allOrders = await getAllOrders();
+        const kaNames = keyAccounts.map(ka => ka.name);
+        const kaOrders = allOrders.filter(o => {
+          const d = o.dateStr;
+          return kaNames.includes(o.customerName) && d && d >= startDate && d <= endDate;
+        });
+
+        const totalOrders = kaOrders.length;
+        const totalQty = kaOrders.reduce((s, o) => s + (o.quantity || 1), 0);
+
+        // 按大客户统计
+        const kaDist = {};
+        kaOrders.forEach(o => {
+          const customer = o.customerName || "未知";
+          if (!kaDist[customer]) kaDist[customer] = { orders: 0, qty: 0, agent: "" };
+          kaDist[customer].orders++;
+          kaDist[customer].qty += (o.quantity || 1);
+        });
+
+        // 补充代理商信息
+        keyAccounts.forEach(ka => {
+          if (kaDist[ka.name]) {
+            kaDist[ka.name].agent = ka.agent;
+          }
+        });
+
+        const kaBreakdown = Object.entries(kaDist)
+          .map(([name, data]) => ({ name, ...data }))
+          .sort((a, b) => b.qty - a.qty);
+
+        jsonRes(res, 200, {
+          period: { start: startDate, end: endDate },
+          summary: { totalOrders, totalQty, keyAccountCount: keyAccounts.length },
+          keyAccounts: kaBreakdown,
+        });
+      } catch (e) {
+        console.error("biz-dashboard key-accounts error:", e.message);
+        jsonRes(res, 500, { error: "数据获取失败" });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // GET /api/biz-dashboard/lists — 获取所有列表（经理/代理商/大客户）
+    if (pathname === "/api/biz-dashboard/lists" && req.method === "GET") {
+      try {
+        // 获取所有代理商
+        const agentRecords = await listRecords(TABLES.agent);
+        const agents = agentRecords.map(r => r.fields["代理商名称"] || r.fields["名称"] || "").filter(Boolean);
+
+        // 获取所有销售经理
+        let managers = [];
+        try {
+          const managerRecords = await listRecords(TABLES.sales_manager);
+          managers = managerRecords.map(r => r.fields["经理姓名"] || "").filter(Boolean);
+        } catch (e) {
+          console.warn("读取销售经理表失败:", e.message);
+        }
+
+        // 获取所有大客户
+        let keyAccounts = [];
+        try {
+          const kaRecords = await listRecords(TABLES.key_account);
+          keyAccounts = kaRecords.map(r => r.fields["客户名称"] || "").filter(Boolean);
+        } catch (e) {
+          console.warn("读取大客户表失败:", e.message);
+        }
+
+        jsonRes(res, 200, { agents, managers, keyAccounts });
+      } catch (e) {
+        console.error("biz-dashboard lists error:", e.message);
+        jsonRes(res, 500, { error: "数据获取失败" });
+      }
+      return logReq(req, 200, start);
+    }
+
     // ── 404 ──
     jsonRes(res, 404, { error: "Not found" });
     logReq(req, 404, start);
@@ -6359,6 +6858,42 @@ ${Object.entries(RULE_MANIFEST).map(([k, v]) => {
     logReq(req, 500, start);
   }
 });
+
+// ─── 获取所有订单（业务看板用）────────────────────────────────────────────────
+async function getAllOrders() {
+  const allOrders = [];
+  let pageToken = "";
+  do {
+    const params = pageToken ? `page_token=${pageToken}&page_size=500` : "page_size=500";
+    const data = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?${params}`);
+    const items = data.items || [];
+    for (const r of items) {
+      const f = r.fields;
+      const rawDate = f["下单日期"] || f["创建时间"] || "";
+      let date = 0, dateStr = "";
+      if (rawDate) {
+        const d = new Date(rawDate);
+        if (!isNaN(d.getTime())) {
+          date = d.getTime();
+          dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+        }
+      }
+      allOrders.push({
+        orderNo: rawVal(f["订单编号"]) || "",
+        customerName: rawVal(f["顾客姓名"]) || "",
+        sku: rawVal(f["产品型号"]) || "",
+        quantity: Number(f["数量"]) || 1,
+        agentName: rawVal(f["代理商名称"]) || "",
+        agentId: rawVal(f["代理商ID"]) || "",
+        status: rawVal(f["订单状态"]) || "",
+        date,
+        dateStr,
+      });
+    }
+    pageToken = data.page_token || "";
+  } while (pageToken);
+  return allOrders;
+}
 
 // ─── 公共订单过滤函数（避免三处重复逻辑）────────────────────────────────────
 function applyOrderFilters(orders, { filterStatus, filterSku, filterFrom, filterTo, filterSearch, filterAgent, filterQ } = {}) {
