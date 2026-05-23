@@ -553,11 +553,16 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
       <button onclick="setQuickDate('week')">7天</button>
     </span>
     <select id="filterStatus" onchange="activeStatusFilter='all';activeQuickFilter='all';document.querySelectorAll('.stat-card').forEach(c=>c.classList.toggle('active',c.dataset.status==='all'));"><option value="">状态</option><option value="已下单">已下单</option><option value="待处理">待处理</option><option value="生产中">生产中</option><option value="打标签">打标签</option><option value="已发货">已发货</option></select>
-    <select id="filterAssembly"><option value="">装配</option><option value="是">已装配</option><option value="否">未装配</option></select>
-    <select id="filterSupplier"><option value="">供应商</option><option value="高清">高清</option><option value="圣普">圣普</option><option value="九次方">九次方</option><option value="五彩">五彩</option><option value="欧陆">欧陆</option><option value="圣谱">圣谱</option></select>
+    <select id="filterAssembly" onchange="currentPage=1;loadOrders()"><option value="">是否装配</option><option value="是">是</option><option value="否">否</option></select>
+    <select id="filterSupplier" onchange="currentPage=1;loadOrders()"><option value="">供应商</option><option value="高清">高清</option><option value="圣普">圣普</option><option value="九次方">九次方</option><option value="五彩">五彩</option><option value="欧陆">欧陆</option><option value="圣谱">圣谱</option></select>
+    <select id="filterExport" onchange="currentPage=1;loadOrders()"><option value="">导出状态</option><option value="factory-done">已导出工厂</option><option value="factory-pending">未导出工厂</option><option value="label-done">已导出打标签</option><option value="label-pending">未导出打标签</option></select>
     <input type="text" id="filterQ" placeholder="订单号/顾客" style="width:100px">
     <button class="btn btn-primary" onclick="currentPage=1;loadOrders()">查询</button>
     <button class="btn btn-outline" onclick="resetFilter()">重置</button>
+    <span class="date-q">
+      <button onclick="setWorkflowFilter('factory')" title="生产中 + 未导出工厂" style="color:#0958d9;border-color:#0958d9">待发工厂</button>
+      <button onclick="setWorkflowFilter('label')" title="打标签 + 未导出打标签" style="color:#eb2f96;border-color:#eb2f96">待打标签</button>
+    </span>
   </div>
 
   <!-- 操作栏 -->
@@ -568,7 +573,7 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
       <button class="btn btn-outline act-confirm-btn" style="color:#1677ff;border-color:#1677ff" onclick="confirmOrders()">确认下单</button>
       <button class="btn btn-outline" style="color:#0958d9;border-color:#0958d9" onclick="downloadExcel()">导出Excel给工厂</button>
       <button class="btn btn-outline ctx-btn act-slip-btn" style="color:#722ed1;border-color:#722ed1" onclick="slipBatchSelected()">同行单</button>
-      <button class="btn btn-outline ctx-btn act-excel-btn" style="color:#eb2f96;border-color:#eb2f96" onclick="exportExcelSelected()">导出Excel</button>
+      <button class="btn btn-outline act-excel-btn" style="color:#eb2f96;border-color:#eb2f96" onclick="exportExcelSelected()">导出Excel给打标签</button>
       <button class="btn btn-outline ctx-btn act-print-btn" style="color:#531dab;border-color:#531dab" onclick="batchPrintLabels()">斑马打印</button>
       <button class="btn btn-primary ctx-btn act-ship-btn" onclick="batchShip()">确认发货</button>
     </div>
@@ -778,8 +783,10 @@ async function loadOrders() {
   if (q) params.set("q", q);
   const assembly = document.getElementById("filterAssembly")?.value;
   const supplier = document.getElementById("filterSupplier")?.value;
+  const exportFilterVal = document.getElementById("filterExport")?.value;
   if (assembly) params.set("assembly", assembly);
   if (supplier) params.set("supplier", supplier);
+  if (exportFilterVal) params.set("exportFilter", exportFilterVal);
 
   // 超期用老端点（需全量），其余用 fast 端点（飞书服务端筛选）
   const endpoint = activeQuickFilter === "overdue" ? "/api/admin/orders" : "/api/admin/orders-fast";
@@ -1122,6 +1129,26 @@ function changePage(delta) {
   loadOrders();
 }
 
+function setWorkflowFilter(type) {
+  document.getElementById("filterQ").value = "";
+  document.getElementById("filterFrom").value = "";
+  document.getElementById("filterTo").value = "";
+  if (document.getElementById("filterAssembly")) document.getElementById("filterAssembly").value = "";
+  if (document.getElementById("filterSupplier")) document.getElementById("filterSupplier").value = "";
+  activeStatusFilter = "all";
+  activeQuickFilter = "all";
+  document.querySelectorAll(".stat-card").forEach(c => c.classList.toggle("active", c.dataset.status === "all"));
+  if (type === "factory") {
+    document.getElementById("filterStatus").value = "生产中";
+    document.getElementById("filterExport").value = "factory-pending";
+  } else if (type === "label") {
+    document.getElementById("filterStatus").value = "打标签";
+    document.getElementById("filterExport").value = "label-pending";
+  }
+  currentPage = 1;
+  loadOrders();
+}
+
 function setQuickDate(type) {
   const today = new Date();
   const todayStr = fmtDateISO(today);
@@ -1141,6 +1168,7 @@ function resetFilter() {
   if (document.getElementById("filterAssembly")) document.getElementById("filterAssembly").value = "";
   if (document.getElementById("filterStatus")) document.getElementById("filterStatus").value = "";
   if (document.getElementById("filterSupplier")) document.getElementById("filterSupplier").value = "";
+  if (document.getElementById("filterExport")) document.getElementById("filterExport").value = "";
   document.getElementById("filterFrom").value = "";
   document.getElementById("filterTo").value = "";
   activeStatusFilter = "all";
@@ -1166,21 +1194,26 @@ function quickZip(orderNo, customerName, pairIndex) {
 async function quickConfirm(orderNo, customerName, pairIndex) {
   const pi = pairIndex || 1;
   const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
-  const ok = await showConfirmModal({ title: "确认订单", body: `确认 <b>${orderNo}</b> · <b>${customerName}</b>${badge}？<br>状态将变为"待处理"并生成镜片码。` });
+  const orderData = allOrders.find(o => o.orderNo === orderNo && o.customerName === customerName && (o.pairIndex || 1) === pi);
+  const isGaoClear = (orderData?.supplier || "") === "高清";
+  const targetStatus = isGaoClear ? "打标签" : "待处理";
+  const ok = await showConfirmModal({ title: "确认订单", body: `确认 <b>${orderNo}</b> · <b>${customerName}</b>${badge}？<br>状态将变为"${targetStatus}"并生成镜片码。` });
   if (!ok) return;
   // 乐观更新：立即改本地状态并重渲染
   const targets = allOrders.filter(o => o.orderNo === orderNo && o.customerName === customerName && (o.pairIndex || 1) === pi && o.status === "已下单");
   const prev = targets.map(o => ({ order: o, status: o.status }));
-  targets.forEach(o => o.status = "待处理");
-  updateStats(-targets.length, targets.length);
+  targets.forEach(o => o.status = targetStatus);
+  updateStats(-targets.length, isGaoClear ? 0 : targets.length);
   renderOrders();
   try {
-    const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName, pairIndex: pi });
+    const body = { orderNos: [orderNo], customerName, pairIndex: pi };
+    if (isGaoClear) body.stockStatus = "有库存";
+    const data = await adminApi("/api/admin/confirm", body);
     const r = data.results[0];
     if (r.ok) { showToast(`${orderNo} ${customerName} 已确认`, "success"); loadOrders(); }
-    else { prev.forEach(p => p.order.status = p.status); updateStats(targets.length, -targets.length); renderOrders(); showToast(`确认失败: ${r.error}`, "error"); }
+    else { prev.forEach(p => p.order.status = p.status); updateStats(targets.length, isGaoClear ? 0 : -targets.length); renderOrders(); showToast(`确认失败: ${r.error}`, "error"); }
   } catch (e) {
-    prev.forEach(p => p.order.status = p.status); updateStats(targets.length, -targets.length); renderOrders();
+    prev.forEach(p => p.order.status = p.status); updateStats(targets.length, isGaoClear ? 0 : -targets.length); renderOrders();
     showToast(`确认失败: ${e.message}`, "error");
   }
 }
@@ -1211,30 +1244,36 @@ async function confirmOrders() {
     if (keys.length === 0) { showToast("没有已下单的订单可确认", "info"); return; }
   }
   if (keys.length === 0) { showToast("没有已下单的订单可确认", "info"); return; }
-  const ok = await showConfirmModal({ title: "批量确认", body: `确认 <b>${keys.length}</b> 项？<br>状态将变为"待处理"并生成镜片码。` });
+  const keySet = new Set(keys);
+  const targets = allOrders.filter(o => keySet.has(o.orderNo + "|" + o.customerName + "|" + (o.pairIndex || 1)) && o.status === "已下单");
+  const allGaoClear = targets.length > 0 && targets.every(o => o.supplier === "高清");
+  const hasGaoClear = targets.some(o => o.supplier === "高清");
+  const statusHint = allGaoClear ? "打标签" : hasGaoClear ? "打标签/待处理" : "待处理";
+  const ok = await showConfirmModal({ title: "批量确认", body: `确认 <b>${keys.length}</b> 项？<br>状态将变为"${statusHint}"并生成镜片码。` });
   if (!ok) return;
   // 收集所有 orderNo（去重），一次性提交后端并行处理
   const orderNos = [...new Set(keys.map(k => parseKey(k).orderNo))];
   const btn = document.querySelector(".act-confirm-btn");
   if (btn) { btn.disabled = true; btn.textContent = `确认中 (${orderNos.length} 单)...`; }
-  // 乐观更新：立即改本地状态并重渲染
-  const keySet = new Set(keys);
-  const targets = allOrders.filter(o => keySet.has(o.orderNo + "|" + o.customerName + "|" + (o.pairIndex || 1)) && o.status === "已下单");
+  // 乐观更新
   const prev = targets.map(o => ({ order: o, status: o.status }));
   const n = targets.length;
-  targets.forEach(o => o.status = "待处理");
-  updateStats(-n, n);
+  const optimisticStatus = allGaoClear ? "打标签" : "待处理";
+  targets.forEach(o => o.status = optimisticStatus);
+  updateStats(-n, allGaoClear ? 0 : n);
   renderOrders();
   try {
-    const data = await adminApi("/api/admin/confirm", { orderNos });
+    const body = { orderNos };
+    if (allGaoClear) body.stockStatus = "有库存";
+    const data = await adminApi("/api/admin/confirm", body);
     const results = data.results || [];
     const done = results.filter(r => r.ok).length;
     const fail = results.filter(r => !r.ok).length;
-    if (fail) { prev.forEach(p => p.order.status = p.status); updateStats(n, -n); renderOrders(); }
+    if (fail) { prev.forEach(p => p.order.status = p.status); updateStats(n, allGaoClear ? 0 : -n); renderOrders(); }
     showToast(`确认完成：成功 ${done} 项${fail ? "，失败 " + fail + " 项" : ""}`, fail ? "error" : "success");
     loadOrders();
   } catch (e) {
-    prev.forEach(p => p.order.status = p.status); updateStats(n, -n); renderOrders();
+    prev.forEach(p => p.order.status = p.status); updateStats(n, allGaoClear ? 0 : -n); renderOrders();
     showToast(`确认失败: ${e.message}`, "error");
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = "确认下单"; }
@@ -1405,6 +1444,7 @@ async function exportExcelSelected() {
   let url = `/api/admin/labels/export-excel?orderNos=${encodeURIComponent(orderNos.join(","))}&admin=${adminToken}&orderCustomers=${encodeURIComponent(orderCustomers)}`;
   window.open(url, "_blank");
   showToast("正在导出 Excel...", "info");
+  setTimeout(() => loadOrders(), 2000);
 }
 
 function quickExportExcel(orderNo, customerName, pairIndex) {

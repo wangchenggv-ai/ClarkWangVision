@@ -1,5 +1,173 @@
 # CHANGELOG
 
+## 2026-05-23 — 财务模块封存，改用飞书低代码
+
+### 删除的代码
+- **7天自动签收定时任务**：`server.js` 中 `setInterval` 定时任务（每天凌晨3点检查）
+- **7天自动签收API**：`POST /api/admin/auto-receipt` 端点
+- **对账单API**：`GET /api/admin/reconciliation` 端点
+
+### 修改的文件
+- `server.js`：删除上述三个代码段
+- `shared/tables.js`：财务相关5个表ID置空（agent_pricing、agent_deposit_log、return_exchange、rebate_rule、rebate_record）
+
+### 原因
+- 避免过早耦合，财务功能用飞书低代码即可实现
+- 飞书自动化可实现：定时签收、扣款流水、余额汇总
+- 飞书筛选视图可实现：对账单导出
+- 减少代码维护，降低系统复杂度
+
+### 飞书低代码方案
+| 功能 | 实现方式 |
+|------|----------|
+| 7天自动签收 | 飞书自动化（定时触发器） |
+| 对账单 | 飞书筛选视图 + 汇总行 |
+| 定价表 | 新建表 + 公式字段 |
+| 预存款 | 新建表 + 汇总字段 + 自动化 |
+| 退换货登记 | 新建表 |
+| 返利 | 新建表 + 公式字段 |
+
+## 2026-05-23 — OEM品牌验真暂不启用
+
+### server.js
+- **移除 `终端门店` 写入 lens_detail**：confirm 端点不再写入 `终端门店` 字段到镜片明细表（字段尚未维护）
+- **移除 `镜片码状态` 写入 lens_detail**：confirm 端点和批量导入端点不再写入 `镜片码状态` 字段（字段不存在）
+- **验真页面始终显示高视高清品牌**：由于 `终端门店` 字段未维护，`getBrandByStoreName("")` 返回默认品牌
+
+### 原因
+- 铂视控OEM品牌验真功能已完成代码，但终端门店字段尚未维护
+- 写入不存在的字段导致 `FieldNameNotFound` 错误，镜片码无法生成
+- 暂不启用该功能，等终端门店维护完成后恢复相关代码
+
+### 测试结果
+- ✅ 镜片码正常生成（16位HEX）
+- ✅ 状态正确更新（已下单→打标签）
+- ✅ 验真页面显示高视高清品牌
+- ✅ E2E 测试通过
+
+## 2026-05-22 — orders.html 四项优化 + 重复记录根因分析
+
+### orders.html / server.js（已部署测试环境 :3211，待部署生产）
+- **装配筛选器**：选项从"已装配"/"未装配" → "是"/"否"，与 Bitable 实际字段值一致
+- **导出按钮**：移除 `ctx-btn`（始终显示），改名"导出Excel给打标签"
+- **高清直达打标签**：`quickConfirm` 检测 supplier="高清" → targetStatus 直接设为"打标签"（前端）；`/api/admin/confirm` 端点新增 `existingSupplier === "高清"` 分支，设 confirmTargetStatus="打标签"/wfStep="labeled"（后端）
+- **导出状态筛选器**：新增 `filterExport` 下拉（已导出工厂/未导出工厂/已导出打标签/未导出打标签），客户端利用 `exportStatusMap` 过滤
+
+### 重复记录根因分析（生产 Bitable 订单主表）
+- 根因：`processPendingDrafts` 无幂等检查 + `feishuApi` 原 10s 超时（已改 15s），大批次写入超时但数据实际已写入 → 重试 → 20 倍重复
+- 影响范围：4/30–5/9 订单，488 unique 组合，实际 10000 条（需删 9512 条）
+- 清理脚本 `dedup_orders.mjs` 已写好并上传生产容器，dry-run 验证正确
+- **执行失败**：非 dry-run 全批次报 `RecordIdNotFound (1254043)`，共删 0 条，原因待诊断
+- 诊断脚本 `C:\Users\wangc\diag_records.mjs` 已准备好，下次会话继续
+
+## 2026-05-19 — 配货单（仓库拣货单）
+
+仓库拣货用配货单，按货位路径排序，分区显示。
+
+- `lib/templates.js` 新增 `binSortKey()` 和 `picklistHTML()` 两个导出函数
+- `picklistHTML` 输出 A4 可打印 HTML，按 A/B/C 区分组，每区内按货架→层→列排序
+- `server.js` 新增 `GET /api/admin/picklist?orderNos=ORD-xxx,ORD-yyy` 端点，拉取镜片明细 → 调 `lookupBySphCyl` 查序列号+货位 → 排序后返回 HTML
+- `public/labels-print.html` 在操作栏新增「配货单」按钮（`picklistSelected()`），多选订单后在新标签页打开
+- 非 Ultra双效 SKU 序列号/货位显示"—"（sku-serial.js 暂只覆盖 Ultra双效）
+
+✅ 已部署 ECS（2026-05-19）
+
+## 2026-05-19 — Phase 0 地基：SKU三层定义 + sku_location 数据完善
+
+**不涉及 ECS 部署，均为文档/表结构/数据补全工作。**
+
+- `shared/tables.js` 顶部插入 SKU 三层数据模型注释（Layer1 ProductSKU / Layer2 StockSKU / Layer3 LensItem），全局约定不得绕过
+- `order-system/ARCHITECTURE.md` 末尾新增「状态机 × 库存操作对照表」，明确 reserveStock/releaseReservation/convertReservation 的触发时机和 server.js 行号
+- `ARCHITECTURE-OVERVIEW.md` 末尾新增「数据 Master 方向约定」表，标明 CRM↔订单 各字段的写入源、消费方、同步方式及缺失状态
+- `sku_location` 表（tblTbLuC3VI0ISKH）新建 `ProductSKU` 字段（文本），批量回填所有219条记录为"Ultra双效"
+- `inventory-system/migrate_sku_location.js` 新增迁移脚本，支持 `--product-sku` 和 `--dry-run` 参数，供多产品场景重导使用
+
+## 2026-05-14 — 标签导出Excel加仓位列
+
+标签Excel导出（`/api/admin/labels/export-excel`）新增"仓位"列，位于"日期"和"数量"之间。仓位从收货地址通过`matchBin()`自动匹配。涉及文件：`server.js` + `lib/factory-export.js` ✅ 已部署 ECS
+
+## 2026-05-14 — 暑期备库模拟器
+
+独立网页工具，从订单系统解耦。
+
+### 功能
+- 输入备库总数 + A/B/C比例（默认75/20/5，A+B+C=100%校验，A+B<85%警告）
+- 25×9 SPH×CYL热力图，最大余额法精确分配
+- ABC颜色标注 + 行列合计
+- 下载Excel：Sheet1备库订单（可编辑），Sheet2 ABC参考
+- 无需登录，纯前端单HTML文件
+
+### 文件
+- `public/summer-stock-tool.html` — 前端页面
+- `server.js` — 新增 `/summer-stock-tool` 路由
+
+### 部署
+- `https://lab.gaushclear.com/summer-stock-tool`
+
+---
+
+## 2026-05-14 — E2E 测试验证 + binCode bug 修复 + 测试文档
+
+### E2E 测试（三个新功能）
+- 测试订单：ORD-20260514-D5886B32
+- **签收终态** ✅：已发货→已签收，状态机正确
+- **标签SKU条码** ✅：格式 TKAP-250-075、TKAP-300-100
+- **仓位自动赋码** ✅：orders API 返回 binCode
+- 13/13 断言全部通过
+
+### binCode bug 修复
+- **问题**：orders API 不返回 binCode，labels-print 仓位列为空
+- **修复**：server.js orders API 添加 `matchBin(address)` 计算仓位
+- **部署**：已推送到 ECS 生产环境
+
+### 测试文档
+- 新增 `docs/新功能测试指引-2026-05-14.md`
+- 包含三个功能的分步测试指引、对照表、完整流程测试
+
+## 2026-05-12 — 仓位系统设计 + 本地生产代码同步
+
+### 仓位系统设计（未部署）
+- 设计文档：`docs/仓位系统设计-2026-05-12.md`
+- **核心逻辑**：一个收货地址 = 一个仓位 = 一张通行单
+- **流程**：导出 Excel 时按地址分组分配仓位号（A1, A2...）→ 标签印仓位号 → 配货扫码分拣 → 通行单按仓位分组
+- **两阶段**：第一阶段仓位分配+通行单，第二阶段地址库校验
+- 代码改动未部署，仅保存设计文档
+
+### 对账单系统设计（未部署）
+- 设计文档：`docs/对账单系统设计-2026-05-12.md`
+- 导入顺丰签收明细 → 匹配快递单号 → 写入签收时间 → 状态改已签收
+- 对账单导出增强：加签收日期、签收状态、交期天数列
+- 状态机新增"已签收"终态
+
+### 本地生产代码同步
+- 从 ECS 生产容器下载 7 个关键文件覆盖本地，确保本地基线与生产一致
+- 生产版新增：`loadBinMap()` + `matchBin()` 仓位匹配、标签 80% 缩放、`bin_map`/`export_log` 表引用、批量导入重构
+
+## 2026-05-12 — 批量赋码重构 + 标签导出优化
+
+### 批量赋码系统重构
+- **最小输入**：只需 SKU + 度数（SPH/CYL/AXIS）+ 数量，无需顾客姓名、眼别、代理商
+- **数量支持**：每行数量为 N 则生成 N 个独立镜片码（如数量=2生成2个码）
+- **写入 lens_detail 表**：每个镜片生成唯一 16 位 HEX 码，写入镜片明细表，验真系统可直接查询
+- **每镜片独立订单号**：每个镜片分配独立 `ORD-` 编号，验真页面独立显示
+- **直接解析 Excel**：不依赖 `handleExcelUpload`，自行解析列头（模糊匹配）
+- **前端精简**：`batch-import.html` 重写为拖拽上传+一键生成
+- **涉及文件**：`public/batch-import.html` + `server.js` + `lib/batch-import.js`
+- ✅ 已部署 ECS（2026-05-12）
+
+### 标签打印导出自动流转
+- `exportExcelSelected()` 批量导出后自动调 `update-field` 将订单状态改为「打标签」
+- 与单条导出 `quickExportExcel()` 行为一致
+- **涉及文件**：`public/labels-print.html`
+- ✅ 已部署 ECS
+
+### 工厂导出 Excel 列顺序调整
+- `buildFactoryExcel` 列顺序改为：顾客→产品型号→眼别→球镜SPH→柱镜CYL→轴位AXIS→镜片码→验真网址→日期→数量→订单号→是否装配→联系人→联系电话→收货地址→备注
+- **涉及文件**：`lib/factory-export.js`
+- ✅ 已部署 ECS
+
+---
+
 ## 2026-05-10 — 暑期支持政策页面
 
 ### 新增「支持政策」Tab
@@ -2240,3 +2408,61 @@ ssh -i 密钥/key-gaush-lab.pem root@113.44.175.221 "docker cp /tmp/server.js or
 ### 涉及文件
 - public/orders.html
 - server.js
+
+## 2026-05-16 序列号映射系统 + 同行单货位列 + 异常处理三功能
+
+### 变更概述
+本次会话实现两大功能：①异常处理三功能（改单/发错货/退货）；②仓库序列号映射入系统并在同行单展示货位。
+
+### 异常处理三功能（已实现，UI暂未启用）
+- `POST /api/admin/modify-rx`：改单（改SPH/CYL/AXIS），若非已下单状态则先退回
+- `POST /api/admin/wrong-shipment`：发错货标记（备注追加"【发错货 MM/DD】"）
+- `POST /api/admin/return-order`：退货（已发货/已签收→已退货，备注追加原因）
+- `labels-clean.html`：三个 JS 函数已实现（modifyRx/wrongShipment/returnOrder），getQuickAction 中按钮已注释，启用时取消注释即可
+- 状态机新增：已退货（终态），`status-dot.returned` 红色样式
+
+### 序列号映射系统
+- 新建 `lib/sku-serial.js`：219条记录，双索引（序列号精确查/SPH+CYL反查）
+  - 001-020：完整数据（SPH/CYL来自Top20确认 + 货位来自仓库设计文档）
+  - 021-024, 026-061（A区）, 062-067, 075-104（B区）：货位已知，SPH/CYL待补录
+  - 025, 068-074, 105-219：bin=null（待分配）
+- 新增 `GET /api/admin/sku-serial-map`（支持 ?serial=, ?sph=&cyl=, 无参数返回全量）
+
+### 同行单货位列
+- `lib/templates.js` 同行单新增「序列号」「货位」两列
+- lookupBySphCyl(sph, cyl) 查映射，Top20 SKU 直接显示序列号+货位，未映射显示"—"
+- 新增 `td.serial`/`td.bin` CSS 样式
+
+### 测试
+- `test_serial_slip.mjs`：102/102 通过（总量/Top20/浮点容忍/B类货位/待分配/slipHTML列生成）
+
+### 涉及文件
+- server.js（新增import + 2个端点段 + GET /api/admin/sku-serial-map）
+- lib/sku-serial.js（新建）
+- lib/templates.js（新增import + 两列 + CSS）
+- public/labels-clean.html（异常处理JS函数 + UI注释）
+- test_serial_slip.mjs（新建）
+
+## 2026-05-23 导出状态筛选器完整修复
+
+### 问题
+- filterExport 下拉选择后无反应（无 onchange），需手动点查询
+- 导出状态筛选在客户端执行（分页后过滤），导致每页结果稀疏、翻页漏单、总页数错误
+- 打标签导出后页面不刷新，助理不知道哪些已标记
+- filterAssembly / filterSupplier 同样缺少 onchange
+
+### 修复
+- server.js orders-fast 端点：新增 exportFilter 参数，在 filterQ 之后、分页之前执行内存过滤，分页数据自动准确
+- server.js：exportFilter 激活时跳过缓存路径，确保实时数据
+- orders.html loadOrders()：将 exportFilter 传给 API，删除客户端过滤逻辑
+- orders.html：filterExport / filterAssembly / filterSupplier 均加 onchange="currentPage=1;loadOrders()"
+- orders.html exportExcelSelected()：补 setTimeout(() => loadOrders(), 2000)
+
+### 新增快捷按钮
+- "待发工厂"：一键设置 status=生产中 + exportFilter=factory-pending
+- "待打标签"：一键设置 status=打标签 + exportFilter=label-pending
+- setWorkflowFilter() 函数
+
+### 涉及文件
+- server.js
+- public/orders.html

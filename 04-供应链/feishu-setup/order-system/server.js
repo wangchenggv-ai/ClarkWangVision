@@ -42,6 +42,7 @@ import { genOrderNo as genMergeOrderNo, buildMergeOrderRecords, buildMergeLensRe
 import { checkExportStatus, logExport, getOrderExportStatus, listExportLogs } from "./lib/export-log.js";
 import { getAgentAnnualVolume, calculateStarTrail, calculateStarTier, getECPLeaderboard } from "./lib/starmap-aggregator.js";
 import { lookupBySphCyl, lookupBySerial, getAllEntries, getSupportedSkus } from "./lib/sku-serial.js";
+import { getBrandByStoreName } from "./lib/brand-config.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3210;
@@ -644,12 +645,18 @@ async function processPendingDrafts() {
       draft = JSON.parse(readFileSync(fp, "utf8"));
       // 跳过近期修改的草稿（给代理商编辑窗口）
       if (now - draft.updatedAt < DRAFT_AGE_MIN) continue;
-      // 跳过超过 10 次重试的
+      // 跳过超过 10 次重试的（标记失败，保留文件可见，不静默删除）
       if (draft.retryCount >= 10) {
-        console.error(`  草稿 ${draft.orderNo} 重试超过 10 次，放弃同步`);
-        // 重命名为 .failed 避免重复处理
-        writeFileSync(fp + ".failed", JSON.stringify(draft));
-        unlinkSync(fp);
+        if (!draft.syncFailed) {
+          draft.syncFailed = true;
+          draft.syncFailedAt = Date.now();
+          writeFileSync(fp, JSON.stringify(draft, null, 2));
+          console.error(`  🚨 草稿 ${draft.orderNo} 同步耗尽（10次），已标记失败，发送告警`);
+          sendFeishuCard({
+            header: { title: { tag: "plain_text", content: "🚨 订单草稿同步失败" }, template: "red" },
+            elements: [{ tag: "markdown", content: `**订单号：** ${draft.orderNo}\n**代理商：** ${draft.agentName || ""}\n**最后错误：** ${draft.lastError || "未知"}\n\n请用 /diagnose 诊断，或管理后台点「重试同步」。` }],
+          }).catch(() => {});
+        }
         continue;
       }
     } catch {
@@ -663,8 +670,9 @@ async function processPendingDrafts() {
     console.log(`  → 同步草稿 ${orderNo} (${agentName})`);
 
     // 幂等检查：订单已存在则跳过，防止超时重试导致重复写入
+    const encOrderNo = encodeURIComponent(`"${orderNo}"`);
     const existCheck = await feishuApi("GET",
-      `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[订单编号]="${orderNo}"`
+      `/bitable/v1/apps/${APP_TOKEN}/tables/${TABLES.order}/records?page_size=1&filter=CurrentValue.[订单编号]=${encOrderNo}`
     ).catch(() => null);
     if (existCheck?.items?.length > 0) {
       unlinkSync(fp);
@@ -705,8 +713,6 @@ async function processPendingDrafts() {
             "订单来源": "代理商门户",
             "客户ID": customerId,
             "是否装配": assembly !== false ? "是" : "否",
-            "单价": unitPrice,
-            "金额": amount,
             ...(terminalCustomer?.name ? { "终端门店": terminalCustomer.name } : {}),
             ...(terminalCustomer?.contact ? { "联系人": terminalCustomer.contact } : {}),
             ...(terminalCustomer?.phone ? { "联系电话": terminalCustomer.phone } : {}),
@@ -740,8 +746,9 @@ async function processPendingDrafts() {
       const okLens = lensRecords.length > 0 ? await batchCreateRecords(TABLES.lens_detail, lensRecords) : true;
       if (!okLens) console.error(`  ⚠️ 镜片明细写入失败 ${orderNo}`);
 
-      // 删除草稿文件
+      // 删除草稿文件，失效管理端缓存
       unlinkSync(fp);
+      invalidateOrdersCache();
       console.log(`  ✅ 草稿同步完成: ${orderNo}`);
     } catch (e) {
       draft.retryCount = (draft.retryCount || 0) + 1;
@@ -960,6 +967,7 @@ async function warmLensCache() {
         sph: r.fields["球镜SPH"] ?? "",
         cyl: r.fields["柱镜CYL"] ?? "",
         axis: r.fields["轴位AXIS"] ?? "",
+        storeName: r.fields["终端门店"] || "",
       });
     }
     _lensCacheReady = true;
@@ -1054,6 +1062,21 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function applyBrandToHtml(html, brand) {
+  const display = brand.nameEn
+    ? `<span class="gaush">${escapeHtml(brand.nameEn)}</span><span class="sep">|</span><span class="clear">${escapeHtml(brand.name)}</span>`
+    : `<span class="gaush">${escapeHtml(brand.name)}</span>`;
+  const footer = brand.nameEn
+    ? `${escapeHtml(brand.nameEn)} &middot; ${escapeHtml(brand.name)}`
+    : escapeHtml(brand.name);
+  return html
+    .replace("{{BRAND_COLOR}}", escapeHtml(brand.color))
+    .replace("{{BRAND_DISPLAY}}", display)
+    .replace("{{BRAND_FOOTER}}", footer)
+    .replace("{{BRAND_NAME}}", escapeHtml(brand.name))
+    .replace("{{BRAND_FOOTER_CONTACT}}", brand.footer ? `<br>${escapeHtml(brand.footer)}` : "");
 }
 
 function csvEscape(val) {
@@ -1215,7 +1238,6 @@ async function assignLensCodes(orderNo, customerName, pairIndex) {
     await updateRecord(TABLES.lens_detail, rec.record_id, {
       "镜片码（唯一）": code,
       "订单状态": "待处理",
-      "镜片码状态": "active",
     });
     await generateQRPng(code);
     lensCodes.push(code);
@@ -1986,6 +2008,7 @@ const server = createServer(async (req, res) => {
             address: d.payload?.address || "",
             remark: "",
             _draft: true,
+            _syncFailed: d.syncFailed || false,
           });
         }
       }
@@ -2293,11 +2316,13 @@ const server = createServer(async (req, res) => {
       let found = false;
       let orderInfo = {};
       let eyes = [];
+      let storeName = "";
 
       // 2. 内存缓存查询（零 API）
       if (_lensCacheReady && _lensCache.has(lensCode)) {
         found = true;
         const src = _lensCache.get(lensCode);
+        storeName = src.storeName || "";
         const skus = await getSkusWithInventory();
         const skuMatch = skus.find(s => s.sku === src.sku);
         orderInfo = { orderNo: src.orderNo, customerName: src.customer, skuName: skuMatch?.name || src.sku };
@@ -2322,6 +2347,7 @@ const server = createServer(async (req, res) => {
           // 作废码检查：显示"已作废"页面
           if (lf["镜片码状态"] === "void") {
             const replacementCode = lf["替换码"] || "";
+            const voidBrand = getBrandByStoreName(lf["终端门店"] || "");
             let voidHtml = _verifyTemplate || readFileSync(resolve(__dirname, "public/verify.html"), "utf-8");
             voidHtml = voidHtml.replace("{{FOUND}}", "true");
             voidHtml = voidHtml.replace("{{HERO_CLASS}}", "hero-fail");
@@ -2333,6 +2359,7 @@ const server = createServer(async (req, res) => {
             voidHtml = voidHtml.replace("{{EYE_ROWS}}", `<tr><td colspan="4" style="text-align:center;color:#e74c3c;font-weight:bold">已作废 — 请使用新镜片码</td></tr>`);
             voidHtml = voidHtml.replace("{{LENS_CODES}}", `<span class="lens-code-item"><span class="mono">${escapeHtml(lensCode)}</span> → <span class="mono">${escapeHtml(replacementCode)}</span></span>`);
             voidHtml = voidHtml.replace("{{NOW}}", escapeHtml(new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })));
+            voidHtml = applyBrandToHtml(voidHtml, voidBrand);
             _verifyCache.set(lensCode, { html: voidHtml, found: true, ts: Date.now() });
             res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
             res.end(voidHtml);
@@ -2341,6 +2368,7 @@ const server = createServer(async (req, res) => {
           const srcOrderNo = lf["订单编号"] || "";
           const srcCustomer = lf["顾客姓名"] || "";
           const srcSku = lf["产品型号"] || "";
+          storeName = lf["终端门店"] || "";
           const srcPi = Number(lf["序号"] || 1);
 
           const skus = await getSkusWithInventory();
@@ -2407,6 +2435,7 @@ const server = createServer(async (req, res) => {
         : eyes.map(e => `<span class="lens-code-item"><span class="lens-code-side">${escapeHtml(e.side)}</span> <span class="mono">${escapeHtml(e.lensCode)}</span></span>`).join("\n");
       html = html.replace("{{LENS_CODES}}", codeHtml);
       html = html.replace("{{NOW}}", escapeHtml(new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })));
+      html = applyBrandToHtml(html, getBrandByStoreName(storeName));
 
       // 写入缓存
       _verifyCache.set(lensCode, { html, found, ts: Date.now() });
@@ -2509,6 +2538,7 @@ const server = createServer(async (req, res) => {
       const filterQ = url.searchParams.get("q") || "";
       const filterFrom = url.searchParams.get("from") || "";
       const filterTo = url.searchParams.get("to") || "";
+      const exportFilter = url.searchParams.get("exportFilter") || "";
       const page = Math.max(1, parseInt(url.searchParams.get("page")) || 1);
       const pageSize = Math.min(9999, Math.max(1, parseInt(url.searchParams.get("pageSize")) || 50));
 
@@ -2541,7 +2571,7 @@ const server = createServer(async (req, res) => {
         : undefined;
 
       // 无筛选时优先走缓存（复用 /api/admin/orders 的缓存）
-      if (conditions.length === 0 &&
+      if (conditions.length === 0 && !exportFilter &&
           _ordersCache.data && Date.now() - _ordersCache.ts < ORDERS_CACHE_TTL) {
         let orders = _ordersCache.data;
         const stats = {
@@ -2562,11 +2592,14 @@ const server = createServer(async (req, res) => {
       }
 
       try {
-        const allRecords = await searchRecords(TABLES.order, {
-          filter,
-          sort: [{ field_name: "下单日期", desc: true }],
-          pageSize: 500,
-        });
+        // 无筛选条件时用 listRecords(GET)，因飞书 POST /search 分页有 bug 会循环返回重复页
+        const allRecords = conditions.length === 0
+          ? await listRecords(TABLES.order)
+          : await searchRecords(TABLES.order, {
+              filter,
+              sort: [{ field_name: "下单日期", desc: true }],
+              pageSize: 500,
+            });
 
         let orders = allRecords.map(r => {
           const f = r.fields;
@@ -2604,6 +2637,19 @@ const server = createServer(async (req, res) => {
             o.orderNo.toLowerCase().includes(s) ||
             (o.customerName || "").toLowerCase().includes(s)
           );
+        }
+
+        // 导出状态筛选（服务端过滤，保证分页正确）
+        if (exportFilter) {
+          const expStatusMap = await getOrderExportStatus(orders.map(o => o.orderNo).filter(Boolean));
+          orders = orders.filter(o => {
+            const es = expStatusMap[o.orderNo] || {};
+            if (exportFilter === "factory-done")    return !!es.factory;
+            if (exportFilter === "factory-pending") return !es.factory;
+            if (exportFilter === "label-done")      return !!es.label;
+            if (exportFilter === "label-pending")   return !es.label;
+            return true;
+          });
         }
 
         // 统计（用缓存的全量数据，避免每次重新查）
@@ -2657,14 +2703,11 @@ const server = createServer(async (req, res) => {
         // 查镜片明细
         const lensDetails = await getLensDetailsByOrder(orderNo);
 
-        // 查草稿
+        // 查草稿（syncFailed 草稿仍保留为 .json 文件）
         const draftPath = resolve(DRAFTS_DIR, `${orderNo}.json`);
-        const failedDraftPath = draftPath + ".failed";
         let draft = null;
         if (existsSync(draftPath)) {
           try { draft = JSON.parse(readFileSync(draftPath, "utf8")); } catch {}
-        } else if (existsSync(failedDraftPath)) {
-          try { draft = { ...JSON.parse(readFileSync(failedDraftPath, "utf8")), failed: true }; } catch {}
         }
 
         // 自动诊断
@@ -2676,7 +2719,7 @@ const server = createServer(async (req, res) => {
         }
 
         if (draft) {
-          info.push(`草稿存在${draft.failed ? "（已失败）" : "（待同步）"}, 创建于 ${new Date(draft.createdAt).toLocaleString("zh-CN")}, 重试 ${draft.retryCount || 0} 次`);
+          info.push(`草稿存在${draft.syncFailed ? "（已标记失败）" : "（待同步）"}, 创建于 ${new Date(draft.createdAt).toLocaleString("zh-CN")}, 重试 ${draft.retryCount || 0} 次`);
           if (draft.lastError) info.push(`最后错误: ${draft.lastError}`);
         }
 
@@ -2724,11 +2767,33 @@ const server = createServer(async (req, res) => {
           orderCount: orderRecords.length,
           lensCount: lensDetails.length,
           draftExists: !!draft,
-          draftFailed: draft?.failed || false,
+          draftFailed: draft?.syncFailed || false,
           info,
           issues,
           status: issues.length === 0 ? "正常" : "有问题",
         });
+      } catch (e) {
+        jsonRes(res, 500, { error: e.message });
+      }
+      return logReq(req, 200, start);
+    }
+
+    // POST /api/admin/retry-draft?orderNo=XXX — 重置失败草稿，允许重新同步
+    if (pathname === "/api/admin/retry-draft" && req.method === "POST") {
+      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
+      const orderNo = url.searchParams.get("orderNo") || "";
+      if (!orderNo) { jsonRes(res, 400, { error: "缺少 orderNo" }); return logReq(req, 400, start); }
+      const fp = resolve(DRAFTS_DIR, `${orderNo}.json`);
+      if (!existsSync(fp)) { jsonRes(res, 404, { error: "草稿不存在" }); return logReq(req, 404, start); }
+      try {
+        const draft = JSON.parse(readFileSync(fp, "utf8"));
+        draft.retryCount = 0;
+        draft.syncFailed = false;
+        draft.syncFailedAt = null;
+        draft.lastError = null;
+        draft.updatedAt = Date.now() - DRAFT_AGE_MIN; // 立即可同步
+        writeFileSync(fp, JSON.stringify(draft, null, 2));
+        jsonRes(res, 200, { ok: true, msg: `草稿 ${orderNo} 已重置，将在下次轮询时同步` });
       } catch (e) {
         jsonRes(res, 500, { error: e.message });
       }
@@ -3433,6 +3498,7 @@ const server = createServer(async (req, res) => {
         (async () => {
           try {
             const t0 = Date.now();
+            const storeName = rawVal(records[0]?.fields["终端门店"]) || "";
             const lensCodes = [];
             const lensUpdates = [];
             const qrPromises = [];
@@ -3444,7 +3510,7 @@ const server = createServer(async (req, res) => {
                 console.log(`  镜片码生成: ${orderNo} → ${code}`);
               }
               lensCodes.push(code);
-              lensUpdates.push({ record_id: rec.record_id, fields: { "镜片码（唯一）": code, "订单状态": confirmTargetStatus, "镜片码状态": "active" } });
+              lensUpdates.push({ record_id: rec.record_id, fields: { "镜片码（唯一）": code, "订单状态": confirmTargetStatus } });
             }
             if (qrPromises.length) await Promise.all(qrPromises);
             const t1 = Date.now();
@@ -3463,10 +3529,10 @@ const server = createServer(async (req, res) => {
                 sph: rec.fields["球镜SPH"] ?? "",
                 cyl: rec.fields["柱镜CYL"] ?? "",
                 axis: rec.fields["轴位AXIS"] ?? "",
+                storeName,
               });
             }
 
-            const storeName = rawVal(records[0]?.fields["终端门店"]) || "";
             const store = await getStoreByName(storeName);
             const storeBinCode = store?.binCode || "";
 
@@ -4599,166 +4665,6 @@ h1{max-width:900px;margin:0 auto 24px;color:#1a1a2e;font-size:18pt}
       }
       invalidateOrdersCache();
       jsonRes(res, 200, { results });
-      return logReq(req, 200, start);
-    }
-
-    // POST /api/admin/auto-receipt — 7天自动签收（手动触发 / 定时任务共用）
-    if (pathname === "/api/admin/auto-receipt" && req.method === "POST") {
-      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
-      try {
-        const days = Number(url.searchParams.get("days") || 7);
-        const cutoff = Date.now() - days * 86400000;
-        // 查询所有已发货订单
-        const allOrders = await searchRecords(TABLES.order, {
-          filter: { conjunction: "and", conditions: [
-            { field_name: "订单状态", operator: "is", value: ["已发货"] },
-          ]},
-          fieldNames: ["订单编号", "订单状态", "发货日期", "顾客姓名", "流程步骤"],
-        });
-        // 筛选发货日期超过N天的
-        const toSign = allOrders.filter(r => {
-          const shipDate = r.fields["发货日期"];
-          if (!shipDate) return false;
-          const ts = typeof shipDate === "number" ? shipDate : new Date(shipDate).getTime();
-          return ts < cutoff;
-        });
-        if (!toSign.length) { jsonRes(res, 200, { ok: true, message: `无超过${days}天未签收订单`, count: 0 }); return logReq(req, 200, start); }
-
-        // 按订单号分组
-        const grouped = {};
-        for (const rec of toSign) {
-          const orderNo = rec.fields["订单编号"];
-          if (!grouped[orderNo]) grouped[orderNo] = [];
-          grouped[orderNo].push(rec);
-        }
-
-        let signed = 0;
-        const now = Date.now();
-        for (const [orderNo, recs] of Object.entries(grouped)) {
-          const updates = recs.map(rec => {
-            const wf = parseWorkflow(rec.fields["流程步骤"]);
-            advanceWorkflow(wf, "delivered");
-            return { record_id: rec.record_id, fields: { "订单状态": "已签收", "签收时间": now, "物流状态": "已签收", "流程步骤": JSON.stringify(wf) } };
-          });
-          await batchUpdateRecords(TABLES.order, updates);
-          signed += updates.length;
-
-          // 同步镜片明细
-          const lensDetails = await getLensDetailsByOrder(orderNo);
-          const lensUpdates = lensDetails.filter(r => (r.fields["订单状态"] || "") === "已发货").map(r => ({ record_id: r.record_id, fields: { "订单状态": "已签收" } }));
-          if (lensUpdates.length) await batchUpdateRecords(TABLES.lens_detail, lensUpdates);
-        }
-        invalidateOrdersCache();
-        jsonRes(res, 200, { ok: true, message: `自动签收完成`, orders: Object.keys(grouped).length, records: signed });
-      } catch (e) { jsonRes(res, 500, { error: e.message }); }
-      return logReq(req, 200, start);
-    }
-
-    // GET /api/admin/reconciliation — 对账单生成（按代理商+日期范围汇总）
-    if (pathname === "/api/admin/reconciliation" && req.method === "GET") {
-      if (!isAdmin(req)) { jsonRes(res, 401, { error: "无管理权限" }); return logReq(req, 401, start); }
-      const agentId = url.searchParams.get("agent") || "";
-      const dateFrom = url.searchParams.get("from") || "";
-      const dateTo = url.searchParams.get("to") || "";
-      if (!agentId) { jsonRes(res, 400, { error: "请提供 agent 参数（代理商ID）" }); return logReq(req, 400, start); }
-
-      try {
-        // 1. 查询该代理商所有已签收订单
-        const conditions = [
-          { field_name: "代理商ID", operator: "is", value: [agentId] },
-          { field_name: "订单状态", operator: "is", value: ["已签收"] },
-        ];
-        if (dateFrom) conditions.push({ field_name: "签收时间", operator: "isGreater", value: [new Date(dateFrom).getTime()] });
-        if (dateTo) conditions.push({ field_name: "签收时间", operator: "isLess", value: [new Date(dateTo).getTime() + 86400000] });
-
-        const signedOrders = await searchRecords(TABLES.order, {
-          filter: { conjunction: "and", conditions },
-          fieldNames: ["订单编号", "产品型号", "数量", "单价", "金额", "签收时间", "顾客姓名"],
-        });
-
-        // 汇总货款
-        const orderDetails = [];
-        let subtotal = 0;
-        for (const rec of signedOrders) {
-          const f = rec.fields;
-          const price = Number(f["单价"]) || 0;
-          const qty = Number(f["数量"]) || 0;
-          const amount = Number(f["金额"]) || (price * qty);
-          subtotal += amount;
-          orderDetails.push({
-            orderNo: f["订单编号"] || "",
-            sku: f["产品型号"] || "",
-            quantity: qty,
-            unitPrice: price,
-            amount,
-            signedAt: f["签收时间"] ? new Date(f["签收时间"]).toISOString().slice(0, 10) : "",
-            customer: f["顾客姓名"] || "",
-          });
-        }
-
-        // 2. 查询退换货冲销
-        let returnAmount = 0;
-        if (TABLES.return_exchange) {
-          const returnConditions = [{ field_name: "代理商", operator: "is", value: [agentId] }];
-          if (dateFrom) returnConditions.push({ field_name: "日期", operator: "isGreater", value: [new Date(dateFrom).getTime()] });
-          if (dateTo) returnConditions.push({ field_name: "日期", operator: "isLess", value: [new Date(dateTo).getTime() + 86400000] });
-
-          const returns = await searchRecords(TABLES.return_exchange, {
-            filter: { conjunction: "and", conditions: returnConditions },
-            fieldNames: ["原订单号", "退款金额", "类型", "眼别"],
-          });
-          for (const rec of returns) {
-            returnAmount += Number(rec.fields["退款金额"]) || 0;
-          }
-        }
-
-        // 3. 查询返利抵扣（上季已确认的返利）
-        let rebateAmount = 0;
-        if (TABLES.rebate_record) {
-          const rebateConditions = [
-            { field_name: "代理商ID", operator: "is", value: [agentId] },
-            { field_name: "状态", operator: "is", value: ["已确认"] },
-          ];
-          const rebates = await searchRecords(TABLES.rebate_record, {
-            filter: { conjunction: "and", conditions: rebateConditions },
-            fieldNames: ["应得返利金额", "季度", "状态"],
-          });
-          for (const rec of rebates) {
-            rebateAmount += Number(rec.fields["应得返利金额"]) || 0;
-          }
-        }
-
-        // 4. 计算本期实付
-        const netAmount = subtotal - returnAmount - rebateAmount;
-
-        // 5. 查询预存款余额
-        let depositBalance = 0;
-        if (TABLES.agent_deposit_log) {
-          const depConditions = [{ field_name: "代理商ID", operator: "is", value: [agentId] }];
-          const deposits = await searchRecords(TABLES.agent_deposit_log, {
-            filter: { conjunction: "and", conditions: depConditions },
-            fieldNames: ["金额"],
-          });
-          for (const rec of deposits) {
-            depositBalance += Number(rec.fields["金额"]) || 0;
-          }
-        }
-
-        jsonRes(res, 200, {
-          ok: true,
-          agentId,
-          period: { from: dateFrom || "全部", to: dateTo || "至今" },
-          summary: {
-            subtotal,        // 货款小计
-            returnAmount,    // 退货冲销
-            rebateAmount,    // 返利抵扣
-            netAmount,       // 本期实付
-            depositBalance,  // 预存款余额
-          },
-          orderCount: signedOrders.length,
-          orders: orderDetails,
-        });
-      } catch (e) { jsonRes(res, 500, { error: e.message }); }
       return logReq(req, 200, start);
     }
 
@@ -7430,47 +7336,6 @@ server.listen(PORT, () => {
   // 预热镜片缓存，验真零 API 调用
   warmLensCache().then(() => setInterval(warmLensCache, 10 * 60 * 1000)).catch(e => console.warn("⚠️ 镜片缓存预热失败:", e.message));
 
-  // 7天自动签收定时任务：每天凌晨3点检查
-  setInterval(async () => {
-    const now = new Date();
-    if (now.getHours() !== 3 || now.getMinutes() !== 0) return;
-    try {
-      console.log("🕐 自动签收定时任务开始...");
-      const cutoff = Date.now() - 7 * 86400000;
-      const allOrders = await searchRecords(TABLES.order, {
-        filter: { conjunction: "and", conditions: [{ field_name: "订单状态", operator: "is", value: ["已发货"] }] },
-        fieldNames: ["订单编号", "订单状态", "发货日期", "流程步骤"],
-      });
-      const toSign = allOrders.filter(r => {
-        const shipDate = r.fields["发货日期"];
-        if (!shipDate) return false;
-        const ts = typeof shipDate === "number" ? shipDate : new Date(shipDate).getTime();
-        return ts < cutoff;
-      });
-      if (!toSign.length) { console.log("  自动签收：无超过7天未签收订单"); return; }
-      const grouped = {};
-      for (const rec of toSign) {
-        const orderNo = rec.fields["订单编号"];
-        if (!grouped[orderNo]) grouped[orderNo] = [];
-        grouped[orderNo].push(rec);
-      }
-      let signed = 0;
-      for (const [orderNo, recs] of Object.entries(grouped)) {
-        const updates = recs.map(rec => {
-          const wf = parseWorkflow(rec.fields["流程步骤"]);
-          advanceWorkflow(wf, "delivered");
-          return { record_id: rec.record_id, fields: { "订单状态": "已签收", "签收时间": Date.now(), "物流状态": "已签收", "流程步骤": JSON.stringify(wf) } };
-        });
-        await batchUpdateRecords(TABLES.order, updates);
-        signed += updates.length;
-        const lensDetails = await getLensDetailsByOrder(orderNo);
-        const lensUpdates = lensDetails.filter(r => (r.fields["订单状态"] || "") === "已发货").map(r => ({ record_id: r.record_id, fields: { "订单状态": "已签收" } }));
-        if (lensUpdates.length) await batchUpdateRecords(TABLES.lens_detail, lensUpdates);
-      }
-      invalidateOrdersCache();
-      console.log(`  自动签收完成: ${Object.keys(grouped).length} 单, ${signed} 条记录`);
-    } catch (e) { console.error("  自动签收异常:", e.message); }
-  }, 60000);
   loadBinMap().catch(e => console.warn("⚠️ 仓位映射加载失败:", e.message));
   ensureField("供应商厂家", { type: 3, property: { options: [{ name: "高清" }, { name: "圣普" }, { name: "九次方" }, { name: "五彩" }, { name: "欧陆" }] } }).catch(e => console.warn("⚠️ 供应商厂家字段检查失败:", e.message));
   ensureField("库存状态", { type: 3, property: { options: [{ name: "有库存" }, { name: "无库存" }] } }).catch(e => console.warn("⚠️ 库存状态字段检查失败:", e.message));

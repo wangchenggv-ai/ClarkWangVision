@@ -1,6 +1,6 @@
-# 系统当前状态
+﻿# 系统当前状态
 
-> 更新：2026-05-14 v10 | 完整历史见 CHANGELOG.md
+> 更新：2026-05-23 v17 | 完整历史见 CHANGELOG.md
 
 ---
 
@@ -14,8 +14,9 @@
 | 生产容器 | order-app:3210（主服务）+ mock-shuang:3220 |
 | 测试容器 | order-app-test:3211 + mock-shuang-test:3221 |
 | 测试 Bitable | APP_TOKEN: `CtXObqwAHaCXYssBBfkcXmrlnUe` |
-| 本次待部署 | ✅ 已全部部署（筛选优化+页面精简+订单补码+诊断工具） |
-| 涉及文件 | server.js, lib/feishu.js, lib/export-log.js, public/orders.html, public/diagnose.html |
+| 本次待部署 | 删除财务模块代码（7天自动签收+对账单API） |
+| 涉及文件 | server.js, shared/tables.js |
+| 2026-05-23已部署 | feishu.js（searchRecords分页bug修复）+ server.js（orders-fast无筛选改listRecords+OEM品牌暂不启用）+ orders.html（522 Plan三项）✅ 全部已部署生产 |
 
 部署命令：
 ```bash
@@ -71,6 +72,15 @@ ssh -i "$KEY" root@113.44.175.221 \
 
 ## 已知问题 / 待办
 
+- [x] **✅ 导出状态筛选器完整修复（2026-05-23）**：修复4个Bug：①分页错乱（exportFilter移至服务端，orders-fast内存分页自动正确）；②filterExport无onchange（选了不触发，加onchange自动查询）；③filterAssembly/filterSupplier同样补onchange；④打标签导出后不刷新（补setTimeout loadOrders）。新增快捷按钮"待发工厂"（生产中+未导出工厂）和"待打标签"（打标签+未导出打标签），防漏单工作流一键直达。涉及文件：`server.js` + `public/orders.html` ✅ 已部署 ECS（2026-05-23），本地19/19测试通过
+- [x] **✅ 财务模块封存（2026-05-23）**：财务结算功能（定价表、预存款、退换货、返利、对账单）改用飞书低代码实现，不编程。已删除：①7天自动签收定时任务，②对账单API（reconciliation），③tables.js中5个财务表ID置空。保留：换货赋码代码（封存不启用）。原因：避免过早耦合，飞书原生功能足够。涉及文件：`server.js` + `shared/tables.js` ✅ 已部署 ECS（2026-05-23）
+- [x] **✅ OEM多品牌验真-暂不启用（2026-05-23）**：铂视控终端客户验真页显示铂视控品牌而非高视高清。新增 `lib/brand-config.js`（门店→品牌映射）；server.js 新增 `applyBrandToHtml()`，verify 三条路径（内存缓存/API fallback/void码）均注入品牌；verify.html 5处硬编码改为模板占位符。**当前暂不启用**：confirm 流程不写 `终端门店` 和 `镜片码状态` 到 lens_detail（字段尚未维护），验真页面始终显示高视高清品牌。等终端门店维护完成后，恢复相关代码即可启用。涉及文件：`server.js` ✅ 已部署 ECS（2026-05-23）✅ 生产环境测试通过
+- [x] **✅ 草稿同步修复（2026-05-23）**：Fix1 幂等检查 URL 编码缺失；Fix2 同步成功后 invalidateOrdersCache；Fix3 重试耗尽不再静默删除→syncFailed标记+飞书告警；Fix4 searchRecords total守卫改软截断；Fix5 追踪页同步失败红色警示+`/api/admin/retry-draft` 端点。**根因：FieldNameNotFound（飞书API code=1254045），订单主表缺 "单价"/"金额" 字段，已移除写入**。涉及文件：`server.js` + `lib/feishu.js` + `public/track.html` ✅ 已部署 ECS，E2E 9步全通过（2026-05-23）
+- [x] **✅ 订单管理UI显示5000条（2026-05-23）**：根因是飞书 POST /records/search 分页 bug（has_more 永不为 false，循环返回同一页），searchRecords 跑满 maxPages→假记录堆叠。Bitable 数据干净，真实 767 条。修复：lib/feishu.js searchRecords 加 total 守卫+record_id 去重；server.js orders-fast 无筛选时改用 listRecords(GET) 绕开 bug。✅ 已部署 ECS（2026-05-23）
+- [x] **✅ 522 Plan 三项改动（2026-05-23）**：①装配筛选选项改"是"/"否"；②"导出Excel给打标签"按钮始终显示；③高清直达打标签——quickConfirm+confirmOrders均支持，批量全高清时弹窗动态提示"打标签"，乐观更新对应。涉及文件：`public/orders.html` + `server.js` ✅ 已部署 ECS（2026-05-23）
+  - ⚠️ 导出状态筛选器（已导出工厂/未导出工厂/已导出打标签/未导出打标签）**未实现**，从 522 Plan 中拆出，下次单独做
+- [x] **✅ lens_detail 无重复（2026-05-23确认）**：同 feishu.js 修复已覆盖，listRecords 返回 2527 条正常
+- [x] **终端门店+仓位架构重构（2026-05-19）**：实体命名规范化（代理商/终端门店/顾客），Bitable字段`客户名称`→`门店名称`、`终端客户`→`终端门店`，customer表新增`仓位`单选字段（A1-D2），server.js新增`loadStores()`5分钟缓存+`/api/terminal-stores`端点，confirm Stage2按门店查`仓位`写入订单主表，orders API优先读存储`仓位`字段，slip-batch改为按门店名称分组（同门店一张单）。涉及文件：`server.js` + `check_schema.js` ✅ 已部署 ECS（2026-05-23）
 - [x] **订单诊断工具**：`/diagnose?admin=GaushOrderMock` 输入订单号自动诊断：订单/镜片明细是否存在、镜片码是否生成、状态是否一致、QR 图片是否缺失、草稿是否待同步/失败、update-field 直接改状态跳过赋码。涉及文件：`server.js` + `public/diagnose.html` ✅ 已部署 ECS（2026-05-14）
 - [x] **筛选性能优化**：新增 `/api/admin/orders-fast` 端点，用飞书 `records/search` API 带 filter（服务端筛选，不拉全表），首次筛选从 ~5s 降到 ~1s。`export-log.js` 给 `getOrderExportStatus` 加 60s 缓存。前端 orders.html 筛选默认走 fast 端点，超期走老端点，fast 失败自动 fallback。涉及文件：`server.js` + `lib/feishu.js` + `lib/export-log.js` + `public/orders.html` ✅ 已部署 ECS（2026-05-14）
 - [x] **订单管理页精简**：orders.html 展开详情去掉镜片处方表和流程进度 stepper，只保留库存/供应商选择器。删除 stepper CSS ~50 行 + JS ~100 行。涉及文件：`public/orders.html` ✅ 已部署 ECS（2026-05-14）
@@ -130,6 +140,8 @@ ssh -i "$KEY" root@113.44.175.221 \
 - [x] **草稿同步时间缩短**：DRAFT_AGE_MIN 从 15 分钟改为 3 分钟 ✅
 - [x] **端到端验真测试**：生产+测试环境全流程通过（下单→同步→确认→赋码→验真）✅
 - [x] **暑期支持政策页面**：在 summer.html 添加「支持政策」Tab，展示《2026暑期上量支持政策》完整内容（标准支持/资格制支持/返利/备库超量货款分担），代理商可手动填写备注+确认知晓。新增 Bitable 字段 `policy_confirmed`（数字）+ `policy_remark`（文本），新增 `/api/summer-policy` 端点（POST 确认+PATCH 仅保存备注）。✅ 已部署 ECS（2026-05-10）
+- [ ] **异常处理三功能（已实现，未启用）**：改单 `POST /api/admin/modify-rx`（自动退回已下单+更新SPH/CYL/AXIS）、发错货 `POST /api/admin/wrong-shipment`（备注打标）、退货 `POST /api/admin/return-order`（状态→已退货）。API已在server.js，JS函数已在labels-clean.html，UI按钮已注释。启用时只需取消labels-clean.html中getQuickAction的注释。（2026-05-16）
+- [x] **序列号映射+标签货位+Excel同步（2026-05-16）**：`lib/sku-serial.js` 219条（xlsx权威，全量SPH/CYL+货位），多型号架构（ENTRIES_BY_SKU）。标签新增序列号+货位（深色badge+货架地址）。随货同行单简化为5列（眼别/SKU/SPH/CYL/AXIS），无镜片码/QR/快递信息。`lib/factory-export.js` 两个Excel导出均新增「序列号」「货位」列（SKU条码之后）。115/115测试全过。✅ 已部署 ECS（server.js/lib/sku-serial.js/lib/templates.js/lib/factory-export.js）
 
 ---
 
