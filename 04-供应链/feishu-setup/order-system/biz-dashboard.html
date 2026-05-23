@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高视业务看板 · 2026-05-16</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+.header { background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); padding: 24px 32px; border-bottom: 1px solid #1e293b; display: flex; justify-content: space-between; align-items: center; }
+h1 { font-size: 28px; background: linear-gradient(90deg, #38bdf8, #818cf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.subtitle { color: #94a3b8; margin-top: 4px; }
+.container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+.region-tabs { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.region-tab { padding: 12px 24px; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 15px; transition: all 0.3s; border: 2px solid transparent; }
+.region-tab:hover { transform: translateY(-2px); }
+.region-tab.active { border-color: currentColor; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+.region-tab[data-region="东区"] { background: rgba(59,130,246,0.2); color: #3b82f6; }
+.region-tab[data-region="南区"] { background: rgba(16,185,129,0.2); color: #10b981; }
+.region-tab[data-region="西区"] { background: rgba(245,158,11,0.2); color: #f59e0b; }
+.region-tab[data-region="北区"] { background: rgba(239,68,68,0.2); color: #ef4444; }
+.region-tab[data-region="all"] { background: rgba(148,163,184,0.2); color: #94a3b8; }
+.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat-card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+.stat-label { font-size: 13px; color: #94a3b8; }
+.stat-value { font-size: 32px; font-weight: 700; margin: 8px 0; }
+.stat-sub { font-size: 12px; color: #64748b; }
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+.chart-card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+.chart-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #e2e8f0; }
+.agents-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.agent-card { background: #1e293b; border-radius: 12px; padding: 16px; border: 1px solid #334155; transition: all 0.3s; }
+.agent-card:hover { border-color: #475569; transform: translateY(-2px); }
+.agent-name { font-weight: 600; margin-bottom: 8px; font-size: 14px; }
+.agent-stats { display: flex; gap: 20px; }
+.agent-stat-value { font-size: 22px; font-weight: 700; }
+.agent-stat-label { font-size: 11px; color: #64748b; }
+.table-card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 12px; text-align: left; border-bottom: 1px solid #334155; }
+th { color: #94a3b8; font-weight: 600; font-size: 13px; }
+.badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+.trend-up { background: rgba(16,185,129,0.2); color: #10b981; }
+.trend-down { background: rgba(239,68,68,0.2); color: #ef4444; }
+@media (max-width: 768px) { .stats-row, .charts-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <h1>高视业务看板</h1>
+    <div class="subtitle">2024-10 - 2026-05 | 数据截至 2026-05-16 10:04</div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="region-tabs" id="regionTabs"><div class="region-tab active" data-region="all" onclick="selectRegion('all')">全部区域</div><div class="region-tab" data-region="东区" onclick="selectRegion('东区')">东区</div><div class="region-tab" data-region="南区" onclick="selectRegion('南区')">南区</div><div class="region-tab" data-region="西区" onclick="selectRegion('西区')">西区</div><div class="region-tab" data-region="北区" onclick="selectRegion('北区')">北区</div></div>
+  <div class="stats-row" id="statsRow"></div>
+  <div class="charts-row">
+    <div class="chart-card"><div class="chart-title">订单占比</div><canvas id="pieChart" height="200"></canvas></div>
+    <div class="chart-card"><div class="chart-title">月度趋势</div><canvas id="trendChart" height="200"></canvas></div>
+  </div>
+  <div class="chart-card" style="margin-bottom:24px"><div class="chart-title">代理商排名</div><div class="agents-grid" id="agentsGrid"></div></div>
+  <div class="table-card">
+    <div class="chart-title">代理商明细表</div>
+    <table><thead><tr><th>排名</th><th>区域</th><th>代理商</th><th>总订单</th><th>近3月</th><th>趋势</th><th>占比</th></tr></thead>
+    <tbody id="agentTable"><tr>
+            <td>1</td>
+            <td><span style="color:#10b981">南区</span></td>
+            <td>深圳市视力康眼健康有限公司</td>
+            <td>2555.0</td>
+            <td>824.0</td>
+            <td><span class="badge trend-up">+24%</span></td>
+            <td>29%</td>
+        </tr><tr>
+            <td>2</td>
+            <td><span style="color:#ef4444">北区</span></td>
+            <td>尧视共创（北京）科技有限公司</td>
+            <td>1389.0</td>
+            <td>331.0</td>
+            <td><span class="badge trend-down">-42%</span></td>
+            <td>16%</td>
+        </tr><tr>
+            <td>3</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>长沙新辰医疗器械有限公司</td>
+            <td>905.0</td>
+            <td>392.0</td>
+            <td><span class="badge trend-up">+26%</span></td>
+            <td>10%</td>
+        </tr><tr>
+            <td>4</td>
+            <td><span style="color:#ef4444">北区</span></td>
+            <td>黑龙江方圆科技有限公司</td>
+            <td>710.0</td>
+            <td>163.0</td>
+            <td><span class="badge trend-down">-34%</span></td>
+            <td>8%</td>
+        </tr><tr>
+            <td>5</td>
+            <td><span style="color:#ef4444">北区</span></td>
+            <td>沈阳悦目星禾科技有限公司</td>
+            <td>375.0</td>
+            <td>291.0</td>
+            <td><span class="badge trend-up">+299%</span></td>
+            <td>4%</td>
+        </tr><tr>
+            <td>6</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>浙江致信医药科技有限公司</td>
+            <td>351.0</td>
+            <td>106.0</td>
+            <td><span class="badge trend-down">-2%</span></td>
+            <td>4%</td>
+        </tr><tr>
+            <td>7</td>
+            <td><span style="color:#10b981">南区</span></td>
+            <td>昆明明德科技有限公司</td>
+            <td>305.0</td>
+            <td>21.0</td>
+            <td><span class="badge trend-down">-48%</span></td>
+            <td>3%</td>
+        </tr><tr>
+            <td>8</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>上海戛桦</td>
+            <td>295.0</td>
+            <td>113.0</td>
+            <td><span class="badge trend-up">+28%</span></td>
+            <td>3%</td>
+        </tr><tr>
+            <td>9</td>
+            <td><span style="color:#ef4444">北区</span></td>
+            <td>石家庄嘉悦润视光学科技有限公司</td>
+            <td>284.0</td>
+            <td>138.0</td>
+            <td><span class="badge trend-up">+10%</span></td>
+            <td>3%</td>
+        </tr><tr>
+            <td>10</td>
+            <td><span style="color:#10b981">南区</span></td>
+            <td>厦门华厦视光中心有限公司</td>
+            <td>267.0</td>
+            <td>113.0</td>
+            <td><span class="badge trend-down">-9%</span></td>
+            <td>3%</td>
+        </tr><tr>
+            <td>11</td>
+            <td><span style="color:#f59e0b">西区</span></td>
+            <td>西安美镜诚</td>
+            <td>252.0</td>
+            <td>123.0</td>
+            <td><span class="badge trend-down">-4%</span></td>
+            <td>3%</td>
+        </tr><tr>
+            <td>12</td>
+            <td><span style="color:#ef4444">北区</span></td>
+            <td>青岛蓝健医疗科技有限公司</td>
+            <td>199.0</td>
+            <td>33.0</td>
+            <td><span class="badge trend-up">+50%</span></td>
+            <td>2%</td>
+        </tr><tr>
+            <td>13</td>
+            <td><span style="color:#ef4444">北区</span></td>
+            <td>吉林省翔渲商贸有限公司</td>
+            <td>147.0</td>
+            <td>27.0</td>
+            <td><span class="badge trend-down">-32%</span></td>
+            <td>2%</td>
+        </tr><tr>
+            <td>14</td>
+            <td><span style="color:#10b981">南区</span></td>
+            <td>武汉亿祥昊医疗器械有限公司</td>
+            <td>138.0</td>
+            <td>48.0</td>
+            <td><span class="badge trend-down">-36%</span></td>
+            <td>2%</td>
+        </tr><tr>
+            <td>15</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>上海聚势医药科技有限公司</td>
+            <td>136.0</td>
+            <td>17.0</td>
+            <td><span class="badge trend-up">+112%</span></td>
+            <td>2%</td>
+        </tr><tr>
+            <td>16</td>
+            <td><span style="color:#f59e0b">西区</span></td>
+            <td>陕西博美乐贸易有限公司</td>
+            <td>131.0</td>
+            <td>25.0</td>
+            <td><span class="badge trend-down">-43%</span></td>
+            <td>1%</td>
+        </tr><tr>
+            <td>17</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>河南眼视康</td>
+            <td>70.0</td>
+            <td>15.0</td>
+            <td><span class="badge trend-down">-42%</span></td>
+            <td>1%</td>
+        </tr><tr>
+            <td>18</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>南京嘉泽智丰光学有限公司</td>
+            <td>59.0</td>
+            <td>11.0</td>
+            <td><span class="badge trend-up">+1000%</span></td>
+            <td>1%</td>
+        </tr><tr>
+            <td>19</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>南京博德眼科医院</td>
+            <td>50.0</td>
+            <td>1.0</td>
+            <td><span class="badge trend-down">-67%</span></td>
+            <td>1%</td>
+        </tr><tr>
+            <td>20</td>
+            <td><span style="color:#ef4444">北区</span></td>
+            <td>药希望（天津）科技有限公司</td>
+            <td>42.0</td>
+            <td>11.0</td>
+            <td><span class="badge trend-up">+175%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>21</td>
+            <td><span style="color:#f59e0b">西区</span></td>
+            <td>凌渡（西安）医疗管理有限责任公司</td>
+            <td>39.0</td>
+            <td>10.0</td>
+            <td><span class="badge trend-up">+400%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>22</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>上海瞳恩欣医疗科技有限公司</td>
+            <td>25.0</td>
+            <td>0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>23</td>
+            <td><span style="color:#94a3b8">内部</span></td>
+            <td>内购订单</td>
+            <td>19.0</td>
+            <td>1.0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>24</td>
+            <td><span style="color:#10b981">南区</span></td>
+            <td>海南安适明</td>
+            <td>18.0</td>
+            <td>0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>25</td>
+            <td><span style="color:#10b981">南区</span></td>
+            <td>珠海科宏医疗器械有限公司</td>
+            <td>16.0</td>
+            <td>8.0</td>
+            <td><span class="badge trend-up">+300%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>26</td>
+            <td><span style="color:#ef4444">北区</span></td>
+            <td>北京东方拓普</td>
+            <td>11.0</td>
+            <td>0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>27</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>河南初玖医疗科技有限公司</td>
+            <td>10.0</td>
+            <td>2.0</td>
+            <td><span class="badge trend-down">-33%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>28</td>
+            <td><span style="color:#ef4444">北区</span></td>
+            <td>山东瞳康</td>
+            <td>6.0</td>
+            <td>0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>29</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>河南强晟</td>
+            <td>6.0</td>
+            <td>0</td>
+            <td><span class="badge trend-down">-100%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>30</td>
+            <td><span style="color:#f59e0b">西区</span></td>
+            <td>新疆德康达因苏商贸有限公司</td>
+            <td>6.0</td>
+            <td>6.0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>31</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>上海视路</td>
+            <td>5.0</td>
+            <td>1.0</td>
+            <td><span class="badge trend-down">-75%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>32</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>上海医视路</td>
+            <td>5.0</td>
+            <td>3.0</td>
+            <td><span class="badge trend-up">+50%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>33</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>重庆博萃医疗器械有限公司</td>
+            <td>3.0</td>
+            <td>0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>34</td>
+            <td><span style="color:#f59e0b">西区</span></td>
+            <td>宁夏朗洁</td>
+            <td>3.0</td>
+            <td>3.0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>35</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>武汉天视宏医疗器械有限公司</td>
+            <td>3.0</td>
+            <td>3.0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>36</td>
+            <td><span style="color:#10b981">南区</span></td>
+            <td>广州云景商贸</td>
+            <td>2.0</td>
+            <td>0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>37</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>成都锦牧加</td>
+            <td>2.0</td>
+            <td>1.0</td>
+            <td><span class="badge trend-up">+0%</span></td>
+            <td>0%</td>
+        </tr><tr>
+            <td>38</td>
+            <td><span style="color:#3b82f6">东区</span></td>
+            <td>苏州凌成科技发展有限公司</td>
+            <td>1.0</td>
+            <td>0</td>
+            <td><span class="badge trend-down">-100%</span></td>
+            <td>0%</td>
+        </tr></tbody></table>
+  </div>
+</div>
+
+<script>
+const regionData = {"东区": {"total": 1926.0, "months": {"2024-10": 3.0, "2024-11": 10.0, "2024-12": 7.0, "2025-01": 3.0, "2025-02": 6.0, "2025-03": 6.0, "2025-05": 5.0, "2025-12": 137.0, "2026-01": 125.0, "2026-03": 316.0, "2025-08": 114.0, "2025-09": 86.0, "2025-10": 173.0, "2025-11": 200.0, "2026-02": 295.0, "2026-04": 217.0, "2026-05": 132.0, "2025-04": 4.0, "2025-06": 36.0, "2025-07": 51.0}, "agents": [{"name": "上海瞳恩欣医疗科技有限公司", "total": 25.0, "months": {"2024-10": 3.0, "2024-11": 8.0, "2024-12": 4.0, "2025-01": 3.0, "2025-02": 4.0, "2025-03": 2.0, "2025-05": 1.0}}, {"name": "河南初玖医疗科技有限公司", "total": 10.0, "months": {"2024-11": 2.0, "2024-12": 3.0, "2025-12": 1.0, "2026-01": 2.0, "2026-03": 2.0}}, {"name": "浙江致信医药科技有限公司", "total": 351.0, "months": {"2025-02": 2.0, "2025-03": 2.0, "2025-08": 21.0, "2025-09": 16.0, "2025-10": 25.0, "2025-11": 71.0, "2025-12": 30.0, "2026-01": 27.0, "2026-02": 51.0, "2026-03": 65.0, "2026-04": 31.0, "2026-05": 10.0}}, {"name": "重庆博萃医疗器械有限公司", "total": 3.0, "months": {"2025-03": 2.0, "2025-10": 1.0}}, {"name": "上海聚势医药科技有限公司", "total": 136.0, "months": {"2025-04": 4.0, "2025-05": 4.0, "2025-06": 36.0, "2025-07": 28.0, "2025-08": 32.0, "2025-09": 4.0, "2025-11": 3.0, "2025-12": 2.0, "2026-01": 2.0, "2026-02": 4.0, "2026-03": 9.0, "2026-04": 7.0, "2026-05": 1.0}}, {"name": "南京嘉泽智丰光学有限公司", "total": 59.0, "months": {"2025-07": 14.0, "2025-08": 22.0, "2025-09": 4.0, "2025-10": 5.0, "2025-11": 2.0, "2026-02": 1.0, "2026-03": 8.0, "2026-04": 3.0}}, {"name": "南京博德眼科医院", "total": 50.0, "months": {"2025-07": 9.0, "2025-08": 14.0, "2025-09": 12.0, "2025-10": 8.0, "2025-11": 3.0, "2025-12": 1.0, "2026-01": 1.0, "2026-02": 1.0, "2026-03": 1.0}}, {"name": "长沙新辰医疗器械有限公司", "total": 905.0, "months": {"2025-08": 25.0, "2025-09": 38.0, "2025-10": 83.0, "2025-11": 56.0, "2025-12": 69.0, "2026-01": 72.0, "2026-02": 170.0, "2026-03": 170.0, "2026-04": 135.0, "2026-05": 87.0}}, {"name": "河南眼视康", "total": 70.0, "months": {"2025-09": 9.0, "2025-10": 12.0, "2025-11": 8.0, "2025-12": 12.0, "2026-01": 2.0, "2026-02": 12.0, "2026-03": 6.0, "2026-04": 7.0, "2026-05": 2.0}}, {"name": "上海戛桦", "total": 295.0, "months": {"2025-09": 3.0, "2025-10": 39.0, "2025-11": 52.0, "2025-12": 20.0, "2026-01": 15.0, "2026-02": 53.0, "2026-03": 53.0, "2026-04": 32.0, "2026-05": 28.0}}, {"name": "河南强晟", "total": 6.0, "months": {"2025-11": 4.0, "2025-12": 1.0, "2026-01": 1.0}}, {"name": "成都锦牧加", "total": 2.0, "months": {"2025-11": 1.0, "2026-04": 1.0}}, {"name": "上海视路", "total": 5.0, "months": {"2025-12": 1.0, "2026-01": 2.0, "2026-02": 1.0, "2026-03": 1.0}}, {"name": "苏州凌成科技发展有限公司", "total": 1.0, "months": {"2026-01": 1.0}}, {"name": "上海医视路", "total": 5.0, "months": {"2026-02": 2.0, "2026-03": 1.0, "2026-04": 1.0, "2026-05": 1.0}}, {"name": "武汉天视宏医疗器械有限公司", "total": 3.0, "months": {"2026-05": 3.0}}]}, "北区": {"total": 3163.0, "months": {"2024-10": 3.0, "2024-11": 11.0, "2024-12": 5.0, "2025-01": 9.0, "2025-02": 26.0, "2025-03": 31.0, "2025-04": 19.0, "2025-05": 41.0, "2025-06": 28.0, "2025-07": 68.0, "2025-08": 157.0, "2025-09": 115.0, "2025-10": 294.0, "2025-11": 285.0, "2025-12": 284.0, "2026-01": 320.0, "2026-02": 473.0, "2026-03": 500.0, "2026-04": 321.0, "2026-05": 173.0}, "agents": [{"name": "黑龙江方圆科技有限公司", "total": 710.0, "months": {"2024-10": 1.0, "2024-11": 7.0, "2024-12": 3.0, "2025-01": 9.0, "2025-02": 26.0, "2025-03": 17.0, "2025-04": 8.0, "2025-05": 18.0, "2025-06": 8.0, "2025-07": 15.0, "2025-08": 46.0, "2025-09": 13.0, "2025-10": 74.0, "2025-11": 56.0, "2025-12": 62.0, "2026-01": 105.0, "2026-02": 79.0, "2026-03": 69.0, "2026-04": 60.0, "2026-05": 34.0}}, {"name": "沈阳悦目星禾科技有限公司", "total": 375.0, "months": {"2024-10": 2.0, "2024-11": 4.0, "2024-12": 2.0, "2025-08": 1.0, "2025-11": 2.0, "2025-12": 6.0, "2026-01": 9.0, "2026-02": 58.0, "2026-03": 147.0, "2026-04": 102.0, "2026-05": 42.0}}, {"name": "药希望（天津）科技有限公司", "total": 42.0, "months": {"2025-03": 12.0, "2025-04": 3.0, "2025-06": 2.0, "2025-08": 4.0, "2025-09": 2.0, "2025-10": 2.0, "2025-11": 2.0, "2026-01": 2.0, "2026-02": 2.0, "2026-03": 8.0, "2026-04": 1.0, "2026-05": 2.0}}, {"name": "吉林省翔渲商贸有限公司", "total": 147.0, "months": {"2025-03": 2.0, "2025-04": 6.0, "2025-05": 4.0, "2025-07": 6.0, "2025-08": 34.0, "2025-09": 6.0, "2025-10": 10.0, "2025-11": 12.0, "2025-12": 5.0, "2026-01": 14.0, "2026-02": 21.0, "2026-03": 13.0, "2026-04": 13.0, "2026-05": 1.0}}, {"name": "青岛蓝健医疗科技有限公司", "total": 199.0, "months": {"2025-04": 2.0, "2025-05": 19.0, "2025-06": 15.0, "2025-07": 33.0, "2025-08": 47.0, "2025-09": 11.0, "2025-10": 9.0, "2025-11": 8.0, "2025-12": 9.0, "2026-01": 2.0, "2026-02": 11.0, "2026-03": 17.0, "2026-04": 5.0, "2026-05": 11.0}}, {"name": "北京东方拓普", "total": 11.0, "months": {"2025-06": 1.0, "2025-07": 6.0, "2025-08": 2.0, "2025-10": 2.0}}, {"name": "尧视共创（北京）科技有限公司", "total": 1389.0, "months": {"2025-06": 2.0, "2025-07": 3.0, "2025-08": 17.0, "2025-09": 80.0, "2025-10": 189.0, "2025-11": 201.0, "2025-12": 186.0, "2026-01": 171.0, "2026-02": 209.0, "2026-03": 166.0, "2026-04": 101.0, "2026-05": 64.0}}, {"name": "石家庄嘉悦润视光学科技有限公司", "total": 284.0, "months": {"2025-07": 3.0, "2025-08": 6.0, "2025-09": 3.0, "2025-10": 4.0, "2025-11": 4.0, "2025-12": 16.0, "2026-01": 17.0, "2026-02": 93.0, "2026-03": 80.0, "2026-04": 39.0, "2026-05": 19.0}}, {"name": "山东瞳康", "total": 6.0, "months": {"2025-07": 2.0, "2025-10": 4.0}}]}, "南区": {"total": 3301.0, "months": {"2024-11": 4.0, "2024-12": 12.0, "2025-01": 2.0, "2025-02": 39.0, "2025-03": 36.0, "2025-04": 19.0, "2025-05": 59.0, "2025-06": 70.0, "2025-07": 164.0, "2025-08": 325.0, "2025-09": 173.0, "2025-10": 268.0, "2025-11": 210.0, "2025-12": 200.0, "2026-01": 224.0, "2026-02": 482.0, "2026-03": 431.0, "2026-04": 351.0, "2026-05": 232.0}, "agents": [{"name": "昆明明德科技有限公司", "total": 305.0, "months": {"2024-11": 4.0, "2024-12": 12.0, "2025-01": 2.0, "2025-02": 39.0, "2025-03": 34.0, "2025-04": 13.0, "2025-05": 25.0, "2025-06": 18.0, "2025-07": 14.0, "2025-08": 48.0, "2025-09": 24.0, "2025-10": 5.0, "2025-11": 6.0, "2025-12": 6.0, "2026-01": 4.0, "2026-02": 30.0, "2026-03": 13.0, "2026-04": 6.0, "2026-05": 2.0}}, {"name": "海南安适明", "total": 18.0, "months": {"2025-03": 2.0, "2025-04": 4.0, "2025-05": 12.0}}, {"name": "广州云景商贸", "total": 2.0, "months": {"2025-04": 2.0}}, {"name": "深圳市视力康眼健康有限公司", "total": 2555.0, "months": {"2025-05": 22.0, "2025-06": 48.0, "2025-07": 148.0, "2025-08": 277.0, "2025-09": 147.0, "2025-10": 252.0, "2025-11": 172.0, "2025-12": 148.0, "2026-01": 178.0, "2026-02": 339.0, "2026-03": 338.0, "2026-04": 288.0, "2026-05": 198.0}}, {"name": "珠海科宏医疗器械有限公司", "total": 16.0, "months": {"2025-06": 4.0, "2025-07": 2.0, "2026-02": 2.0, "2026-03": 1.0, "2026-04": 7.0}}, {"name": "厦门华厦视光中心有限公司", "total": 267.0, "months": {"2025-09": 2.0, "2025-10": 8.0, "2025-11": 20.0, "2025-12": 34.0, "2026-01": 34.0, "2026-02": 56.0, "2026-03": 46.0, "2026-04": 38.0, "2026-05": 29.0}}, {"name": "武汉亿祥昊医疗器械有限公司", "total": 138.0, "months": {"2025-10": 3.0, "2025-11": 12.0, "2025-12": 12.0, "2026-01": 8.0, "2026-02": 55.0, "2026-03": 33.0, "2026-04": 12.0, "2026-05": 3.0}}]}, "西区": {"total": 431.0, "months": {"2025-05": 2.0, "2025-06": 2.0, "2025-07": 16.0, "2025-08": 51.0, "2025-09": 4.0, "2025-10": 9.0, "2025-11": 6.0, "2026-02": 126.0, "2026-03": 67.0, "2026-04": 58.0, "2025-12": 16.0, "2026-01": 32.0, "2026-05": 42.0}, "agents": [{"name": "凌渡（西安）医疗管理有限责任公司", "total": 39.0, "months": {"2025-05": 2.0, "2025-06": 2.0, "2025-07": 4.0, "2025-08": 13.0, "2025-09": 2.0, "2025-10": 2.0, "2025-11": 2.0, "2026-02": 2.0, "2026-03": 6.0, "2026-04": 4.0}}, {"name": "陕西博美乐贸易有限公司", "total": 131.0, "months": {"2025-07": 12.0, "2025-08": 38.0, "2025-09": 2.0, "2025-10": 7.0, "2025-11": 3.0, "2025-12": 14.0, "2026-01": 4.0, "2026-02": 26.0, "2026-03": 13.0, "2026-04": 6.0, "2026-05": 6.0}}, {"name": "西安美镜诚", "total": 252.0, "months": {"2025-11": 1.0, "2025-12": 2.0, "2026-01": 28.0, "2026-02": 98.0, "2026-03": 43.0, "2026-04": 45.0, "2026-05": 35.0}}, {"name": "新疆德康达因苏商贸有限公司", "total": 6.0, "months": {"2026-03": 3.0, "2026-04": 2.0, "2026-05": 1.0}}, {"name": "宁夏朗洁", "total": 3.0, "months": {"2026-03": 2.0, "2026-04": 1.0}}]}};
+const regionColors = {"\u4e1c\u533a": "#3b82f6", "\u5357\u533a": "#10b981", "\u897f\u533a": "#f59e0b", "\u5317\u533a": "#ef4444"};
+const months = ["2024-10", "2024-11", "2024-12", "2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12", "2026-01", "2026-02", "2026-03", "2026-04", "2026-05"];
+const allAgents = [{"name": "深圳市视力康眼健康有限公司", "total": 2555.0, "months": {"2025-05": 22.0, "2025-06": 48.0, "2025-07": 148.0, "2025-08": 277.0, "2025-09": 147.0, "2025-10": 252.0, "2025-11": 172.0, "2025-12": 148.0, "2026-01": 178.0, "2026-02": 339.0, "2026-03": 338.0, "2026-04": 288.0, "2026-05": 198.0}, "region": "南区"}, {"name": "尧视共创（北京）科技有限公司", "total": 1389.0, "months": {"2025-06": 2.0, "2025-07": 3.0, "2025-08": 17.0, "2025-09": 80.0, "2025-10": 189.0, "2025-11": 201.0, "2025-12": 186.0, "2026-01": 171.0, "2026-02": 209.0, "2026-03": 166.0, "2026-04": 101.0, "2026-05": 64.0}, "region": "北区"}, {"name": "长沙新辰医疗器械有限公司", "total": 905.0, "months": {"2025-08": 25.0, "2025-09": 38.0, "2025-10": 83.0, "2025-11": 56.0, "2025-12": 69.0, "2026-01": 72.0, "2026-02": 170.0, "2026-03": 170.0, "2026-04": 135.0, "2026-05": 87.0}, "region": "东区"}, {"name": "黑龙江方圆科技有限公司", "total": 710.0, "months": {"2024-10": 1.0, "2024-11": 7.0, "2024-12": 3.0, "2025-01": 9.0, "2025-02": 26.0, "2025-03": 17.0, "2025-04": 8.0, "2025-05": 18.0, "2025-06": 8.0, "2025-07": 15.0, "2025-08": 46.0, "2025-09": 13.0, "2025-10": 74.0, "2025-11": 56.0, "2025-12": 62.0, "2026-01": 105.0, "2026-02": 79.0, "2026-03": 69.0, "2026-04": 60.0, "2026-05": 34.0}, "region": "北区"}, {"name": "沈阳悦目星禾科技有限公司", "total": 375.0, "months": {"2024-10": 2.0, "2024-11": 4.0, "2024-12": 2.0, "2025-08": 1.0, "2025-11": 2.0, "2025-12": 6.0, "2026-01": 9.0, "2026-02": 58.0, "2026-03": 147.0, "2026-04": 102.0, "2026-05": 42.0}, "region": "北区"}, {"name": "浙江致信医药科技有限公司", "total": 351.0, "months": {"2025-02": 2.0, "2025-03": 2.0, "2025-08": 21.0, "2025-09": 16.0, "2025-10": 25.0, "2025-11": 71.0, "2025-12": 30.0, "2026-01": 27.0, "2026-02": 51.0, "2026-03": 65.0, "2026-04": 31.0, "2026-05": 10.0}, "region": "东区"}, {"name": "昆明明德科技有限公司", "total": 305.0, "months": {"2024-11": 4.0, "2024-12": 12.0, "2025-01": 2.0, "2025-02": 39.0, "2025-03": 34.0, "2025-04": 13.0, "2025-05": 25.0, "2025-06": 18.0, "2025-07": 14.0, "2025-08": 48.0, "2025-09": 24.0, "2025-10": 5.0, "2025-11": 6.0, "2025-12": 6.0, "2026-01": 4.0, "2026-02": 30.0, "2026-03": 13.0, "2026-04": 6.0, "2026-05": 2.0}, "region": "南区"}, {"name": "上海戛桦", "total": 295.0, "months": {"2025-09": 3.0, "2025-10": 39.0, "2025-11": 52.0, "2025-12": 20.0, "2026-01": 15.0, "2026-02": 53.0, "2026-03": 53.0, "2026-04": 32.0, "2026-05": 28.0}, "region": "东区"}, {"name": "石家庄嘉悦润视光学科技有限公司", "total": 284.0, "months": {"2025-07": 3.0, "2025-08": 6.0, "2025-09": 3.0, "2025-10": 4.0, "2025-11": 4.0, "2025-12": 16.0, "2026-01": 17.0, "2026-02": 93.0, "2026-03": 80.0, "2026-04": 39.0, "2026-05": 19.0}, "region": "北区"}, {"name": "厦门华厦视光中心有限公司", "total": 267.0, "months": {"2025-09": 2.0, "2025-10": 8.0, "2025-11": 20.0, "2025-12": 34.0, "2026-01": 34.0, "2026-02": 56.0, "2026-03": 46.0, "2026-04": 38.0, "2026-05": 29.0}, "region": "南区"}, {"name": "西安美镜诚", "total": 252.0, "months": {"2025-11": 1.0, "2025-12": 2.0, "2026-01": 28.0, "2026-02": 98.0, "2026-03": 43.0, "2026-04": 45.0, "2026-05": 35.0}, "region": "西区"}, {"name": "青岛蓝健医疗科技有限公司", "total": 199.0, "months": {"2025-04": 2.0, "2025-05": 19.0, "2025-06": 15.0, "2025-07": 33.0, "2025-08": 47.0, "2025-09": 11.0, "2025-10": 9.0, "2025-11": 8.0, "2025-12": 9.0, "2026-01": 2.0, "2026-02": 11.0, "2026-03": 17.0, "2026-04": 5.0, "2026-05": 11.0}, "region": "北区"}, {"name": "吉林省翔渲商贸有限公司", "total": 147.0, "months": {"2025-03": 2.0, "2025-04": 6.0, "2025-05": 4.0, "2025-07": 6.0, "2025-08": 34.0, "2025-09": 6.0, "2025-10": 10.0, "2025-11": 12.0, "2025-12": 5.0, "2026-01": 14.0, "2026-02": 21.0, "2026-03": 13.0, "2026-04": 13.0, "2026-05": 1.0}, "region": "北区"}, {"name": "武汉亿祥昊医疗器械有限公司", "total": 138.0, "months": {"2025-10": 3.0, "2025-11": 12.0, "2025-12": 12.0, "2026-01": 8.0, "2026-02": 55.0, "2026-03": 33.0, "2026-04": 12.0, "2026-05": 3.0}, "region": "南区"}, {"name": "上海聚势医药科技有限公司", "total": 136.0, "months": {"2025-04": 4.0, "2025-05": 4.0, "2025-06": 36.0, "2025-07": 28.0, "2025-08": 32.0, "2025-09": 4.0, "2025-11": 3.0, "2025-12": 2.0, "2026-01": 2.0, "2026-02": 4.0, "2026-03": 9.0, "2026-04": 7.0, "2026-05": 1.0}, "region": "东区"}, {"name": "陕西博美乐贸易有限公司", "total": 131.0, "months": {"2025-07": 12.0, "2025-08": 38.0, "2025-09": 2.0, "2025-10": 7.0, "2025-11": 3.0, "2025-12": 14.0, "2026-01": 4.0, "2026-02": 26.0, "2026-03": 13.0, "2026-04": 6.0, "2026-05": 6.0}, "region": "西区"}, {"name": "河南眼视康", "total": 70.0, "months": {"2025-09": 9.0, "2025-10": 12.0, "2025-11": 8.0, "2025-12": 12.0, "2026-01": 2.0, "2026-02": 12.0, "2026-03": 6.0, "2026-04": 7.0, "2026-05": 2.0}, "region": "东区"}, {"name": "南京嘉泽智丰光学有限公司", "total": 59.0, "months": {"2025-07": 14.0, "2025-08": 22.0, "2025-09": 4.0, "2025-10": 5.0, "2025-11": 2.0, "2026-02": 1.0, "2026-03": 8.0, "2026-04": 3.0}, "region": "东区"}, {"name": "南京博德眼科医院", "total": 50.0, "months": {"2025-07": 9.0, "2025-08": 14.0, "2025-09": 12.0, "2025-10": 8.0, "2025-11": 3.0, "2025-12": 1.0, "2026-01": 1.0, "2026-02": 1.0, "2026-03": 1.0}, "region": "东区"}, {"name": "药希望（天津）科技有限公司", "total": 42.0, "months": {"2025-03": 12.0, "2025-04": 3.0, "2025-06": 2.0, "2025-08": 4.0, "2025-09": 2.0, "2025-10": 2.0, "2025-11": 2.0, "2026-01": 2.0, "2026-02": 2.0, "2026-03": 8.0, "2026-04": 1.0, "2026-05": 2.0}, "region": "北区"}, {"name": "凌渡（西安）医疗管理有限责任公司", "total": 39.0, "months": {"2025-05": 2.0, "2025-06": 2.0, "2025-07": 4.0, "2025-08": 13.0, "2025-09": 2.0, "2025-10": 2.0, "2025-11": 2.0, "2026-02": 2.0, "2026-03": 6.0, "2026-04": 4.0}, "region": "西区"}, {"name": "上海瞳恩欣医疗科技有限公司", "total": 25.0, "months": {"2024-10": 3.0, "2024-11": 8.0, "2024-12": 4.0, "2025-01": 3.0, "2025-02": 4.0, "2025-03": 2.0, "2025-05": 1.0}, "region": "东区"}, {"name": "内购订单", "total": 19.0, "months": {"2024-11": 1.0, "2024-12": 1.0, "2025-01": 2.0, "2025-02": 5.0, "2025-03": 2.0, "2025-05": 2.0, "2025-08": 3.0, "2025-09": 1.0, "2025-12": 1.0, "2026-04": 1.0}, "region": "内部"}, {"name": "海南安适明", "total": 18.0, "months": {"2025-03": 2.0, "2025-04": 4.0, "2025-05": 12.0}, "region": "南区"}, {"name": "珠海科宏医疗器械有限公司", "total": 16.0, "months": {"2025-06": 4.0, "2025-07": 2.0, "2026-02": 2.0, "2026-03": 1.0, "2026-04": 7.0}, "region": "南区"}, {"name": "北京东方拓普", "total": 11.0, "months": {"2025-06": 1.0, "2025-07": 6.0, "2025-08": 2.0, "2025-10": 2.0}, "region": "北区"}, {"name": "河南初玖医疗科技有限公司", "total": 10.0, "months": {"2024-11": 2.0, "2024-12": 3.0, "2025-12": 1.0, "2026-01": 2.0, "2026-03": 2.0}, "region": "东区"}, {"name": "山东瞳康", "total": 6.0, "months": {"2025-07": 2.0, "2025-10": 4.0}, "region": "北区"}, {"name": "河南强晟", "total": 6.0, "months": {"2025-11": 4.0, "2025-12": 1.0, "2026-01": 1.0}, "region": "东区"}, {"name": "新疆德康达因苏商贸有限公司", "total": 6.0, "months": {"2026-03": 3.0, "2026-04": 2.0, "2026-05": 1.0}, "region": "西区"}, {"name": "上海视路", "total": 5.0, "months": {"2025-12": 1.0, "2026-01": 2.0, "2026-02": 1.0, "2026-03": 1.0}, "region": "东区"}, {"name": "上海医视路", "total": 5.0, "months": {"2026-02": 2.0, "2026-03": 1.0, "2026-04": 1.0, "2026-05": 1.0}, "region": "东区"}, {"name": "重庆博萃医疗器械有限公司", "total": 3.0, "months": {"2025-03": 2.0, "2025-10": 1.0}, "region": "东区"}, {"name": "宁夏朗洁", "total": 3.0, "months": {"2026-03": 2.0, "2026-04": 1.0}, "region": "西区"}, {"name": "武汉天视宏医疗器械有限公司", "total": 3.0, "months": {"2026-05": 3.0}, "region": "东区"}, {"name": "广州云景商贸", "total": 2.0, "months": {"2025-04": 2.0}, "region": "南区"}, {"name": "成都锦牧加", "total": 2.0, "months": {"2025-11": 1.0, "2026-04": 1.0}, "region": "东区"}, {"name": "苏州凌成科技发展有限公司", "total": 1.0, "months": {"2026-01": 1.0}, "region": "东区"}];
+
+let currentRegion = 'all';
+let pieChart, trendChart;
+
+function selectRegion(region) {
+    currentRegion = region;
+    document.querySelectorAll('.region-tab').forEach(t => t.classList.toggle('active', t.dataset.region === region));
+    updateDashboard();
+}
+
+function getAgents() {
+    if (currentRegion === 'all') return allAgents;
+    return (regionData[currentRegion]?.agents || []).map(a => ({...a, region: currentRegion}));
+}
+
+function updateDashboard() {
+    const agents = getAgents();
+    const totalOrders = agents.reduce((s, a) => s + a.total, 0);
+    const recent3 = months.slice(-3);
+    const recentOrders = agents.reduce((s, a) => s + recent3.reduce((ss, m) => ss + (a.months[m] || 0), 0), 0);
+    const prev3 = months.slice(-6, -3);
+    const prevOrders = agents.reduce((s, a) => s + prev3.reduce((ss, m) => ss + (a.months[m] || 0), 0), 0);
+    const trend = prevOrders > 0 ? Math.round((recentOrders - prevOrders) / prevOrders * 100) : 0;
+
+    document.getElementById('statsRow').innerHTML = `
+        <div class="stat-card"><div class="stat-label">总订单数</div><div class="stat-value">${totalOrders.toLocaleString()}</div><div class="stat-sub">${currentRegion === 'all' ? '全部区域' : currentRegion}</div></div>
+        <div class="stat-card"><div class="stat-label">代理商数</div><div class="stat-value">${agents.length}</div><div class="stat-sub">活跃客户</div></div>
+        <div class="stat-card"><div class="stat-label">近3月订单</div><div class="stat-value">${recentOrders.toLocaleString()}</div><div class="stat-sub">最近3个月</div></div>
+        <div class="stat-card"><div class="stat-label">环比趋势</div><div class="stat-value" style="color:${trend >= 0 ? '#10b981' : '#ef4444'}">${trend >= 0 ? '+' : ''}${trend}%</div><div class="stat-sub">vs 前3月</div></div>
+    `;
+
+    // 饼图
+    if (pieChart) pieChart.destroy();
+    const pieData = currentRegion === 'all'
+        ? Object.entries(regionData).map(([r, d]) => ({label: r, value: d.total, color: regionColors[r]}))
+        : agents.sort((a, b) => b.total - a.total).slice(0, 8).map(a => ({label: a.name.substring(0, 6), value: a.total, color: regionColors[a.region]}));
+    pieChart = new Chart(document.getElementById('pieChart'), {
+        type: 'doughnut',
+        data: { labels: pieData.map(d => d.label), datasets: [{ data: pieData.map(d => d.value), backgroundColor: pieData.map(d => d.color) }] },
+        options: { responsive: true, plugins: { legend: { position: 'right', labels: { color: '#94a3b8' } } } }
+    });
+
+    // 趋势图
+    if (trendChart) trendChart.destroy();
+    if (currentRegion === 'all') {
+        trendChart = new Chart(document.getElementById('trendChart'), {
+            type: 'line',
+            data: { labels: months, datasets: Object.entries(regionData).map(([r, d]) => ({
+                label: r, data: months.map(m => d.months[m] || 0), borderColor: regionColors[r], tension: 0.4, borderWidth: 2
+            }))},
+            options: { responsive: true, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { ticks: { color: '#64748b' } }, y: { ticks: { color: '#64748b' } } } }
+        });
+    } else {
+        const topAgents = agents.sort((a, b) => b.total - a.total).slice(0, 5);
+        const colors = ['#38bdf8', '#818cf8', '#a78bfa', '#c084fc', '#e879f9'];
+        trendChart = new Chart(document.getElementById('trendChart'), {
+            type: 'line',
+            data: { labels: months, datasets: topAgents.map((a, i) => ({
+                label: a.name.substring(0, 6), data: months.map(m => a.months[m] || 0), borderColor: colors[i], tension: 0.4, borderWidth: 2
+            }))},
+            options: { responsive: true, plugins: { legend: { labels: { color: '#94a3b8' } } }, scales: { x: { ticks: { color: '#64748b' } }, y: { ticks: { color: '#64748b' } } } }
+        });
+    }
+
+    // 代理商卡片
+    document.getElementById('agentsGrid').innerHTML = agents.sort((a, b) => b.total - a.total).slice(0, 12).map(a => {
+        const recent = recent3.reduce((s, m) => s + (a.months[m] || 0), 0);
+        return `<div class="agent-card">
+            <div class="agent-name" style="color:${regionColors[a.region] || '#94a3b8'}">${a.name}</div>
+            <div class="agent-stats">
+                <div><div class="agent-stat-value">${a.total}</div><div class="agent-stat-label">总订单</div></div>
+                <div><div class="agent-stat-value">${recent}</div><div class="agent-stat-label">近3月</div></div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // 表格
+    document.getElementById('agentTable').innerHTML = agents.sort((a, b) => b.total - a.total).map((a, i) => {
+        const recent = recent3.reduce((s, m) => s + (a.months[m] || 0), 0);
+        const prev = prev3.reduce((s, m) => s + (a.months[m] || 0), 0);
+        const t = prev > 0 ? Math.round((recent - prev) / prev * 100) : 0;
+        const share = Math.round(a.total / totalOrders * 100);
+        return `<tr>
+            <td>${i + 1}</td>
+            <td><span style="color:${regionColors[a.region] || '#94a3b8'}">${a.region}</span></td>
+            <td>${a.name}</td>
+            <td>${a.total}</td>
+            <td>${recent}</td>
+            <td><span class="badge ${t >= 0 ? 'trend-up' : 'trend-down'}">${t >= 0 ? '+' : ''}${t}%</span></td>
+            <td>${share}%</td>
+        </tr>`;
+    }).join('');
+}
+
+updateDashboard();
+</script>
+</body>
+</html>

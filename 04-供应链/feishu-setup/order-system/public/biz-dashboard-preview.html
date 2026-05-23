@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>业务看板预览 · 高视星</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #f0f4f8; --surface: #fff; --border: #dde6ef;
+  --text: #1a2332; --text-2: #4a5568; --text-3: #8a9ab0;
+  --navy: #1A5276; --navy-dark: #0f3352; --navy-light: #2471a3;
+  --accent: #6c8cff; --gold: #ffd700; --orange: #ff8c42;
+  --green: #27ae60; --red: #e74c3c;
+  --shadow: 0 1px 3px rgba(26,82,118,0.08), 0 4px 16px rgba(26,82,118,0.05);
+  --radius: 16px; --font: 'Noto Sans SC', -apple-system, sans-serif;
+  --font-num: 'DM Mono', 'SF Mono', monospace;
+}
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+.topbar { background: var(--navy); height: 52px; display: flex; align-items: center; justify-content: space-between; padding: 0 1.5rem; position: sticky; top: 0; z-index: 100; }
+.topbar-brand { font-size: 0.85rem; font-weight: 700; color: #fff; letter-spacing: 2px; }
+.topbar-tabs { display: flex; }
+.tab-btn { padding: 0.5rem 1.5rem; font-size: 0.82rem; font-weight: 600; color: rgba(255,255,255,0.55); border: none; background: none; cursor: pointer; border-bottom: 3px solid transparent; }
+.tab-btn:hover { color: rgba(255,255,255,0.85); }
+.tab-btn.active { color: #fff; border-bottom-color: #f0a050; }
+.page { max-width: 1280px; margin: 0 auto; padding: 1.25rem 1.5rem 2rem; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 1.25rem; overflow: hidden; }
+.card-header { padding: 0.9rem 1.25rem 0.75rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+.card-title { font-size: 0.82rem; font-weight: 700; color: var(--navy-dark); }
+.card-sub { font-size: 0.7rem; color: var(--text-3); margin-top: 0.1rem; }
+.card-body { padding: 1.25rem; }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.1rem 1.25rem; }
+.kpi-label { font-size: 0.72rem; color: var(--text-3); margin-bottom: 0.5rem; font-weight: 500; }
+.kpi-value { font-size: 1.8rem; font-family: var(--font-num); font-weight: 500; color: var(--navy-dark); line-height: 1; }
+.kpi-value span { font-size: 0.82rem; font-family: var(--font); color: var(--text-3); margin-left: 0.2rem; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+.chart-box { height: 300px; }
+.board-table { width: 100%; border-collapse: collapse; }
+.board-table th { font-size: 0.65rem; letter-spacing: 0.07em; color: var(--text-3); font-weight: 500; padding: 0.6rem 1rem; text-align: left; border-bottom: 1px solid var(--border); background: #fafbfc; }
+.board-table th.r { text-align: right; }
+.board-table td { padding: 0.85rem 1rem; font-size: 0.8rem; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.board-table tr:last-child td { border-bottom: none; }
+.board-table tr:hover td { background: #f8fafc; }
+.td-r { text-align: right; font-family: var(--font-num); font-weight: 600; color: var(--navy-dark); }
+.filter-bar { display: flex; gap: 1rem; align-items: center; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.filter-bar label { font-size: 0.78rem; color: var(--text-2); font-weight: 500; }
+.filter-bar input, .filter-bar select { border: 1px solid var(--border); border-radius: 8px; padding: 0.45rem 0.75rem; font-size: 0.82rem; font-family: var(--font); }
+.filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: var(--navy-light); }
+.btn { padding: 0.45rem 1.2rem; background: var(--navy-light); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 0.82rem; font-weight: 600; }
+.btn:hover { background: var(--navy); }
+.tag { padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; }
+.tag-ka { background: #fef3c7; color: #92400e; }
+.progress-bar { width: 60px; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
+.progress-fill { height: 100%; border-radius: 3px; }
+@media (max-width: 768px) { .kpi-grid { grid-template-columns: 1fr 1fr; } .chart-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">高视星 · 业务看板</div>
+  <div class="topbar-tabs">
+    <button class="tab-btn active" onclick="switchTab('company')">公司看板</button>
+    <button class="tab-btn" onclick="switchTab('manager')">经理看板</button>
+    <button class="tab-btn" onclick="switchTab('agent')">代理商看板</button>
+  </div>
+</div>
+
+<!-- ══ 公司看板 ══ -->
+<div id="tab-company" class="tab-panel active">
+<div class="page">
+  <div class="filter-bar">
+    <label>起始</label><input type="date" value="2026-01-01">
+    <label>截止</label><input type="date" value="2026-05-16">
+    <button class="btn">查询</button>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">订单总量</div><div class="kpi-value">2,847<span>副</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">活跃代理商</div><div class="kpi-value">18<span>家</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">SKU数量</div><div class="kpi-value">7<span>种</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">月均订单</div><div class="kpi-value">569<span>副/月</span></div></div>
+  </div>
+  <div class="chart-grid">
+    <div class="card" style="margin-bottom:0"><div class="card-header"><div class="card-title">月度订单趋势</div></div><div class="card-body"><div class="chart-box" id="c-monthly"></div></div></div>
+    <div class="card" style="margin-bottom:0"><div class="card-header"><div class="card-title">SKU分布</div></div><div class="card-body"><div class="chart-box" id="c-sku"></div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">代理商排名 TOP10</div></div>
+    <table class="board-table"><thead><tr><th style="width:60px">排名</th><th>代理商</th><th class="r">订单量</th><th class="r" style="padding-right:1.25rem">占比</th></tr></thead>
+    <tbody id="c-agents"></tbody></table>
+  </div>
+  <div class="card">
+    <div class="card-header"><div><div class="card-title">大客户看板</div><div class="card-sub">手动标记的重点客户</div></div></div>
+    <table class="board-table"><thead><tr><th style="padding-left:1.25rem;width:60px">排名</th><th>客户</th><th>代理商</th><th class="r">订单量</th><th class="r" style="padding-right:1.25rem">占比</th></tr></thead>
+    <tbody id="c-ka"></tbody></table>
+  </div>
+</div>
+</div>
+
+<!-- ══ 经理看板 ══ -->
+<div id="tab-manager" class="tab-panel">
+<div class="page">
+  <div class="filter-bar">
+    <label>经理</label><select><option>王经理</option><option>李经理</option><option>张经理</option></select>
+    <label>起始</label><input type="date" value="2026-01-01">
+    <label>截止</label><input type="date" value="2026-05-16">
+    <button class="btn">查询</button>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">订单总量</div><div class="kpi-value">1,234<span>副</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">负责代理商</div><div class="kpi-value">8<span>家</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">SKU数量</div><div class="kpi-value">7<span>种</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">月均订单</div><div class="kpi-value">247<span>副/月</span></div></div>
+  </div>
+  <div class="chart-grid">
+    <div class="card" style="margin-bottom:0"><div class="card-header"><div class="card-title">月度趋势</div></div><div class="card-body"><div class="chart-box" id="m-monthly"></div></div></div>
+    <div class="card" style="margin-bottom:0"><div class="card-header"><div class="card-title">代理商分布</div></div><div class="card-body"><div class="chart-box" id="m-agent"></div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-title">代理商明细</div></div>
+    <table class="board-table"><thead><tr><th style="width:60px">排名</th><th>代理商</th><th class="r">订单量</th><th class="r" style="padding-right:1.25rem">占比</th></tr></thead>
+    <tbody id="m-agents"></tbody></table>
+  </div>
+</div>
+</div>
+
+<!-- ══ 代理商看板 ══ -->
+<div id="tab-agent" class="tab-panel">
+<div class="page">
+  <div class="filter-bar">
+    <label>代理商</label><select><option>深圳视力康</option><option>广州明亮</option><option>北京华厦</option></select>
+    <label>起始</label><input type="date" value="2026-01-01">
+    <label>截止</label><input type="date" value="2026-05-16">
+    <button class="btn">查询</button>
+  </div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">订单总量</div><div class="kpi-value">456<span>副</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">SKU数量</div><div class="kpi-value">6<span>种</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">终端客户</div><div class="kpi-value">12<span>家</span></div></div>
+    <div class="kpi-card"><div class="kpi-label">月均订单</div><div class="kpi-value">91<span>副/月</span></div></div>
+  </div>
+  <div class="chart-grid">
+    <div class="card" style="margin-bottom:0"><div class="card-header"><div class="card-title">月度趋势</div></div><div class="card-body"><div class="chart-box" id="a-monthly"></div></div></div>
+    <div class="card" style="margin-bottom:0"><div class="card-header"><div class="card-title">SKU分布</div></div><div class="card-body"><div class="chart-box" id="a-sku"></div></div></div>
+  </div>
+  <div class="card">
+    <div class="card-header"><div><div class="card-title">终端客户排名</div><div class="card-sub">含大客户标记</div></div></div>
+    <table class="board-table"><thead><tr><th style="width:60px">排名</th><th>客户</th><th>标记</th><th class="r">订单量</th><th class="r" style="padding-right:1.25rem">占比</th></tr></thead>
+    <tbody id="a-customers"></tbody></table>
+  </div>
+</div>
+</div>
+
+<script>
+// ── 模拟数据 ──
+const MOCK = {
+  company: {
+    monthly: [
+      { month: '2026-01', qty: 420 }, { month: '2026-02', qty: 380 },
+      { month: '2026-03', qty: 520 }, { month: '2026-04', qty: 680 },
+      { month: '2026-05', qty: 847 },
+    ],
+    sku: [
+      { name: 'Ultra双效', value: 820 }, { name: '时空之眼A', value: 650 },
+      { name: '时空之眼B', value: 480 }, { name: '时空之眼PRO', value: 320 },
+      { name: '时空之眼MAX', value: 280 }, { name: '小旋风', value: 180 },
+      { name: 'D8', value: 117 },
+    ],
+    agents: [
+      { name: '深圳视力康', qty: 456 }, { name: '广州明亮', qty: 389 },
+      { name: '北京华厦', qty: 345 }, { name: '上海新视界', qty: 312 },
+      { name: '成都康明', qty: 278 }, { name: '武汉艾格', qty: 234 },
+      { name: '杭州太学', qty: 198 }, { name: '南京博爱', qty: 167 },
+      { name: '重庆爱尔', qty: 145 }, { name: '天津眼科', qty: 123 },
+    ],
+    ka: [
+      { name: '爱尔眼科深圳', agent: '深圳视力康', qty: 189 },
+      { name: '中山眼科中心', agent: '广州明亮', qty: 156 },
+      { name: '北京同仁医院', agent: '北京华厦', qty: 134 },
+      { name: '复旦眼耳鼻喉', agent: '上海新视界', qty: 98 },
+      { name: '华西医院眼科', agent: '成都康明', qty: 76 },
+    ],
+  },
+  manager: {
+    monthly: [
+      { month: '2026-01', qty: 180 }, { month: '2026-02', qty: 165 },
+      { month: '2026-03', qty: 220 }, { month: '2026-04', qty: 290 },
+      { month: '2026-05', qty: 379 },
+    ],
+    agents: [
+      { name: '深圳视力康', qty: 456 }, { name: '广州明亮', qty: 389 },
+      { name: '北京华厦', qty: 345 }, { name: '上海新视界', qty: 44 },
+    ],
+  },
+  agent: {
+    monthly: [
+      { month: '2026-01', qty: 65 }, { month: '2026-02', qty: 58 },
+      { month: '2026-03', qty: 82 }, { month: '2026-04', qty: 110 },
+      { month: '2026-05', qty: 141 },
+    ],
+    sku: [
+      { name: 'Ultra双效', value: 145 }, { name: '时空之眼A', value: 112 },
+      { name: '时空之眼B', value: 85 }, { name: '时空之眼PRO', value: 56 },
+      { name: '小旋风', value: 38 }, { name: 'D8', value: 20 },
+    ],
+    customers: [
+      { name: '爱尔眼科深圳', qty: 189, isKA: true },
+      { name: '深圳希玛', qty: 67, isKA: false },
+      { name: '深圳博爱', qty: 54, isKA: false },
+      { name: '深圳阳光', qty: 42, isKA: false },
+      { name: '深圳普瑞', qty: 38, isKA: false },
+      { name: '深圳华夏', qty: 28, isKA: false },
+      { name: '深圳明目', qty: 22, isKA: false },
+      { name: '深圳康明', qty: 16, isKA: false },
+    ],
+  },
+};
+
+// ── Tab 切换 ──
+let loaded = { company: false, manager: false, agent: false };
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', ['company','manager','agent'][i] === tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (!loaded[tab]) { loaded[tab] = true; render(tab); }
+}
+
+// ── 渲染 ──
+function render(tab) {
+  if (tab === 'company') {
+    bar('c-monthly', MOCK.company.monthly.map(m => m.month), MOCK.company.monthly.map(m => m.qty), '订单量');
+    pie('c-sku', MOCK.company.sku);
+    table('c-agents', MOCK.company.agents, 2847);
+    kaTable('c-ka', MOCK.company.ka, 2847);
+  } else if (tab === 'manager') {
+    bar('m-monthly', MOCK.manager.monthly.map(m => m.month), MOCK.manager.monthly.map(m => m.qty), '订单量');
+    pie('m-agent', MOCK.manager.agents);
+    table('m-agents', MOCK.manager.agents, 1234);
+  } else {
+    bar('a-monthly', MOCK.agent.monthly.map(m => m.month), MOCK.agent.monthly.map(m => m.qty), '订单量');
+    pie('a-sku', MOCK.agent.sku);
+    customerTable('a-customers', MOCK.agent.customers, 456);
+  }
+}
+
+// ── 图表 ──
+function bar(id, x, y, name) {
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ tooltip:{trigger:'axis'}, grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true}, xAxis:{type:'category',data:x,axisLabel:{fontSize:11}}, yAxis:{type:'value',axisLabel:{fontSize:11}}, series:[{name,type:'bar',data:y,itemStyle:{color:'#6c8cff',borderRadius:[4,4,0,0]},barMaxWidth:40}] });
+  window.addEventListener('resize', () => c.resize());
+}
+function pie(id, data) {
+  const c = echarts.init(document.getElementById(id));
+  c.setOption({ tooltip:{trigger:'item',formatter:'{b}: {c} ({d}%)'}, legend:{orient:'vertical',right:'5%',top:'center',textStyle:{fontSize:11}}, series:[{type:'pie',radius:['40%','70%'],center:['40%','50%'],label:{show:false},emphasis:{label:{show:true,fontSize:12,fontWeight:'bold'}},data}] });
+  window.addEventListener('resize', () => c.resize());
+}
+
+// ── 表格 ──
+function table(id, items, total) {
+  document.getElementById(id).innerHTML = items.map((it, i) => {
+    const pct = Math.round(it.qty / total * 100);
+    return `<tr><td style="padding-left:1.25rem;font-family:var(--font-num);color:${i<3?'var(--gold)':'var(--text-3)'}">${i+1}</td><td><strong>${it.name}</strong></td><td class="td-r">${it.qty.toLocaleString()} 副</td><td style="text-align:right;padding-right:1.25rem"><span class="progress-bar"><span class="progress-fill" style="width:${pct}%;background:var(--navy-light)"></span></span> <span style="font-family:var(--font-num);font-size:0.72rem;font-weight:700">${pct}%</span></td></tr>`;
+  }).join('');
+}
+function kaTable(id, items, total) {
+  document.getElementById(id).innerHTML = items.map((it, i) => {
+    const pct = Math.round(it.qty / total * 100);
+    return `<tr><td style="padding-left:1.25rem;font-family:var(--font-num);color:${i<3?'var(--gold)':'var(--text-3)'}">${i+1}</td><td><strong>${it.name}</strong></td><td style="color:var(--text-3)">${it.agent}</td><td class="td-r">${it.qty.toLocaleString()} 副</td><td style="text-align:right;padding-right:1.25rem"><span class="progress-bar"><span class="progress-fill" style="width:${pct}%;background:var(--gold)"></span></span> <span style="font-family:var(--font-num);font-size:0.72rem;font-weight:700">${pct}%</span></td></tr>`;
+  }).join('');
+}
+function customerTable(id, items, total) {
+  document.getElementById(id).innerHTML = items.map((it, i) => {
+    const pct = Math.round(it.qty / total * 100);
+    return `<tr><td style="padding-left:1.25rem;font-family:var(--font-num);color:${i<3?'var(--gold)':'var(--text-3)'}">${i+1}</td><td><strong>${it.name}</strong></td><td>${it.isKA?'<span class="tag tag-ka">大客户</span>':'<span style="color:var(--text-3);font-size:0.72rem">—</span>'}</td><td class="td-r">${it.qty.toLocaleString()} 副</td><td style="text-align:right;padding-right:1.25rem"><span class="progress-bar"><span class="progress-fill" style="width:${pct}%;background:${it.isKA?'var(--gold)':'var(--navy-light)'}"></span></span> <span style="font-family:var(--font-num);font-size:0.72rem;font-weight:700">${pct}%</span></td></tr>`;
+  }).join('');
+}
+
+// ── 初始化 ──
+loaded.company = true;
+render('company');
+</script>
+</body>
+</html>

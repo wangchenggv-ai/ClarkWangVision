@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>高视高清 · 镜片真伪验证</title>
+<title>{{BRAND_NAME}} · 镜片真伪验证</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 :root {
-  --brand: #0066CC;
+  --brand: {{BRAND_COLOR}};
   --brand-dark: #1B3A5C;
   --success: #00B894;
   --error: #E74C3C;
@@ -192,11 +192,7 @@ body {
 <body>
 
 <div class="hero {{HERO_CLASS}}">
-  <div class="brand">
-    <span class="gaush">GAUSH</span>
-    <span class="sep">|</span>
-    <span class="clear">CLEAR</span>
-  </div>
+  <div class="brand">{{BRAND_DISPLAY}}</div>
   <div class="shield">
     <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -228,7 +224,7 @@ body {
   <div class="lens-codes">{{LENS_CODES}}</div>
   <p>验证时间 {{NOW}}</p>
   <div class="divider"></div>
-  <p class="brand-name">GAUSH | CLEAR &middot; 高视高清</p>
+  <p class="brand-name">{{BRAND_FOOTER}}{{BRAND_FOOTER_CONTACT}}</p>
 </div>
 
 <script>
@@ -243,7 +239,7 @@ if (found) {
   cross1.style.display = 'none';
   cross2.style.display = 'none';
   document.getElementById('statusText').textContent = '正品验证通过';
-  document.getElementById('statusSub').textContent = '该镜片已通过高视高清溯源系统认证';
+  document.getElementById('statusSub').textContent = '该镜片已通过{{BRAND_NAME}}溯源系统认证';
   document.getElementById('foundContent').style.display = '';
 } else {
   hero.classList.add('hero-fail');

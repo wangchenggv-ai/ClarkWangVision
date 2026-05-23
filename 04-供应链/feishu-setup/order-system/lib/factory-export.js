@@ -1,10 +1,25 @@
 // lib/factory-export.js — 工厂导出（Excel + ZIP）
 
 import XLSX from "xlsx";
+import { lookupBySphCyl } from "./sku-serial.js";
+
+const SKU_ABBR = {
+  "Ultra双效":"ULT","D8":"D8",
+  "时空之眼A":"TKAA","时空之眼B":"TKAB",
+  "时空之眼PRO":"TKAP","时空之眼MAX":"TKAM",
+  "小旋风":"XFJ"
+};
+
+function encodeSkuBarcode(sku, sph, cyl) {
+  const abbr = SKU_ABBR[sku] || sku.replace(/\W/g,"").toUpperCase().slice(0,4);
+  const sphCode = String(Math.round(Math.abs(Number(sph))*100)).padStart(3,"0");
+  const cylCode = String(Math.round(Math.abs(Number(cyl))*100)).padStart(3,"0");
+  return `${abbr}-${sphCode}-${cylCode}`;
+}
 
 // ─── 生成工厂 Excel 文件 ─────────────────────────────────────────────────────
 
-export function buildFactoryExcel(records, orderNo, orderInfoMap = {}, dateMap = {}) {
+export function buildFactoryExcel(records, orderNo, orderInfoMap = {}, dateMap = {}, binCodeMap = {}) {
   const isMap = orderInfoMap && !orderInfoMap.remark && !orderInfoMap.address;
   const getInfo = (recOrderNo, recCustomer, recPairIndex) => {
     if (!isMap) return orderInfoMap; // 旧格式：单个 info
@@ -30,31 +45,35 @@ export function buildFactoryExcel(records, orderNo, orderInfoMap = {}, dateMap =
     const f = rec.fields;
     const info = getInfo(f["订单编号"] || "", f["顾客姓名"] || "", f["序号"] || 1);
     return {
-      "订单号": f["订单编号"] || "",
       "顾客": f["顾客姓名"] || "",
       "产品型号": f["产品型号"] || "",
-      "数量": 1,
       "眼别": f["眼别"] || "",
       "球镜SPH": f["球镜SPH"] != null && isFinite(Number(f["球镜SPH"])) ? Number(f["球镜SPH"]).toFixed(2) : "",
       "柱镜CYL": f["柱镜CYL"] != null && isFinite(Number(f["柱镜CYL"])) ? Number(f["柱镜CYL"]).toFixed(2) : "",
       "轴位AXIS": f["轴位AXIS"] != null && isFinite(Number(f["轴位AXIS"])) ? Number(f["轴位AXIS"]).toFixed(0) : "",
+      "SKU条码": encodeSkuBarcode(f["产品型号"], f["球镜SPH"], f["柱镜CYL"]),
+      "序列号": lookupBySphCyl(f["产品型号"], f["球镜SPH"], f["柱镜CYL"])?.s ?? "",
+      "货位": lookupBySphCyl(f["产品型号"], f["球镜SPH"], f["柱镜CYL"])?.bin ?? "",
       "镜片码（唯一）": f["镜片码（唯一）"] || "",
       "验真网址": f["镜片码（唯一）"] ? `https://lab.gaushclear.com/verify/${f["镜片码（唯一）"]}` : "",
+      "日期": dateMap[`${f["订单编号"] || ""}|${f["顾客姓名"] || ""}|${f["序号"] || 1}`] || dateMap[f["订单编号"] || ""] || "",
+      "仓位": binCodeMap[`${f["订单编号"] || ""}|${f["顾客姓名"] || ""}|${f["序号"] || 1}`] || binCodeMap[f["订单编号"] || ""] || "",
+      "数量": 1,
+      "订单号": f["订单编号"] || "",
       "是否装配": f["是否装配"] || "",
       "联系人": info.contact || "",
       "联系电话": info.phone || "",
       "收货地址": info.address || "",
       "备注": info.remark || "",
-      "日期": dateMap[`${f["订单编号"] || ""}|${f["顾客姓名"] || ""}|${f["序号"] || 1}`] || dateMap[f["订单编号"] || ""] || "",
     };
   });
 
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows);
   ws["!cols"] = [
-    { wch: 20 }, { wch: 10 }, { wch: 20 }, { wch: 6 },
-    { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
-    { wch: 16 }, { wch: 50 }, { wch: 8 }, { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 30 }, { wch: 12 },
+    { wch: 10 }, { wch: 20 }, { wch: 6 }, { wch: 10 }, { wch: 10 }, { wch: 8 },
+    { wch: 16 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 50 }, { wch: 12 }, { wch: 8 }, { wch: 6 }, { wch: 20 }, { wch: 8 },
+    { wch: 10 }, { wch: 14 }, { wch: 24 }, { wch: 30 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, `订单${orderNo}`.slice(0, 31));
   return Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));
@@ -95,6 +114,9 @@ export function buildLabelExportExcel(records, dateMap = {}) {
       "球镜": f["球镜SPH"] != null && isFinite(Number(f["球镜SPH"])) ? Number(f["球镜SPH"]).toFixed(2) : "",
       "柱镜": f["柱镜CYL"] != null && isFinite(Number(f["柱镜CYL"])) ? Number(f["柱镜CYL"]).toFixed(2) : "",
       "轴位": f["轴位AXIS"] != null && isFinite(Number(f["轴位AXIS"])) ? Number(f["轴位AXIS"]).toFixed(0) : "",
+      "SKU条码": encodeSkuBarcode(f["产品型号"], f["球镜SPH"], f["柱镜CYL"]),
+      "序列号": lookupBySphCyl(f["产品型号"], f["球镜SPH"], f["柱镜CYL"])?.s ?? "",
+      "货位": lookupBySphCyl(f["产品型号"], f["球镜SPH"], f["柱镜CYL"])?.bin ?? "",
       "二维码": lensCode ? `https://lab.gaushclear.com/verify/${lensCode}` : "",
       "日期": dateVal,
     };
@@ -104,7 +126,7 @@ export function buildLabelExportExcel(records, dateMap = {}) {
   const ws = XLSX.utils.json_to_sheet(rows);
   ws["!cols"] = [
     { wch: 14 }, { wch: 16 }, { wch: 6 }, { wch: 8 },
-    { wch: 8 }, { wch: 6 }, { wch: 50 }, { wch: 12 },
+    { wch: 8 }, { wch: 6 }, { wch: 16 }, { wch: 8 }, { wch: 14 }, { wch: 50 }, { wch: 12 },
   ];
   XLSX.utils.book_append_sheet(wb, ws, "病人片数据_完美版");
   return Buffer.from(XLSX.write(wb, { type: "array", bookType: "xlsx" }));

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"C:/Users/wangc/Downloads/ClarkWangVision\" show HEAD:tailscale-vnc-setup.md)",
+      "Bash(git -C \"C:/Users/wangc/Downloads/ClarkWangVision\" log --oneline --all -- tailscale-vnc-setup.md)",
+      "Bash(git -C \"C:/Users/wangc/Downloads/ClarkWangVision\" log --oneline -5 -- \"tailscale*\")",
+      "Bash(git -C \"C:/Users/wangc/Downloads/ClarkWangVision\" log --oneline -5 -- \"*tailscale*\")",
+      "Bash(git -C \"C:/Users/wangc/Downloads/ClarkWangVision\" show 015dc9a -- \"*tailscale*\")",
+      "Bash(tailscale ping:*)",
+      "Bash(tailscale status:*)",
+      "Bash(powershell -Command \"Get-Service -Name 'Tailscale*' | Select-Object Name, Status\")",
+      "Bash(tailscale up:*)",
+      "Bash(powershell -Command \"Test-NetConnection -ComputerName 100.100.201.16 -Port 5900\")",
+      "Bash(Start-Process \"C:\\\\Program Files\\\\RealVNC\\\\VNC Viewer\\\\vncviewer.exe\" -ArgumentList \"100.100.201.16::5900\")",
+      "Bash(powershell -Command \"Start-Process 'C:\\\\\\\\Program Files\\\\\\\\RealVNC\\\\\\\\VNC Viewer\\\\\\\\vncviewer.exe' -ArgumentList '100.100.201.16::5900'\")",
+      "Bash(ssh wangcheng@100.100.201.16 \"sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw 'vnc123456' -restart -agent -privs -all 2>&1\")",
+      "Bash(powershell -Command \"Test-NetConnection -ComputerName localhost -Port 18789 -InformationLevel Quiet\")"
+    ]
+  }
+}

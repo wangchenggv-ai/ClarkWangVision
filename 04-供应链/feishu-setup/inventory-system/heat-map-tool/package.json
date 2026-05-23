@@ -1,0 +1,9 @@
+{
+  "name": "ultra-stock-manager",
+  "version": "1.0.0",
+  "description": "Ultra 车房库存管理工具",
+  "main": "server.js",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

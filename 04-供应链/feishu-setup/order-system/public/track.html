@@ -266,12 +266,14 @@ function renderOrderList(orders) {
     const date = formatDate(items[0].date);
     const first = items[0];
     const isDraft = items[0]._draft;
+    const isSyncFailed = items[0]._syncFailed;
 
     html += `<div class="order-group">
       <div class="order-group-header" onclick="showDetail('${orderNo}')">
         <span class="order-no">${orderNo}</span>
         <span class="meta">${date} · ${items.length}片</span>
-        ${isDraft ? `<span style="margin-left:auto;display:flex;gap:6px">
+        ${isSyncFailed ? `<span style="margin-left:auto;color:#cf1322;font-size:11px;background:#fff1f0;border:1px solid #ffa39e;border-radius:3px;padding:2px 8px">⚠️ 提交失败，请联系客服</span>` :
+          isDraft ? `<span style="margin-left:auto;display:flex;gap:6px">
           <button class="btn btn-sm" onclick="event.stopPropagation();location.href='/order?t=${token}&edit=${orderNo}'" style="padding:2px 10px;font-size:11px;background:#e6f7ff;color:#0066CC;border:1px solid #91d5ff;border-radius:3px;cursor:pointer">编辑</button>
           <button class="btn btn-sm" onclick="event.stopPropagation();cancelDraft('${orderNo}')" style="padding:2px 10px;font-size:11px;background:#fff1f0;color:#cf1322;border:1px solid #ffa39e;border-radius:3px;cursor:pointer">取消</button>
         </span>` : ''}
@@ -287,7 +289,7 @@ function renderOrderList(orders) {
         <div class="right">
           ${deliveryBadge(item.deliveryType, item.promiseDate)}
           ${statusBadge(item.status)}
-          ${isDraft ? '<span style="font-size:10px;color:#0066CC;background:#e6f7ff;border:1px solid #91d5ff;border-radius:3px;padding:1px 5px;margin-left:4px">可编辑</span>' : ''}
+          ${isSyncFailed ? '<span style="font-size:10px;color:#cf1322;background:#fff1f0;border:1px solid #ffa39e;border-radius:3px;padding:1px 5px;margin-left:4px">提交失败</span>' : isDraft ? '<span style="font-size:10px;color:#0066CC;background:#e6f7ff;border:1px solid #91d5ff;border-radius:3px;padding:1px 5px;margin-left:4px">可编辑</span>' : ''}
         </div>
       </div>`;
     }

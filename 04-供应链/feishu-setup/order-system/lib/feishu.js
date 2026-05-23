@@ -12,11 +12,22 @@ export function init({ base, appToken, env }) {
 
 export async function getFeishuToken() {
   if (Date.now() - _feishuTokenTime < 5000 * 1000 && _feishuToken) return _feishuToken;
-  const res = await fetch(`${BASE}/auth/v3/tenant_access_token/internal`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ app_id: ENV.FEISHU_APP_ID, app_secret: ENV.FEISHU_APP_SECRET }),
-  });
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 10000);
+  let res;
+  try {
+    res = await fetch(`${BASE}/auth/v3/tenant_access_token/internal`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ app_id: ENV.FEISHU_APP_ID, app_secret: ENV.FEISHU_APP_SECRET }),
+      signal: ac.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    console.error(`  飞书 token 获取超时: ${e.message}`);
+    return _feishuToken;
+  }
+  clearTimeout(timer);
   let json;
   try { json = await res.json(); } catch { return _feishuToken; }
   if (json.tenant_access_token) {
@@ -28,14 +39,25 @@ export async function getFeishuToken() {
 
 export async function feishuApi(method, path, body) {
   const token = await getFeishuToken();
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 15000);
+  let res;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: ac.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    console.error(`  飞书 API 超时/网络错误 [${method} ${path}]: ${e.message}`);
+    return null;
+  }
+  clearTimeout(timer);
   let json;
   try {
     json = await res.json();
@@ -58,25 +80,30 @@ export async function feishuApi(method, path, body) {
   return json.data;
 }
 
-export async function listRecords(tableId, fieldNames) {
+export async function listRecords(tableId, fieldNames, maxPages = 50) {
   const records = [];
   let pageToken = "";
+  let pages = 0;
   const fnParam = fieldNames ? `&field_names=${encodeURIComponent(JSON.stringify(fieldNames))}` : "";
-  while (true) {
+  while (pages < maxPages) {
     const qs = pageToken ? `?page_size=100&page_token=${pageToken}${fnParam}` : `?page_size=100${fnParam}`;
     const data = await feishuApi("GET", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records${qs}`);
     if (!data) break;
     if (data.items) records.push(...data.items);
+    pages++;
     if (!data.has_more) break;
     pageToken = data.page_token;
   }
   return records;
 }
 
-export async function searchRecords(tableId, { filter, sort, fieldNames, pageSize = 500 } = {}) {
+export async function searchRecords(tableId, { filter, sort, fieldNames, pageSize = 500, maxPages = 10 } = {}) {
   const records = [];
   let pageToken = "";
-  while (true) {
+  let pages = 0;
+  let totalCount = null;
+  let passedTotal = false; // 允许超出 total 一页，兼容并发写入场景
+  while (pages < maxPages) {
     const body = { page_size: pageSize };
     if (filter) body.filter = filter;
     if (sort) body.sort = sort;
@@ -84,11 +111,28 @@ export async function searchRecords(tableId, { filter, sort, fieldNames, pageSiz
     if (pageToken) body.page_token = pageToken;
     const data = await feishuApi("POST", `/bitable/v1/apps/${APP_TOKEN}/tables/${tableId}/records/search`, body);
     if (!data) break;
+    if (totalCount === null && data.total != null) totalCount = data.total;
     if (data.items) records.push(...data.items);
+    pages++;
     if (!data.has_more) break;
+    // 飞书 POST /records/search 分页 bug：has_more 可能一直为 true 但实际已返回全部数据
+    // 允许超出 total 一页（兼容刚写入的新记录 total 还未更新的情况），第二次超出才截断
+    if (totalCount !== null && records.length >= totalCount) {
+      if (passedTotal) break;
+      passedTotal = true;
+    }
     pageToken = data.page_token;
   }
-  return records;
+  if (pages >= maxPages && pageToken) {
+    console.warn(`  searchRecords 达到最大页数 ${maxPages}，已获取 ${records.length} 条`);
+  }
+  // 按 record_id 去重，防止分页 bug 导致重复记录
+  const seen = new Set();
+  return records.filter(r => {
+    if (!r.record_id || seen.has(r.record_id)) return false;
+    seen.add(r.record_id);
+    return true;
+  });
 }
 
 export async function createRecord(tableId, fields) {

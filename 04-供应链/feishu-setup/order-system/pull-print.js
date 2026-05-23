@@ -72,12 +72,34 @@ function openUrl(url) {
   });
 }
 
+// ─── USB 桥接发送 ──────────────────────────────────────────────────────────
+
+async function sendUsbBridge(zpl, bridgeUrl) {
+  const res = await fetch(`${bridgeUrl}/print`, {
+    method: "POST",
+    headers: { "Content-Type": "text/plain" },
+    body: zpl,
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `USB bridge HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 // ─── 处理单个打印任务 ──────────────────────────────────────────────────────
 
 async function processJob(job) {
   if (job.type === "zpl") {
-    await sendTcpZpl(job.zpl, cfg.printerHost, cfg.printerPort, cfg.timeoutMs);
-    log("ok", `标签已打印: ${job.orderNo} ${job.customerName} ${job.eye} [${job.lensCode}]`);
+    const conn = cfg.connection || "tcp";
+    if (conn === "usb") {
+      await sendUsbBridge(job.zpl, cfg.usbBridgeUrl || "http://localhost:9101");
+      log("ok", `标签已打印(USB): ${job.orderNo} ${job.customerName} ${job.eye} [${job.lensCode}]`);
+    } else {
+      await sendTcpZpl(job.zpl, cfg.printerHost, cfg.printerPort, cfg.timeoutMs);
+      log("ok", `标签已打印(TCP): ${job.orderNo} ${job.customerName} ${job.eye} [${job.lensCode}]`);
+    }
   } else if (job.type === "slip") {
     await openUrl(job.slipUrl);
     log("ok", `同行单已打开: ${job.title}`);

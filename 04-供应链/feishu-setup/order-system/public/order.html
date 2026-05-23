@@ -135,11 +135,13 @@
 
   <div id="formPage">
     <div class="card">
-      <div class="card-title">收货信息</div>
+      <div class="card-title" style="display:flex;align-items:center;gap:8px">
+        收货信息
+      </div>
       <div class="field">
-        <label>终端客户 <span class="req">*</span></label>
-        <input type="text" id="terminalCustomer" placeholder="选择或输入终端客户名称" list="terminalCustomerList" autocomplete="off" onchange="onTerminalCustomerSelect()">
-        <div class="error-tip">请填写终端客户</div>
+        <label>终端门店 <span class="req">*</span></label>
+        <input type="text" id="terminalCustomer" placeholder="选择或输入终端门店名称" list="terminalCustomerList" autocomplete="off" onchange="onTerminalCustomerSelect()">
+        <div class="error-tip">请填写终端门店</div>
       </div>
       <div class="field">
         <label>联系人 <span class="req">*</span></label>
@@ -219,6 +221,7 @@ let terminalCustomers = []; // 终端客户列表 [{id,name,contact,phone,addres
 let patientCount = 0;
 let draftTimer = null;
 const DRAFT_KEY = `orderDraft_${token}`;
+let pendingTerminalCustomer = null; // 草稿/编辑模式暂存的终端客户名
 
 // ─── 处方校验 ──────────────────────────────────────────────────────────────
 function validatePrescription(patients) {
@@ -281,7 +284,7 @@ function restoreDraft() {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) return;
     const draft = JSON.parse(raw);
-    if (draft.terminalCustomer) document.getElementById("terminalCustomer").value = draft.terminalCustomer;
+    if (draft.terminalCustomer) pendingTerminalCustomer = draft.terminalCustomer;
     if (draft.contact) document.getElementById("contact").value = draft.contact;
     if (draft.phone) document.getElementById("phone").value = draft.phone;
     if (draft.address) document.getElementById("address").value = draft.address;
@@ -388,7 +391,7 @@ async function init() {
         const res = await fetch(`/api/draft/${editOrderNo}?t=${token}`);
         if (!res.ok) throw new Error("加载草稿失败");
         const draft = await res.json();
-        if (draft.terminalCustomer?.name) document.getElementById("terminalCustomer").value = draft.terminalCustomer.name;
+        if (draft.terminalCustomer?.name) pendingTerminalCustomer = draft.terminalCustomer.name;
         if (draft.terminalCustomer?.contact) document.getElementById("contact").value = draft.terminalCustomer.contact;
         if (draft.terminalCustomer?.phone) document.getElementById("phone").value = draft.terminalCustomer.phone;
         if (draft.address) document.getElementById("address").value = draft.address;
@@ -446,6 +449,12 @@ async function init() {
     renderCustomerDatalist();
     renderTerminalCustomerDatalist();
     renderAddressDatalist();
+    // 草稿/编辑模式：恢复终端客户
+    if (pendingTerminalCustomer) {
+      document.getElementById("terminalCustomer").value = pendingTerminalCustomer;
+      onTerminalCustomerSelect();
+      pendingTerminalCustomer = null;
+    }
   }).catch(e => console.error("客户数据加载失败:", e));
 }
 
@@ -513,7 +522,7 @@ function addPatient() {
     </div>
     <div class="field">
       <label>顾客姓名 <span class="req">*</span></label>
-      <input type="text" id="name-${id}" placeholder="请输入顾客姓名" list="customerList" autocomplete="off">
+      <input type="text" id="name-${id}" placeholder="请输入顾客姓名" autocomplete="off">
       <div class="error-tip">请填写顾客姓名</div>
     </div>
     <div class="field">
@@ -560,14 +569,25 @@ function addPatient() {
       </div>
     </div>
 
-    <div style="margin-top:4px;display:flex;align-items:center;gap:4px;font-size:13px">
-      <span style="color:#666">装配：</span>
-      <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #e0e0e0;border-radius:4px;background:#fff" id="assy-yes-${id}">
-        <input type="radio" name="assembly-${id}" value="yes" style="width:auto;margin:0;accent-color:#0066CC" onchange="toggleAssemblyStyle(${id})"> 是
-      </label>
-      <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #0066CC;border-radius:4px;background:#f0f7ff" id="assy-no-${id}">
-        <input type="radio" name="assembly-${id}" value="no" checked style="width:auto;margin:0;accent-color:#0066CC" onchange="toggleAssemblyStyle(${id})"> 否
-      </label>
+    <div style="margin-top:4px;display:flex;align-items:center;gap:12px;font-size:13px">
+      <div style="display:flex;align-items:center;gap:4px">
+        <span style="color:#666">装配：</span>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #e0e0e0;border-radius:4px;background:#fff" id="assy-yes-${id}">
+          <input type="radio" name="assembly-${id}" value="yes" style="width:auto;margin:0;accent-color:#0066CC" onchange="toggleAssemblyStyle(${id})"> 是
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #0066CC;border-radius:4px;background:#f0f7ff" id="assy-no-${id}">
+          <input type="radio" name="assembly-${id}" value="no" checked style="width:auto;margin:0;accent-color:#0066CC" onchange="toggleAssemblyStyle(${id})"> 否
+        </label>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <span style="color:#666">首单：</span>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #e0e0e0;border-radius:4px;background:#fff" id="first-yes-${id}">
+          <input type="radio" name="firstOrder-${id}" value="yes" style="width:auto;margin:0;accent-color:#ff6b35" onchange="toggleFirstOrderStyle(${id})"> 是
+        </label>
+        <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid #ff6b35;border-radius:4px;background:#fff5f0" id="first-no-${id}">
+          <input type="radio" name="firstOrder-${id}" value="no" checked style="width:auto;margin:0;accent-color:#ff6b35" onchange="toggleFirstOrderStyle(${id})"> 否
+        </label>
+      </div>
     </div>
     <div class="field" style="margin-top:8px">
       <label>备注（选填）</label>
@@ -585,6 +605,14 @@ function toggleAssemblyStyle(id) {
   const noLabel = document.getElementById(`assy-no-${id}`);
   if (yesLabel) { yesLabel.style.borderColor = checked === 'yes' ? '#0066CC' : '#e0e0e0'; yesLabel.style.background = checked === 'yes' ? '#f0f7ff' : '#fff'; }
   if (noLabel) { noLabel.style.borderColor = checked === 'no' ? '#0066CC' : '#e0e0e0'; noLabel.style.background = checked === 'no' ? '#f0f7ff' : '#fff'; }
+}
+
+function toggleFirstOrderStyle(id) {
+  const checked = document.querySelector(`input[name="firstOrder-${id}"]:checked`)?.value;
+  const yesLabel = document.getElementById(`first-yes-${id}`);
+  const noLabel = document.getElementById(`first-no-${id}`);
+  if (yesLabel) { yesLabel.style.borderColor = checked === 'yes' ? '#ff6b35' : '#e0e0e0'; yesLabel.style.background = checked === 'yes' ? '#fff5f0' : '#fff'; }
+  if (noLabel) { noLabel.style.borderColor = checked === 'no' ? '#ff6b35' : '#e0e0e0'; noLabel.style.background = checked === 'no' ? '#fff5f0' : '#fff'; }
 }
 
 function removePatient(id) {
@@ -670,10 +698,12 @@ function collectPatients() {
     }
     const assemblyEl = document.querySelector(`input[name="assembly-${id}"]:checked`);
     const assembly = assemblyEl?.value === "yes";
+    const firstOrderEl = document.querySelector(`input[name="firstOrder-${id}"]:checked`);
+    const firstOrder = firstOrderEl?.value === "yes";
     const remark = document.getElementById(`remark-${id}`)?.value.trim() || "";
     if (eyes.length > 0) {
       pairCount[name] = (pairCount[name] || 0) + 1;
-      patients.push({ id, customerName: name, sku, quantity, eyes, assembly, remark, pairIndex: pairCount[name] });
+      patients.push({ id, customerName: name, sku, quantity, eyes, assembly, firstOrder, remark, pairIndex: pairCount[name] });
     }
   }
   return patients;
@@ -721,6 +751,13 @@ function validate() {
 }
 
 // ─── 确认弹窗 ──────────────────────────────────────────────────────────────
+function fmt(v) {
+  if (v === '' || v === null || v === undefined) return '--';
+  const n = Number(v);
+  if (!isFinite(n)) return '--';
+  return (n >= 0 ? '+' : '') + n.toFixed(2);
+}
+
 function showConfirm() {
   if (!validate()) return;
   const patients = collectPatients();
@@ -732,7 +769,10 @@ function showConfirm() {
     html += `<div style="background:#fff;border:1px solid #e8e8e8;border-radius:8px;padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <strong style="font-size:14px">${p.customerName}</strong>
-        <span style="font-size:12px;color:${p.assembly ? '#0066CC' : '#999'};background:${p.assembly ? '#f0f7ff' : '#f5f5f5'};padding:2px 8px;border-radius:3px">${p.assembly ? '装配' : '不装配'}</span>
+        <div style="display:flex;gap:6px">
+          <span style="font-size:12px;color:${p.assembly ? '#0066CC' : '#999'};background:${p.assembly ? '#f0f7ff' : '#f5f5f5'};padding:2px 8px;border-radius:3px">${p.assembly ? '装配' : '不装配'}</span>
+          ${p.firstOrder ? '<span style="font-size:12px;color:#ff6b35;background:#fff5f0;padding:2px 8px;border-radius:3px">首单</span>' : ''}
+        </div>
       </div>
       <div style="font-size:13px;color:#888;margin-bottom:6px">${p.sku} × ${p.eyes.length}片</div>`;
     const sortedEyes = [...p.eyes].sort((a, b) => (a.side === "右眼" ? 0 : 1) - (b.side === "右眼" ? 0 : 1));
@@ -740,8 +780,8 @@ function showConfirm() {
       const isRight = eye.side === "右眼";
       html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:3px;font-size:13px">
         <span style="background:${isRight ? '#fff1f0' : '#e6f7ff'};color:${isRight ? '#cf1322' : '#096dd9'};padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">${eye.side}</span>
-        <span>SPH <strong>${Number(eye.sph || 0).toFixed(2)}</strong></span>
-        <span>CYL <strong>${Number(eye.cyl || 0).toFixed(2)}</strong></span>
+        <span>SPH <strong>${fmt(eye.sph)}</strong></span>
+        <span>CYL <strong>${fmt(eye.cyl)}</strong></span>
         <span>AXIS <strong>${eye.axis}</strong></span>
       </div>`;
     }
@@ -770,7 +810,7 @@ async function doSubmit() {
     const body = {
       address,
       clientRequestId: crypto.randomUUID(),
-      patients: patients.map(p => ({ customerName: p.customerName, sku: p.sku, quantity: p.quantity, eyes: p.eyes, assembly: p.assembly, remark: p.remark })),
+      patients: patients.map(p => ({ customerName: p.customerName, sku: p.sku, quantity: p.quantity, eyes: p.eyes, assembly: p.assembly, firstOrder: p.firstOrder, remark: p.remark })),
       ...(editOrderNo ? { orderNo: editOrderNo } : {}),
     };
     if (tcName || contact || phone) {
@@ -915,16 +955,16 @@ function renderExcelPreview(patients, warnings) {
     if (rEye) {
       html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;font-size:13px">
         <span style="background:#fff1f0;color:#cf1322;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">右眼</span>
-        <span>SPH <strong>${Number(rEye.sph || 0).toFixed(2)}</strong></span>
-        <span>CYL <strong>${Number(rEye.cyl || 0).toFixed(2)}</strong></span>
+        <span>SPH <strong>${fmt(rEye.sph)}</strong></span>
+        <span>CYL <strong>${fmt(rEye.cyl)}</strong></span>
         <span>AXIS <strong>${rEye.axis || "0"}</strong></span>
       </div>`;
     }
     if (lEye) {
       html += `<div style="display:flex;gap:8px;align-items:center;font-size:13px">
         <span style="background:#e6f7ff;color:#096dd9;padding:2px 8px;border-radius:3px;font-size:11px;font-weight:600">左眼</span>
-        <span>SPH <strong>${Number(lEye.sph || 0).toFixed(2)}</strong></span>
-        <span>CYL <strong>${Number(lEye.cyl || 0).toFixed(2)}</strong></span>
+        <span>SPH <strong>${fmt(lEye.sph)}</strong></span>
+        <span>CYL <strong>${fmt(lEye.cyl)}</strong></span>
         <span>AXIS <strong>${lEye.axis || "0"}</strong></span>
       </div>`;
     }
@@ -1008,6 +1048,8 @@ function importToForm(mode) {
 }
 
 function closeExcelModal() { document.getElementById("excelModal").classList.remove("show"); }
+
+document.addEventListener('wheel', e => { if (e.target.type === 'number') e.preventDefault(); }, { passive: false });
 
 init();</script>
 </body>

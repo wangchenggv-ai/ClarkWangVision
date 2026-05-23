@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>高视星 · 星图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080c1a;
+  --surface: #0f1429;
+  --surface-2: #161d35;
+  --card: #1a2240;
+  --text: #e8ecf4;
+  --text-muted: #8892a8;
+  --accent: #6c8cff;
+  --accent-glow: rgba(108,140,255,0.15);
+  --gold: #ffd700;
+  --gold-glow: rgba(255,215,0,0.15);
+  --orange: #ff8c42;
+  --orange-glow: rgba(255,140,66,0.15);
+  --green: #4ade80;
+  --green-glow: rgba(74,222,128,0.15);
+  --grey: #6b7280;
+  --radius: 16px;
+  --radius-sm: 12px;
+  --font: 'Noto Sans SC', -apple-system, sans-serif;
+  --font-num: 'DM Mono', monospace;
+  --nav-h: 60px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ── */
+.header {
+  padding: 20px 20px 12px;
+  text-align: center;
+  position: relative;
+}
+.header h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, #6c8cff 0%, #a78bfa 50%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.header .subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.header .agent-name {
+  font-size: 0.85rem;
+  color: var(--accent);
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+/* ── Content ── */
+.content {
+  padding: 0 16px calc(var(--nav-h) + var(--safe-bottom) + 16px);
+  min-height: calc(100dvh - var(--nav-h));
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Cards ── */
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(108,140,255,0.08);
+}
+.card-title {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+/* ── Progress Bar ── */
+.progress-bar-wrap {
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  height: 16px;
+  overflow: hidden;
+  margin: 16px 0;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.8s ease;
+  position: relative;
+}
+.progress-bar-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.15) 50%, transparent 100%);
+  animation: shimmer 2s infinite;
+}
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ── Big Numbers ── */
+.big-num {
+  font-family: var(--font-num);
+  font-size: 2.5rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.big-num-unit {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-family: var(--font);
+  margin-left: 4px;
+}
+
+/* ── Stats Grid ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+.stat-item {
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  text-align: center;
+}
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.stat-value {
+  font-family: var(--font-num);
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+/* ── Status Badge ── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+.status-badge.normal { background: var(--accent-glow); color: var(--accent); }
+.status-badge.behind { background: var(--orange-glow); color: var(--orange); }
+.status-badge.ahead { background: var(--green-glow); color: var(--green); }
+.status-badge.exceeded { background: var(--gold-glow); color: var(--gold); }
+.status-badge.no_target { background: rgba(107,114,128,0.15); color: var(--grey); }
+
+/* ── Tier Badge ── */
+.tier-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  font-size: 1.8rem;
+  font-weight: 900;
+  margin: 0 auto 12px;
+}
+.tier-0 { background: rgba(107,114,128,0.2); color: var(--grey); border: 2px solid var(--grey); }
+.tier-5 { background: var(--accent-glow); color: var(--accent); border: 2px solid var(--accent); }
+.tier-8 { background: var(--green-glow); color: var(--green); border: 2px solid var(--green); }
+.tier-10 { background: var(--gold-glow); color: var(--gold); border: 2px solid var(--gold); }
+
+/* ── ECP List ── */
+.ecp-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.ecp-item:last-child { border-bottom: none; }
+.ecp-rank {
+  font-family: var(--font-num);
+  font-size: 1.2rem;
+  font-weight: 500;
+  width: 32px;
+  text-align: center;
+  color: var(--text-muted);
+}
+.ecp-rank.top3 { color: var(--gold); }
+.ecp-info { flex: 1; }
+.ecp-name { font-size: 0.9rem; font-weight: 500; }
+.ecp-store { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+.ecp-progress { text-align: right; }
+.ecp-count {
+  font-family: var(--font-num);
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+.ecp-bar {
+  width: 60px;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  margin-top: 4px;
+  margin-left: auto;
+}
+.ecp-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+/* ── Bottom Nav ── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--nav-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: var(--surface);
+  border-top: 1px solid rgba(108,140,255,0.1);
+  display: flex;
+  z-index: 100;
+}
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s;
+  position: relative;
+}
+.nav-item .nav-icon {
+  font-size: 1.4rem;
+  transition: transform 0.2s;
+}
+.nav-item .nav-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+.nav-item.active .nav-icon { transform: scale(1.15); }
+.nav-item.active .nav-label { color: var(--accent); font-weight: 500; }
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 0 0 3px 3px;
+}
+
+/* ── Loading ── */
+.loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(108,140,255,0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Error ── */
+.error-msg {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--orange);
+  font-size: 0.85rem;
+}
+
+/* ── Empty ── */
+.empty-msg {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+/* ── Responsive ── */
+@media (min-width: 600px) {
+  .content { max-width: 500px; margin: 0 auto; }
+  .big-num { font-size: 3rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1>高视星 · 星图</h1>
+  <div class="subtitle">每一颗星，都被看见</div>
+  <div class="agent-name" id="agentName">加载中...</div>
+</div>
+
+<!-- Content -->
+<div class="content">
+  <!-- 星轨 Tab -->
+  <div class="tab-panel active" id="tabTrail">
+    <div class="loading" id="trailLoading">
+      <div class="spinner"></div>
+      <span>加载星轨数据...</span>
+    </div>
+    <div id="trailContent" style="display:none">
+      <!-- 进度卡片 -->
+      <div class="card" style="text-align:center">
+        <div class="card-title">年度进度</div>
+        <div class="big-num" id="trailPercent">0<span class="big-num-unit">%</span></div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="trailBar" style="width:0%;background:var(--accent)"></div>
+        </div>
+        <div id="trailStatus"></div>
+      </div>
+
+      <!-- 关键数字 -->
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-label">年度目标</div>
+          <div class="stat-value" id="trailTarget">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">当前完成</div>
+          <div class="stat-value" id="trailCurrent">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">剩余副数</div>
+          <div class="stat-value" id="trailRemaining">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">月均需达成</div>
+          <div class="stat-value" id="trailPace">—</div>
+        </div>
+      </div>
+
+      <!-- 更新时间 -->
+      <div style="text-align:center;margin-top:16px;font-size:0.72rem;color:var(--text-muted)">
+        数据更新：<span id="trailTime">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 星级 Tab -->
+  <div class="tab-panel" id="tabTier">
+    <div class="loading" id="tierLoading">
+      <div class="spinner"></div>
+      <span>加载星级数据...</span>
+    </div>
+    <div id="tierContent" style="display:none">
+      <!-- 当前档位 -->
+      <div class="card" style="text-align:center">
+        <div class="card-title">当前返利档位</div>
+        <div class="tier-badge" id="tierBadge">0%</div>
+        <div style="font-size:1.1rem;font-weight:700;margin-bottom:4px" id="tierLabel">无返利</div>
+        <div style="font-size:0.8rem;color:var(--text-muted)" id="tierDesc">年采购量&lt;4000副</div>
+      </div>
+
+      <!-- 距下一档 -->
+      <div class="card" id="tierNextCard">
+        <div class="card-title">距下一档</div>
+        <div style="display:flex;align-items:baseline;gap:8px;justify-content:center">
+          <div class="big-num" id="tierNextGap" style="font-size:2rem">—</div>
+          <span style="color:var(--text-muted);font-size:0.85rem">副</span>
+        </div>
+        <div style="text-align:center;margin-top:8px;font-size:0.8rem;color:var(--text-muted)" id="tierNextLabel">
+        </div>
+      </div>
+
+      <!-- 供货价信息 -->
+      <div class="card">
+        <div class="card-title">当前供货价</div>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div class="stat-label">时空之眼</div>
+            <div class="stat-value" id="priceSky">—</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">时空之眼 Ultra</div>
+            <div class="stat-value" id="priceUltra">—</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">小旋风</div>
+            <div class="stat-value" id="priceStorm">—</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">年承诺量</div>
+            <div class="stat-value" id="priceCommit">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 返利档位表 -->
+      <div class="card">
+        <div class="card-title">返利政策</div>
+        <div style="font-size:0.8rem;line-height:1.8">
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <span style="color:var(--text-muted)">&lt;4,000副</span><span>0%</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <span style="color:var(--text-muted)">4,000-5,999副</span><span style="color:var(--accent)">5%</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <span style="color:var(--text-muted)">6,000-9,999副</span><span style="color:var(--green)">8%</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:6px 0">
+            <span style="color:var(--text-muted)">≥10,000副</span><span style="color:var(--gold)">10%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 星耀榜 Tab -->
+  <div class="tab-panel" id="tabECP">
+    <div class="loading" id="ecpLoading">
+      <div class="spinner"></div>
+      <span>加载ECP榜单...</span>
+    </div>
+    <div id="ecpContent" style="display:none">
+      <!-- 概览 -->
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat-item">
+          <div class="stat-label">关联ECP</div>
+          <div class="stat-value" id="ecpTotal">—</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">游学名额剩余</div>
+          <div class="stat-value" id="ecpTripRemaining" style="color:var(--gold)">—</div>
+        </div>
+      </div>
+
+      <!-- ECP列表 -->
+      <div class="card">
+        <div class="card-title">ECP排名</div>
+        <div id="ecpList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Navigation -->
+<div class="bottom-nav">
+  <div class="nav-item active" onclick="switchTab('trail')">
+    <span class="nav-icon">⭐</span>
+    <span class="nav-label">星轨</span>
+  </div>
+  <div class="nav-item" onclick="switchTab('tier')">
+    <span class="nav-icon">🏆</span>
+    <span class="nav-label">星级</span>
+  </div>
+  <div class="nav-item" onclick="switchTab('ecp')">
+    <span class="nav-icon">🌟</span>
+    <span class="nav-label">星耀榜</span>
+  </div>
+</div>
+
+<script>
+const token = new URLSearchParams(location.search).get("t") || "";
+const STATUS_MAP = {
+  normal:   { label: "正常推进", color: "var(--accent)", barColor: "var(--accent)" },
+  behind:   { label: "需要加速", color: "var(--orange)", barColor: "var(--orange)" },
+  ahead:    { label: "超额推进", color: "var(--green)",  barColor: "var(--green)" },
+  exceeded: { label: "已超额完成", color: "var(--gold)",  barColor: "var(--gold)" },
+  no_target:{ label: "未设定目标", color: "var(--grey)",  barColor: "var(--grey)" },
+};
+
+const TIER_MAP = {
+  "0%":  { cls: "tier-0",  label: "无返利",       desc: "年采购量<4,000副" },
+  "5%":  { cls: "tier-5",  label: "5%返利档",     desc: "年采购量 4,000-5,999副" },
+  "8%":  { cls: "tier-8",  label: "8%返利档",     desc: "年采购量 6,000-9,999副" },
+  "10%": { cls: "tier-10", label: "10%返利档(最高)", desc: "年采购量 ≥10,000副" },
+};
+
+// ── Tab Switching ──
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('tab' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+  event.currentTarget.classList.add('active');
+
+  // 懒加载
+  if (name === 'trail' && !window._trailLoaded) loadTrail();
+  if (name === 'tier' && !window._tierLoaded) loadTier();
+  if (name === 'ecp' && !window._ecpLoaded) loadECP();
+}
+
+// ── Load Agent Info ──
+async function loadAgent() {
+  try {
+    const res = await fetch(`/api/agent?t=${token}`);
+    const data = await res.json();
+    document.getElementById('agentName').textContent = data.name || '未知代理商';
+  } catch {
+    document.getElementById('agentName').textContent = '无法获取代理商信息';
+  }
+}
+
+// ── Load Star Trail ──
+async function loadTrail() {
+  const loading = document.getElementById('trailLoading');
+  const content = document.getElementById('trailContent');
+  try {
+    const res = await fetch(`/api/starmap/star-trail?t=${token}`);
+    if (!res.ok) throw new Error((await res.json()).error || '请求失败');
+    const d = await res.json();
+    window._trailLoaded = true;
+
+    // 进度条
+    const st = STATUS_MAP[d.status] || STATUS_MAP.normal;
+    document.getElementById('trailPercent').innerHTML =
+      `${d.progressPercent}<span class="big-num-unit">%</span>`;
+    document.getElementById('trailPercent').style.color = st.color;
+
+    const bar = document.getElementById('trailBar');
+    bar.style.width = Math.min(100, d.progressPercent) + '%';
+    bar.style.background = st.barColor;
+
+    // 状态标签
+    document.getElementById('trailStatus').innerHTML =
+      `<span class="status-badge ${d.status}">${st.label}</span>`;
+
+    // 关键数字
+    document.getElementById('trailTarget').textContent = d.yearlyTarget ? d.yearlyTarget.toLocaleString() : '—';
+    document.getElementById('trailCurrent').textContent = d.currentVolume.toLocaleString();
+    document.getElementById('trailRemaining').textContent = d.remainingVolume.toLocaleString();
+    document.getElementById('trailPace').textContent = d.monthlyPaceNeeded > 0 ? d.monthlyPaceNeeded.toLocaleString() : '—';
+
+    // 更新时间
+    const t = new Date(d.lastUpdateTime);
+    document.getElementById('trailTime').textContent =
+      `${t.getMonth()+1}/${t.getDate()} ${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}`;
+
+    loading.style.display = 'none';
+    content.style.display = 'block';
+  } catch (e) {
+    loading.innerHTML = `<div class="error-msg">加载失败：${e.message}</div>`;
+  }
+}
+
+// ── Load Star Tier ──
+async function loadTier() {
+  const loading = document.getElementById('tierLoading');
+  const content = document.getElementById('tierContent');
+  try {
+    const res = await fetch(`/api/starmap/star-tier?t=${token}`);
+    if (!res.ok) throw new Error((await res.json()).error || '请求失败');
+    const d = await res.json();
+    window._tierLoaded = true;
+
+    // 当前档位
+    const tier = TIER_MAP[d.rebatePercent] || TIER_MAP["0%"];
+    const badge = document.getElementById('tierBadge');
+    badge.textContent = d.rebatePercent;
+    badge.className = 'tier-badge ' + tier.cls;
+    document.getElementById('tierLabel').textContent = tier.label;
+    document.getElementById('tierDesc').textContent = tier.desc;
+
+    // 距下一档
+    if (d.nextRebateTier) {
+      document.getElementById('tierNextGap').textContent = d.volumeToNextRebate.toLocaleString();
+      document.getElementById('tierNextLabel').textContent =
+        `距 ${d.nextRebateTier.min.toLocaleString()} 副（${(d.nextRebateTier.rate*100).toFixed(0)}%返利）`;
+      document.getElementById('tierNextCard').style.display = 'block';
+    } else {
+      document.getElementById('tierNextCard').style.display = 'none';
+    }
+
+    // 供货价
+    const p = d.currentPriceTier || {};
+    document.getElementById('priceSky').textContent = p.sky ? `¥${p.sky}` : '—';
+    document.getElementById('priceUltra').textContent = p.ultra ? `¥${p.ultra}` : '—';
+    document.getElementById('priceStorm').textContent = p.storm ? `¥${p.storm}` : '—';
+    document.getElementById('priceCommit').textContent = p.min ? `${p.min.toLocaleString()}副` : '—';
+
+    loading.style.display = 'none';
+    content.style.display = 'block';
+  } catch (e) {
+    loading.innerHTML = `<div class="error-msg">加载失败：${e.message}</div>`;
+  }
+}
+
+// ── Load ECP Board ──
+async function loadECP() {
+  const loading = document.getElementById('ecpLoading');
+  const content = document.getElementById('ecpContent');
+  try {
+    const res = await fetch(`/api/starmap/ecp-board?t=${token}`);
+    if (!res.ok) throw new Error((await res.json()).error || '请求失败');
+    const d = await res.json();
+    window._ecpLoaded = true;
+
+    document.getElementById('ecpTotal').textContent = d.totalECP;
+    document.getElementById('ecpTripRemaining').textContent = d.studyTripRemaining;
+
+    // ECP列表
+    const list = document.getElementById('ecpList');
+    if (!d.leaderboard || d.leaderboard.length === 0) {
+      list.innerHTML = '<div class="empty-msg">暂无ECP数据</div>';
+    } else {
+      list.innerHTML = d.leaderboard.map(ecp => `
+        <div class="ecp-item">
+          <div class="ecp-rank ${ecp.rank <= 3 ? 'top3' : ''}">#${ecp.rank}</div>
+          <div class="ecp-info">
+            <div class="ecp-name">${ecp.name}</div>
+            <div class="ecp-store">${ecp.store || '—'}</div>
+          </div>
+          <div class="ecp-progress">
+            <div class="ecp-count">${ecp.boundCount}<span style="font-size:0.7rem;color:var(--text-muted)">/100</span></div>
+            <div class="ecp-bar"><div class="ecp-bar-fill" style="width:${ecp.progress}%"></div></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    loading.style.display = 'none';
+    content.style.display = 'block';
+  } catch (e) {
+    loading.innerHTML = `<div class="error-msg">加载失败：${e.message}</div>`;
+  }
+}
+
+// ── Init ──
+if (!token) {
+  document.getElementById('agentName').textContent = '无效访问链接';
+  document.querySelectorAll('.loading').forEach(l => l.innerHTML = '<div class="error-msg">缺少访问参数</div>');
+} else {
+  loadAgent();
+  loadTrail();
+}
+</script>
+</body>
+</html>

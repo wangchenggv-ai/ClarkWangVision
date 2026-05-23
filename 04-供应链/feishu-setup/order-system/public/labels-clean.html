@@ -201,6 +201,7 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
 .admin-table tr.data-row[data-status="已发货"] { border-left-color: var(--success); }
 .admin-table tr.data-row[data-status="打标签"] { border-left-color: #531dab; }
 .admin-table tr.data-row[data-status="完成"] { border-left-color: #00875A; }
+.admin-table tr.data-row[data-status="已退货"] { border-left-color: #f5222d; }
 .admin-table tr.data-row.overdue { background: var(--error-light) !important; }
 .admin-table tr.data-row.overdue:hover { background: #FADBD8 !important; }
 .admin-table input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; }
@@ -327,6 +328,7 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
 .status-dot.pending-receive { background: #13c2c2; }
 .status-dot.received { background: #237804; }
 .status-dot.done { background: #d9d9d9; }
+.status-dot.returned { background: #f5222d; }
 
 /* ─── Toast ─── */
 .toast-container {
@@ -455,60 +457,6 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
   .admin-table { overflow-x: auto; }
 }
 
-/* ─── 工作流 Stepper ─── */
-.step-track {
-  display: flex;
-  align-items: center;
-  padding: 14px 0 10px;
-  gap: 0;
-}
-.step-node {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700;
-  position: relative;
-  flex-shrink: 0;
-  cursor: default;
-}
-.step-node.done { background: #52c41a; color: #fff; }
-.step-node.current { background: #1677ff; color: #fff; animation: stepPulse 1.5s infinite; }
-.step-node.pending { background: #f0f0f0; color: #bbb; border: 2px solid #d9d9d9; }
-.step-node .step-tip {
-  display: none;
-  position: absolute;
-  bottom: 36px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #333;
-  color: #fff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  white-space: nowrap;
-  z-index: 10;
-  font-weight: 400;
-}
-.step-node:hover .step-tip { display: block; }
-.step-line { flex: 1; height: 3px; background: #e8e8e8; min-width: 8px; }
-.step-line.done { background: #52c41a; }
-.step-labels {
-  display: flex;
-  padding: 0 0 4px;
-}
-.step-label {
-  flex: 1;
-  text-align: center;
-  font-size: 9px;
-  color: #999;
-  white-space: nowrap;
-}
-.step-label.done { color: #52c41a; }
-.step-label.current { color: #1677ff; font-weight: 600; }
-@keyframes stepPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(22,127,255,0.4); }
-  50% { box-shadow: 0 0 0 6px rgba(22,127,255,0); }
-}
 
 </style>
 </head>
@@ -746,8 +694,8 @@ function jsAttr(s) {
 }
 
 function statusBadge(s) {
-  const dotMap = { "已下单":"ordered","待处理":"pending","生产中":"producing","打标签":"labeled","已发货":"shipped" };
-  const clsMap = { "已下单":"badge-ordered","待处理":"badge-pending","生产中":"badge-producing","打标签":"badge-labeled","已发货":"badge-shipped" };
+  const dotMap = { "已下单":"ordered","待处理":"pending","生产中":"producing","打标签":"labeled","已发货":"shipped","已退货":"returned" };
+  const clsMap = { "已下单":"badge-ordered","待处理":"badge-pending","生产中":"badge-producing","打标签":"badge-labeled","已发货":"badge-shipped","已退货":"badge-ordered" };
   const dot = dotMap[s] ? `<span class="status-dot ${dotMap[s]}"></span>` : '';
   return `<span class="badge ${clsMap[s]||'badge-pending'}">${dot}${s||'未知'}</span>`;
 }
@@ -933,11 +881,17 @@ function getQuickAction(o) {
   const revertBtn = (o.status === "已下单" || o.status === "待处理" || o.status === "生产中" || o.status === "打标签")
     ? ` <button style="background:none;border:1px solid #d9d9d9;color:#999;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:4px" onclick="revertOrder('${o.orderNo}','${cn}',${pi},'${o.status}')" title="退回上一步">退回</button>`
     : '';
+  // 改单/发错货/退货按钮暂未启用，函数已实现，启用时取消注释
+  // const modifyBtn = (o.status === "已下单" || o.status === "待处理" || o.status === "生产中" || o.status === "打标签")
+  //   ? ` <button style="background:none;border:1px solid #d9d9d9;color:#595959;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:11px;margin-left:4px" onclick="modifyRx('${o.orderNo}','${cn}',${pi})" title="修改处方">改单</button>`
+  //   : '';
   if (o.status === "已下单") return `<button class="row-action-btn act-confirm" style="background:#1677ff;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:12px" onclick="quickConfirm('${o.orderNo}','${cn}',${pi})">待确认</button>${revertBtn}`;
   if (o.status === "待处理") return `<span style="color:#722ed1;font-size:12px;font-weight:600">&#10003; 已确认</span>${revertBtn}`;
   if (o.status === "生产中") return `<span style="color:#0958d9;font-size:12px;font-weight:600">&#9881; 生产中</span>${revertBtn}<button class="row-action-btn act-ship" style="margin-left:4px" onclick="quickShip('${o.orderNo}','${cn}',${pi})">发货</button>`;
   if (o.status === "打标签") return `<span style="color:#531dab;font-size:12px;font-weight:600">&#127991; 打标签</span>${revertBtn}<button class="row-action-btn act-slip" style="margin-left:4px;background:linear-gradient(135deg,#fff2f0,#ffccc7);color:#cf1322" onclick="quickSlip('${o.orderNo}','${cn}',${pi})">同行单</button><button class="row-action-btn act-ship" style="margin-left:4px" onclick="quickShip('${o.orderNo}','${cn}',${pi})">发货</button>`;
+  // if (o.status === "已发货") return `... 发错货/退货按钮 ...`; // 未启用
   if (o.status === "已发货") return `<span style="color:#389e0d;font-size:12px">&#128666; 已发货</span>`;
+  if (o.status === "已退货") return `<span style="color:#f5222d;font-size:12px">&#8617; 已退货</span>`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
 }
 
@@ -1181,10 +1135,15 @@ function quickZip(orderNo, customerName, pairIndex) {
 async function quickConfirm(orderNo, customerName, pairIndex) {
   const pi = pairIndex || 1;
   const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : '';
-  const ok = await showConfirmModal({ title: "确认订单", body: `确认 <b>${orderNo}</b> · <b>${customerName}</b>${badge}？<br>状态将变为"待处理"并生成镜片码。` });
+  const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName && (x.pairIndex || 1) === pi);
+  const stock = o?.stockStatus || "";
+  const stockHint = stock === "有库存" ? ' <span style="color:#52c41a">（有库存→直接打标签）</span>' : '';
+  const ok = await showConfirmModal({ title: "确认订单", body: `确认 <b>${orderNo}</b> · <b>${customerName}</b>${badge}？${stockHint}` });
   if (!ok) return;
   try {
-    const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName, pairIndex: pi });
+    const payload = { orderNos: [orderNo], customerName, pairIndex: pi };
+    if (stock === "有库存") payload.stockStatus = "有库存";
+    const data = await adminApi("/api/admin/confirm", payload);
     const r = data.results[0];
     if (r.ok) { showToast(`${orderNo} ${customerName} 已确认`, "success"); loadOrders(); }
     else showToast(`确认失败: ${r.error}`, "error");
@@ -1209,18 +1168,107 @@ async function revertOrder(orderNo, customerName, pairIndex, currentStatus) {
   } catch (e) { showToast(`退回失败: ${e.message}`, "error"); }
 }
 
+async function modifyRx(orderNo, customerName, pairIndex) {
+  const pi = pairIndex || 1;
+  let lenses = [];
+  try {
+    const r = await fetch(`/api/admin/order/${encodeURIComponent(orderNo)}/lens-details?admin=${adminToken}`);
+    const data = await r.json();
+    lenses = (data.lenses || []).filter(l => l.customerName === customerName && (l.pairIndex || 1) === pi);
+  } catch (e) { showToast("获取处方失败: " + e.message, "error"); return; }
+  if (!lenses.length) { showToast("未找到处方数据", "info"); return; }
+
+  const rxForm = lenses.map(l => `
+    <div style="margin:10px 0 4px"><b>${l.eye === "OD" ? "右眼" : "左眼"} (${l.eye})</b></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <label style="font-size:12px">SPH&nbsp;<input id="rx-${l.eye}-sph" type="number" step="0.25" value="${l.sph}" style="width:68px;border:1px solid #d9d9d9;border-radius:4px;padding:2px 4px"></label>
+      <label style="font-size:12px">CYL&nbsp;<input id="rx-${l.eye}-cyl" type="number" step="0.25" value="${l.cyl}" style="width:68px;border:1px solid #d9d9d9;border-radius:4px;padding:2px 4px"></label>
+      <label style="font-size:12px">AXIS&nbsp;<input id="rx-${l.eye}-axis" type="number" step="1" min="0" max="180" value="${l.axis}" style="width:56px;border:1px solid #d9d9d9;border-radius:4px;padding:2px 4px"></label>
+    </div>`).join("");
+
+  const badge = pi > 1 ? ` <span style="color:#e67e22">第${pi}副</span>` : "";
+  const ok = await showConfirmModal({
+    title: "改单 · 修改处方",
+    body: `<b>${orderNo}</b> · <b>${customerName}</b>${badge}<br><small style="color:#999">改单后自动退回已下单，需重新确认</small><div style="margin-top:8px">${rxForm}</div>`,
+    confirmText: "确认改单",
+    danger: true,
+  });
+  if (!ok) return;
+
+  const newLenses = lenses.map(l => ({
+    eye: l.eye,
+    sph: document.getElementById(`rx-${l.eye}-sph`)?.value ?? l.sph,
+    cyl: document.getElementById(`rx-${l.eye}-cyl`)?.value ?? l.cyl,
+    axis: document.getElementById(`rx-${l.eye}-axis`)?.value ?? l.axis,
+  }));
+
+  try {
+    const data = await adminApi("/api/admin/modify-rx", { orderNo, customerName, pairIndex: pi, lenses: newLenses });
+    const reverted = data.revertedFrom ? `（已从"${data.revertedFrom}"退回）` : "";
+    showToast(`改单成功${reverted}，请重新确认订单`, "success");
+    loadOrders();
+  } catch (e) { showToast("改单失败: " + e.message, "error"); }
+}
+
+async function wrongShipment(orderNo, customerName, pairIndex) {
+  const pi = pairIndex || 1;
+  const badge = pi > 1 ? ` 第${pi}副` : "";
+  const ok = await showConfirmModal({
+    title: "发错货标记",
+    body: `将 <b>${orderNo}</b> · <b>${customerName}</b>${badge} 标记为"发错货"？<br><small style="color:#999">仅在备注打标，状态不变。补发请手动新建订单。</small>`,
+    confirmText: "确认标记",
+    danger: true,
+  });
+  if (!ok) return;
+  const note = window.prompt("发错货备注（可选，如：发错度数、发错型号）：", "");
+  if (note === null) return;
+  try {
+    await adminApi("/api/admin/wrong-shipment", { orderNo, customerName, pairIndex: pi, note });
+    showToast("已标记发错货，请尽快手动补发", "success");
+    loadOrders();
+  } catch (e) { showToast("标记失败: " + e.message, "error"); }
+}
+
+async function returnOrder(orderNo, customerName, pairIndex) {
+  const pi = pairIndex || 1;
+  const badge = pi > 1 ? ` 第${pi}副` : "";
+  const ok = await showConfirmModal({
+    title: "确认退货",
+    body: `将 <b>${orderNo}</b> · <b>${customerName}</b>${badge} 标记为"已退货"？`,
+    confirmText: "确认退货",
+    danger: true,
+  });
+  if (!ok) return;
+  const reason = window.prompt("退货原因（可选）：", "");
+  if (reason === null) return;
+  try {
+    await adminApi("/api/admin/return-order", { orderNo, customerName, pairIndex: pi, reason });
+    showToast("已标记为已退货", "success");
+    loadOrders();
+  } catch (e) { showToast("退货失败: " + e.message, "error"); }
+}
+
 // ─── 批量操作 ───────────────────────────────────────────────────────
 
 async function confirmOrders() {
   const keys = getSelectedByStatus("已下单");
   if (keys.length === 0) { showToast("没有已下单的订单可确认", "info"); return; }
-  const ok = await showConfirmModal({ title: "批量确认", body: `确认 <b>${keys.length}</b> 项？<br>状态将变为"待处理"并生成镜片码。` });
+  const hasInStock = keys.some(key => {
+    const { orderNo, customerName, pairIndex } = parseKey(key);
+    const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName && (x.pairIndex || 1) === (pairIndex || 1));
+    return o?.stockStatus === "有库存";
+  });
+  const hint = hasInStock ? '<br><span style="color:#52c41a">有库存订单将直接变为"打标签"</span>' : '';
+  const ok = await showConfirmModal({ title: "批量确认", body: `确认 <b>${keys.length}</b> 项？${hint}` });
   if (!ok) return;
   let done = 0, fail = 0;
   for (const key of keys) {
     const { orderNo, customerName, pairIndex } = parseKey(key);
     try {
-      const data = await adminApi("/api/admin/confirm", { orderNos: [orderNo], customerName, pairIndex });
+      const o = allOrders.find(x => x.orderNo === orderNo && x.customerName === customerName && (x.pairIndex || 1) === (pairIndex || 1));
+      const payload = { orderNos: [orderNo], customerName, pairIndex };
+      if (o?.stockStatus === "有库存") payload.stockStatus = "有库存";
+      const data = await adminApi("/api/admin/confirm", payload);
       if (data.results?.[0]?.ok) done++; else fail++;
     } catch { fail++; }
   }
@@ -1393,82 +1441,6 @@ function showShipModal(count) {
     };
   });
 }
-
-// ─── 工作流 Stepper 渲染 ──────────────────────────────────────────────
-
-const STEP_KEYS = ["submitted","confirmed","producing","labeled","shipped"];
-const STEP_NAMES = ["已下单","待处理","生产中","打标签","已发货"];
-
-function renderWorkflow(container, wfData) {
-  if (!wfData || !wfData.steps) {
-    container.innerHTML = '<div style="padding:8px 0;font-size:12px;color:#bbb">暂无流程数据</div>';
-    return;
-  }
-  const steps = wfData.steps || {};
-  const currentIdx = wfData.current || 0;
-
-  let trackHtml = '<div class="step-track">';
-  let labelsHtml = '<div class="step-labels">';
-
-  for (let i = 0; i < STEP_KEYS.length; i++) {
-    const key = STEP_KEYS[i];
-    const name = STEP_NAMES[i];
-    const stepData = steps[key];
-    const isDone = !!stepData;
-    const isCurrent = i === currentIdx && !isDone;
-    // 确定最终 current：已完成的最后一步之后是 current
-    const hasThis = !!steps[key];
-    const hasNext = i < STEP_KEYS.length - 1 && !!steps[STEP_KEYS[i + 1]];
-    const isCurrentStep = hasThis && !hasNext;
-    const isPending = !hasThis && !isCurrentStep;
-
-    let cls = "pending";
-    if (hasThis) cls = "done";
-    if (isCurrentStep) cls = "current";
-
-    const tipText = stepData?.ts
-      ? `${name}\n${new Date(stepData.ts).toLocaleString("zh-CN")}`
-      : name;
-
-    trackHtml += `<div class="step-node ${cls}" title="${tipText}">${i + 1}<div class="step-tip">${tipText.replace('\n','<br>')}</div></div>`;
-
-    if (i < STEP_KEYS.length - 1) {
-      trackHtml += `<div class="step-line${hasThis ? ' done' : ''}"></div>`;
-    }
-
-    let labelCls = "";
-    if (hasThis) labelCls = "done";
-    if (isCurrentStep) labelCls = "current";
-    labelsHtml += `<div class="step-label ${labelCls}">${name}</div>`;
-  }
-
-  trackHtml += '</div>';
-  labelsHtml += '</div>';
-  container.innerHTML = trackHtml + labelsHtml;
-}
-
-// 增强 renderDetail：在处方表下方加工作流 stepper
-const _origRenderDetail = renderDetail;
-renderDetail = function(panel, data) {
-  _origRenderDetail(panel, data);
-  // 添加工作流容器
-  const wfDiv = document.createElement("div");
-  wfDiv.className = "workflow-section";
-  wfDiv.innerHTML = '<div style="font-size:12px;font-weight:600;color:#666;margin-top:10px;padding-top:8px;border-top:1px solid #f0f0f0">流程进度</div>';
-  const trackDiv = document.createElement("div");
-  trackDiv.innerHTML = '<div style="font-size:11px;color:#ccc;padding:4px 0">加载中...</div>';
-  wfDiv.appendChild(trackDiv);
-  panel.appendChild(wfDiv);
-  // 异步加载工作流
-  const on = panel.dataset.orderNo;
-  if (on) {
-    api(`/api/admin/workflow/${encodeURIComponent(on)}`).then(wfData => {
-      renderWorkflow(trackDiv, wfData);
-    }).catch(() => {
-      trackDiv.innerHTML = '<div style="font-size:11px;color:#ccc">流程数据加载失败</div>';
-    });
-  }
-};
 
 // ─── 初始化 ─────────────────────────────────────────────────────────
 

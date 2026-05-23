@@ -1,54 +1,41 @@
 {
   "main": {
-    "id": "282e8f3da3c6e05f",
+    "id": "25fb8a460083afb9",
     "type": "split",
     "children": [
       {
-        "id": "3905f9753e418b16",
+        "id": "62fd43ce887bd0a9",
         "type": "tabs",
         "children": [
           {
-            "id": "ade5c27156912433",
+            "id": "72eb04f18f8c9964",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "04-供应链/feishu-setup/order-system/订单流程图-权威版.md",
+                "file": "01-销售/暑期政策.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "订单流程图-权威版"
-            }
-          },
-          {
-            "id": "c60fa3e06f615765",
-            "type": "leaf",
-            "state": {
-              "type": "pdf",
-              "state": {
-                "file": "02-医学市场/老花OK镜/CN_Design_Ortho-K_RD_Report.pdf"
-              },
-              "icon": "lucide-file-text",
-              "title": "CN_Design_Ortho-K_RD_Report"
+              "title": "暑期政策"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "vertical"
   },
   "left": {
-    "id": "13218aab50dcba62",
+    "id": "a9a9a39e29988b8e",
     "type": "split",
     "children": [
       {
-        "id": "4e7795d24473c779",
+        "id": "9450e405a53c8047",
         "type": "tabs",
         "children": [
           {
-            "id": "76eecfbf2d207637",
+            "id": "9382085cb9f8b5b6",
             "type": "leaf",
             "state": {
               "type": "file-explorer",
@@ -61,7 +48,7 @@
             }
           },
           {
-            "id": "18973e942eedb540",
+            "id": "1a9896d31153ba96",
             "type": "leaf",
             "state": {
               "type": "search",
@@ -78,7 +65,7 @@
             }
           },
           {
-            "id": "dcf4647a46d58dc6",
+            "id": "18c79efed4272e34",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
@@ -91,23 +78,23 @@
       }
     ],
     "direction": "horizontal",
-    "width": 229.5
+    "width": 300
   },
   "right": {
-    "id": "2e20f37112f03c46",
+    "id": "f4035140a8f2a308",
     "type": "split",
     "children": [
       {
-        "id": "99c98bb175248b53",
+        "id": "941ed7d287a5fe15",
         "type": "tabs",
         "children": [
           {
-            "id": "1eb3305768765963",
+            "id": "cb6a657e0c3ac0a8",
             "type": "leaf",
             "state": {
               "type": "backlink",
               "state": {
-                "file": "02-医学市场/4月9日产品发布会逐字稿_20260409.md",
+                "file": "02-医学市场/短视频工作流/短视频文案工作流.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -117,25 +104,25 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "4月9日产品发布会逐字稿_20260409 的反向链接列表"
+              "title": "短视频文案工作流 的反向链接列表"
             }
           },
           {
-            "id": "257db77ef3e40923",
+            "id": "e0b4ed76135dc53d",
             "type": "leaf",
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "欢迎.md",
+                "file": "02-医学市场/短视频工作流/短视频文案工作流.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "欢迎 的出链列表"
+              "title": "短视频文案工作流 的出链列表"
             }
           },
           {
-            "id": "b4ba0a4fbf40dba9",
+            "id": "69160ed674092e1c",
             "type": "leaf",
             "state": {
               "type": "tag",
@@ -150,7 +137,7 @@
             }
           },
           {
-            "id": "f7f8c0ada62682f2",
+            "id": "5acbaa37196eedc5",
             "type": "leaf",
             "state": {
               "type": "all-properties",
@@ -164,25 +151,25 @@
             }
           },
           {
-            "id": "8bc246a4ccd3e43d",
+            "id": "bb9d03c04cc09a7a",
             "type": "leaf",
             "state": {
               "type": "outline",
               "state": {
-                "file": "大客户与RGP开发奖政策_2026.md",
+                "file": "02-医学市场/短视频工作流/短视频文案工作流.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "大客户与RGP开发奖政策_2026 的大纲"
+              "title": "短视频文案工作流 的大纲"
             }
           }
         ]
       }
     ],
     "direction": "horizontal",
-    "width": 200,
+    "width": 300,
     "collapsed": true
   },
   "left-ribbon": {
@@ -196,53 +183,32 @@
       "bases:新建数据库": false
     }
   },
-  "active": "76eecfbf2d207637",
+  "active": "72eb04f18f8c9964",
   "lastOpenFiles": [
-    "02-医学市场/老花OK镜/CN_Design_Ortho-K_R&D_Report_EN.md",
-    "02-医学市场/老花OK镜/中央看近型设计（CN)研发报告.md",
-    "02-医学市场/老花OK镜/老花OK镜_完整认知与推广策略汇总.md",
-    "02-医学市场/老花OK镜/成人OK镜战略_2026.md",
-    "AI配置/小米MiMo大模型申请.md",
-    "朝聚售后.md",
-    "04-供应链/feishu-setup/order-system/docs/标签Excel导出操作手册.md",
-    "04-供应链/feishu-setup/order-system/订单流程图-权威版.md",
-    "~$标签数据_21单.xlsx",
-    "标签数据_21单.xlsx",
-    "未确认 55300.crdownload",
-    "d039e4ea-ded1-4bca-a8f0-6150c288b72c.tmp",
-    "04-供应链/feishu-setup/order-system/qrcodes/TEST17773543057022.png",
-    "04-供应链/feishu-setup/order-system/qrcodes/TEST17773543056921.png",
-    "04-供应链/feishu-setup/order-system/qrcodes/TEST17773543056660.png",
-    "04-供应链/feishu-setup/order-system/qrcodes",
-    "04-供应链/feishu-setup/order-system/docs/打标签操作手册.md",
-    "04-供应链/feishu-setup/order-system/docs/e2e-flow-guide.md",
-    "04-供应链/feishu-setup/order-system/public/orders.html",
-    "04-供应链/feishu-setup/order-system/migrate_lens_detail.js",
-    "04-供应链/feishu-setup/order-system/CHANGELOG.md",
-    "04-供应链/feishu-setup/ARCHITECTURE-OVERVIEW.md",
-    "04-供应链/feishu-setup/order-system/cleanup_signed.js",
-    "README-方案C.txt",
-    "98-代码仓库/马尼拉.zip",
-    "98-代码仓库/茂茂/卡坦岛/卡坦岛.md",
-    "98-代码仓库/茂茂/马尼拉/README.md",
-    "98-代码仓库/茂茂/angry-birds/README.md",
-    "98-代码仓库/茂茂/abstract-tinkering-fairy.md",
-    "04-供应链/feishu-setup/order-system/ARCHITECTURE.md",
-    "04-供应链/feishu-setup/inventory-system/CLAUDE.md",
-    "04-供应链/feishu-setup/inventory-system/STATE.md",
-    "04-供应链/各种文件汇总/feishu-setup-summary.md",
-    "04-供应链/feishu-setup/order-system/STATE.md",
-    "04-供应链/feishu-setup/order-system/核心业务流程完整的订单状态.md",
-    "04-供应链/feishu-setup/order-system/订单项目-AI启动提示词.md.md",
-    "04-供应链/feishu-setup/order-system/README_optimizer.md",
-    "04-供应链/feishu-setup/order-system/README.md",
-    "04-供应链/feishu-setup/order-system/LAUNCH-PLAN.md",
-    "04-供应链/feishu-setup/order-system/flowchart.jpg",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/1D40EF07E37AAD1C.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/69779A5436589EDD.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/5811F828E6379634.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/A4ABCFE3775F9338.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/83668705B5817649.png",
-    "04-供应链/feishu-setup/order-system/public/qrcodes/E65F73447801D0F3.png"
+    "04-供应链/feishu-setup/order-system/docs/biz-dashboard.md",
+    "04-供应链/feishu-setup/order-system/STATE.md.tmp.23072.28efa1584d8e",
+    "04-供应链/feishu-setup/order-system/STATE.md.tmp.23072.342dc2165792",
+    "04-供应链/feishu-setup/order-system/lib/factory-export.js.tmp.23072.87afd8695921",
+    "04-供应链/feishu-setup/order-system/lib/factory-export.js.tmp.23072.840b10b312c4",
+    "04-供应链/feishu-setup/order-system/lib/factory-export.js.tmp.23072.94809f71296e",
+    "04-供应链/feishu-setup/order-system/test_labels_demo.html",
+    "04-供应链/feishu-setup/order-system/test_slip_demo.html",
+    "04-供应链/feishu-setup/order-system/test_serial_slip.mjs.tmp.23072.a81fd4300d24",
+    "04-供应链/feishu-setup/order-system/lib/templates.js.tmp.23072.23ce717c6e7d",
+    "04-供应链/feishu-setup/order-system/biz-dashboard.html",
+    "04-供应链/未命名.md",
+    "01-销售/暑期政策.md",
+    "04-供应链/feishu-setup/仓库设计/仓库设计-镜片备库方案.md",
+    "AI配置/01-OpenClaw/飞书Openclaw.md",
+    "AI配置/README.md",
+    "AI配置/同时4个窗口AI工作.png",
+    "AI配置/01-OpenClaw/OpenCode 工作配置（2026-04-25）.md",
+    "AI配置/01-OpenClaw/2026-04-11-openclaw-setup.md",
+    "04-供应链/feishu-setup/inventory-system/需求.md",
+    "04-供应链/feishu-setup/order-system/docs/单眼订单方案评估.md",
+    "04-供应链/feishu-setup/inventory-system/heat-map-tool/测试指南.md",
+    "04-供应链/feishu-setup/order-system/docs/仓位系统设计-2026-05-12.md",
+    "02-医学市场/短视频工作流/短视频文案工作流.md",
+    "05-人力/核心销售留任谈话要点.md"
   ]
 }

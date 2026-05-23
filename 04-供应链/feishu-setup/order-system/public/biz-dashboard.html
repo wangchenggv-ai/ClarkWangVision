@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>业务看板 · 高视星</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<style>
+:root {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --border: #dde6ef;
+  --text: #1a2332;
+  --text-2: #4a5568;
+  --text-3: #8a9ab0;
+  --navy: #1A5276;
+  --navy-dark: #0f3352;
+  --navy-light: #2471a3;
+  --accent: #6c8cff;
+  --gold: #ffd700;
+  --orange: #ff8c42;
+  --green: #27ae60;
+  --red: #e74c3c;
+  --shadow: 0 1px 3px rgba(26,82,118,0.08), 0 4px 16px rgba(26,82,118,0.05);
+  --radius: 16px;
+  --radius-sm: 12px;
+  --font: 'Noto Sans SC', -apple-system, sans-serif;
+  --font-num: 'DM Mono', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+.topbar {
+  background: var(--navy);
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-brand {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, #6c8cff 0%, #a78bfa 50%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.topbar-tabs { display: flex; gap: 0; }
+.tab-btn {
+  padding: 0.5rem 1.5rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s;
+}
+.tab-btn:hover { color: rgba(255,255,255,0.85); }
+.tab-btn.active { color: #fff; border-bottom-color: #f0a050; }
+.page { max-width: 1280px; margin: 0 auto; padding: 1.25rem 1.5rem 2rem; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+.card-header {
+  padding: 0.9rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-title { font-size: 0.82rem; font-weight: 700; color: var(--navy-dark); }
+.card-sub { font-size: 0.7rem; color: var(--text-3); margin-top: 0.1rem; }
+.card-body { padding: 1.25rem; }
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.25rem; }
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.25rem;
+}
+.kpi-label { font-size: 0.72rem; color: var(--text-3); margin-bottom: 0.5rem; font-weight: 500; }
+.kpi-value {
+  font-size: 1.8rem;
+  font-family: var(--font-num);
+  font-weight: 500;
+  color: var(--navy-dark);
+  line-height: 1;
+}
+.kpi-value span { font-size: 0.82rem; font-family: var(--font); color: var(--text-3); font-weight: 400; margin-left: 0.2rem; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-bottom: 1.25rem; }
+.chart-box { height: 300px; }
+.board-table { width: 100%; border-collapse: collapse; }
+.board-table th {
+  font-size: 0.65rem;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  font-weight: 500;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: #fafbfc;
+}
+.board-table th.r { text-align: right; }
+.board-table td {
+  padding: 0.85rem 1rem;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+}
+.board-table tr:last-child td { border-bottom: none; }
+.board-table tr:hover td { background: #f8fafc; }
+.td-r { text-align: right; font-family: var(--font-num); font-weight: 600; color: var(--navy-dark); }
+.filter-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+.filter-bar label { font-size: 0.78rem; color: var(--text-2); font-weight: 500; }
+.filter-bar input, .filter-bar select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.82rem;
+  font-family: var(--font);
+  color: var(--text);
+  background: #fff;
+}
+.filter-bar input:focus, .filter-bar select:focus { outline: none; border-color: var(--navy-light); }
+.btn-refresh {
+  padding: 0.45rem 1.2rem;
+  background: var(--navy-light);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.btn-refresh:hover { background: var(--navy); }
+.empty-tip { text-align: center; color: var(--text-3); font-size: 0.8rem; padding: 2rem 1rem; }
+.loading { text-align: center; color: var(--text-3); padding: 3rem; }
+@media (max-width: 768px) {
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .chart-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-brand">高视星 · 业务看板</div>
+  <div class="topbar-tabs">
+    <button class="tab-btn active" data-tab="company" onclick="switchTab('company')">公司看板</button>
+    <button class="tab-btn" data-tab="manager" onclick="switchTab('manager')">经理看板</button>
+    <button class="tab-btn" data-tab="agent" onclick="switchTab('agent')">代理商看板</button>
+  </div>
+</div>
+
+<!-- ══ Tab 1: 公司看板 ══ -->
+<div id="tab-company" class="tab-panel active">
+<div class="page">
+  <div class="filter-bar">
+    <label>起始日期</label>
+    <input type="date" id="c-start" value="2026-01-01">
+    <label>截止日期</label>
+    <input type="date" id="c-end">
+    <button class="btn-refresh" onclick="loadCompany()">查询</button>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">订单总量</div>
+      <div class="kpi-value" id="c-total-orders">—<span>副</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">活跃代理商</div>
+      <div class="kpi-value" id="c-active-agents">—<span>家</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">SKU数量</div>
+      <div class="kpi-value" id="c-sku-count">—<span>种</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">月均订单</div>
+      <div class="kpi-value" id="c-avg-monthly">—<span>副/月</span></div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-header"><div class="card-title">月度订单趋势</div></div>
+      <div class="card-body"><div class="chart-box" id="c-chart-monthly"></div></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-header"><div class="card-title">SKU分布</div></div>
+      <div class="card-body"><div class="chart-box" id="c-chart-sku"></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">代理商排名 TOP10</div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="board-table">
+        <thead><tr>
+          <th style="width:60px">排名</th>
+          <th>代理商</th>
+          <th class="r">订单量</th>
+          <th class="r" style="padding-right:1.25rem">占比</th>
+        </tr></thead>
+        <tbody id="c-top-agents"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 大客户看板 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">大客户看板</div>
+        <div class="card-sub">手动标记的重点客户订单汇总</div>
+      </div>
+    </div>
+    <div id="c-key-accounts-body">
+      <div class="loading">加载中…</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ Tab 2: 经理看板 ══ -->
+<div id="tab-manager" class="tab-panel">
+<div class="page">
+  <div class="filter-bar">
+    <label>选择经理</label>
+    <select id="m-manager"><option value="">加载中…</option></select>
+    <label>起始日期</label>
+    <input type="date" id="m-start" value="2026-01-01">
+    <label>截止日期</label>
+    <input type="date" id="m-end">
+    <button class="btn-refresh" onclick="loadManager()">查询</button>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">订单总量</div>
+      <div class="kpi-value" id="m-total-orders">—<span>副</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">负责代理商</div>
+      <div class="kpi-value" id="m-agent-count">—<span>家</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">SKU数量</div>
+      <div class="kpi-value" id="m-sku-count">—<span>种</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">月均订单</div>
+      <div class="kpi-value" id="m-avg-monthly">—<span>副/月</span></div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-header"><div class="card-title">月度订单趋势</div></div>
+      <div class="card-body"><div class="chart-box" id="m-chart-monthly"></div></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-header"><div class="card-title">代理商分布</div></div>
+      <div class="card-body"><div class="chart-box" id="m-chart-agent"></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">代理商明细</div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="board-table">
+        <thead><tr>
+          <th style="width:60px">排名</th>
+          <th>代理商</th>
+          <th class="r">订单量</th>
+          <th class="r" style="padding-right:1.25rem">占比</th>
+        </tr></thead>
+        <tbody id="m-agent-breakdown"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ══ Tab 3: 代理商看板 ══ -->
+<div id="tab-agent" class="tab-panel">
+<div class="page">
+  <div class="filter-bar">
+    <label>选择代理商</label>
+    <select id="a-agent"><option value="">加载中…</option></select>
+    <label>起始日期</label>
+    <input type="date" id="a-start" value="2026-01-01">
+    <label>截止日期</label>
+    <input type="date" id="a-end">
+    <button class="btn-refresh" onclick="loadAgent()">查询</button>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">订单总量</div>
+      <div class="kpi-value" id="a-total-orders">—<span>副</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">SKU数量</div>
+      <div class="kpi-value" id="a-sku-count">—<span>种</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">终端客户数</div>
+      <div class="kpi-value" id="a-customer-count">—<span>家</span></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">月均订单</div>
+      <div class="kpi-value" id="a-avg-monthly">—<span>副/月</span></div>
+    </div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-header"><div class="card-title">月度订单趋势</div></div>
+      <div class="card-body"><div class="chart-box" id="a-chart-monthly"></div></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-header"><div class="card-title">SKU分布</div></div>
+      <div class="card-body"><div class="chart-box" id="a-chart-sku"></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">终端客户排名</div>
+        <div class="card-sub">含大客户标记</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="board-table">
+        <thead><tr>
+          <th style="width:60px">排名</th>
+          <th>客户名称</th>
+          <th>标记</th>
+          <th class="r">订单量</th>
+          <th class="r" style="padding-right:1.25rem">占比</th>
+        </tr></thead>
+        <tbody id="a-customer-breakdown"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const API = '';
+
+// ══════════════════════════════════════════════════
+// Tab Switching
+// ══════════════════════════════════════════════════
+
+let companyLoaded = false;
+let managerLoaded = false;
+let agentLoaded = false;
+let listsData = null;
+let keyAccountsList = [];
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+
+  if (tab === 'company' && !companyLoaded) { companyLoaded = true; loadCompany(); }
+  if (tab === 'manager' && !managerLoaded) { managerLoaded = true; initManager(); }
+  if (tab === 'agent' && !agentLoaded) { agentLoaded = true; initAgent(); }
+}
+
+// ══════════════════════════════════════════════════
+// Company Dashboard
+// ══════════════════════════════════════════════════
+
+async function loadCompany() {
+  const start = document.getElementById('c-start').value;
+  const end = document.getElementById('c-end').value || new Date().toISOString().slice(0, 10);
+
+  try {
+    const [overview, kaData] = await Promise.all([
+      fetch(`${API}/api/biz-dashboard/overview?start=${start}&end=${end}`).then(r => r.json()),
+      fetch(`${API}/api/biz-dashboard/key-accounts?start=${start}&end=${end}`).then(r => r.json()),
+    ]);
+
+    // KPI
+    document.getElementById('c-total-orders').innerHTML = `${overview.summary.totalOrders.toLocaleString()}<span>副</span>`;
+    document.getElementById('c-active-agents').innerHTML = `${overview.summary.activeAgents}<span>家</span>`;
+    document.getElementById('c-sku-count').innerHTML = `${overview.skuDist.length}<span>种</span>`;
+
+    const months = overview.monthly.length || 1;
+    document.getElementById('c-avg-monthly').innerHTML = `${Math.round(overview.summary.totalOrders / months).toLocaleString()}<span>副/月</span>`;
+
+    // 月度趋势图
+    renderBarChart('c-chart-monthly', overview.monthly.map(m => m.month), overview.monthly.map(m => m.qty), '订单量');
+
+    // SKU分布图
+    renderPieChart('c-chart-sku', overview.skuDist.map(s => ({ name: s.sku, value: s.qty })));
+
+    // TOP10代理商
+    renderTopTable('c-top-agents', overview.topAgents, overview.summary.totalQty);
+
+    // 大客户看板
+    renderKeyAccounts(kaData);
+
+  } catch (e) {
+    console.error('loadCompany error:', e);
+  }
+}
+
+function renderKeyAccounts(data) {
+  const el = document.getElementById('c-key-accounts-body');
+  if (!data.keyAccounts || !data.keyAccounts.length) {
+    el.innerHTML = '<div class="empty-tip">暂无大客户数据，请在飞书大客户标记表中添加</div>';
+    return;
+  }
+  const total = data.summary.totalQty;
+  el.innerHTML = `
+    <div style="padding:0 1.25rem 1rem;font-size:0.78rem;color:var(--text-3)">
+      共 ${data.summary.keyAccountCount} 个大客户，累计 ${data.summary.totalOrders} 单 ${data.summary.totalQty} 副
+    </div>
+    <table class="board-table">
+      <thead><tr>
+        <th style="padding-left:1.25rem;width:60px">排名</th>
+        <th>客户名称</th>
+        <th>所属代理商</th>
+        <th class="r">订单量</th>
+        <th class="r" style="padding-right:1.25rem">占比</th>
+      </tr></thead>
+      <tbody>
+        ${data.keyAccounts.map((ka, i) => {
+          const pct = total ? Math.round(ka.qty / total * 100) : 0;
+          return `<tr>
+            <td style="padding-left:1.25rem;font-family:var(--font-num);color:${i < 3 ? 'var(--gold)' : 'var(--text-3)'}">${i + 1}</td>
+            <td><strong>${ka.name}</strong></td>
+            <td style="color:var(--text-3)">${ka.agent || '—'}</td>
+            <td class="td-r">${ka.qty.toLocaleString()} 副</td>
+            <td style="text-align:right;padding-right:1.25rem">
+              <div style="display:flex;align-items:center;gap:0.5rem;justify-content:flex-end">
+                <div style="width:60px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+                  <div style="width:${pct}%;height:100%;background:var(--navy-light);border-radius:3px"></div>
+                </div>
+                <span style="font-family:var(--font-num);font-size:0.72rem;font-weight:700;width:32px;text-align:right">${pct}%</span>
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ══════════════════════════════════════════════════
+// Manager Dashboard
+// ══════════════════════════════════════════════════
+
+async function initManager() {
+  if (!listsData) {
+    try {
+      listsData = await fetch(`${API}/api/biz-dashboard/lists`).then(r => r.json());
+      keyAccountsList = listsData.keyAccounts || [];
+    } catch (e) {
+      console.error('load lists error:', e);
+    }
+  }
+
+  const sel = document.getElementById('m-manager');
+  sel.innerHTML = '<option value="">请选择经理</option>' +
+    (listsData?.managers || []).map(m => `<option value="${m}">${m}</option>`).join('');
+}
+
+async function loadManager() {
+  const manager = document.getElementById('m-manager').value;
+  if (!manager) return;
+
+  const start = document.getElementById('m-start').value;
+  const end = document.getElementById('m-end').value || new Date().toISOString().slice(0, 10);
+
+  try {
+    const data = await fetch(`${API}/api/biz-dashboard/manager/${encodeURIComponent(manager)}?start=${start}&end=${end}`).then(r => r.json());
+
+    // KPI
+    document.getElementById('m-total-orders').innerHTML = `${data.summary.totalOrders.toLocaleString()}<span>副</span>`;
+    document.getElementById('m-agent-count').innerHTML = `${data.summary.agentCount}<span>家</span>`;
+
+    const skuSet = new Set();
+    data.agentBreakdown?.forEach(a => skuSet.add(a.name));
+    document.getElementById('m-sku-count').innerHTML = `${data.agentBreakdown?.length || 0}<span>种</span>`;
+
+    const months = data.monthly.length || 1;
+    document.getElementById('m-avg-monthly').innerHTML = `${Math.round(data.summary.totalOrders / months).toLocaleString()}<span>副/月</span>`;
+
+    // 月度趋势图
+    renderBarChart('m-chart-monthly', data.monthly.map(m => m.month), data.monthly.map(m => m.qty), '订单量');
+
+    // 代理商分布图
+    renderPieChart('m-chart-agent', data.agentBreakdown?.map(a => ({ name: a.name, value: a.qty })) || []);
+
+    // 代理商明细表
+    renderTopTable('m-agent-breakdown', data.agentBreakdown || [], data.summary.totalQty);
+
+  } catch (e) {
+    console.error('loadManager error:', e);
+  }
+}
+
+// ══════════════════════════════════════════════════
+// Agent Dashboard
+// ══════════════════════════════════════════════════
+
+async function initAgent() {
+  if (!listsData) {
+    try {
+      listsData = await fetch(`${API}/api/biz-dashboard/lists`).then(r => r.json());
+      keyAccountsList = listsData.keyAccounts || [];
+    } catch (e) {
+      console.error('load lists error:', e);
+    }
+  }
+
+  const sel = document.getElementById('a-agent');
+  sel.innerHTML = '<option value="">请选择代理商</option>' +
+    (listsData?.agents || []).map(a => `<option value="${a}">${a}</option>`).join('');
+}
+
+async function loadAgent() {
+  const agent = document.getElementById('a-agent').value;
+  if (!agent) return;
+
+  const start = document.getElementById('a-start').value;
+  const end = document.getElementById('a-end').value || new Date().toISOString().slice(0, 10);
+
+  try {
+    const data = await fetch(`${API}/api/biz-dashboard/agent/${encodeURIComponent(agent)}?start=${start}&end=${end}`).then(r => r.json());
+
+    // KPI
+    document.getElementById('a-total-orders').innerHTML = `${data.summary.totalOrders.toLocaleString()}<span>副</span>`;
+    document.getElementById('a-sku-count').innerHTML = `${data.skuDist.length}<span>种</span>`;
+    document.getElementById('a-customer-count').innerHTML = `${data.topCustomers.length}<span>家</span>`;
+
+    const months = data.monthly.length || 1;
+    document.getElementById('a-avg-monthly').innerHTML = `${Math.round(data.summary.totalOrders / months).toLocaleString()}<span>副/月</span>`;
+
+    // 月度趋势图
+    renderBarChart('a-chart-monthly', data.monthly.map(m => m.month), data.monthly.map(m => m.qty), '订单量');
+
+    // SKU分布图
+    renderPieChart('a-chart-sku', data.skuDist.map(s => ({ name: s.sku, value: s.qty })));
+
+    // 终端客户排名表
+    renderCustomerTable('a-customer-breakdown', data.topCustomers, data.summary.totalQty);
+
+  } catch (e) {
+    console.error('loadAgent error:', e);
+  }
+}
+
+function renderCustomerTable(elementId, customers, total) {
+  const el = document.getElementById(elementId);
+  el.innerHTML = customers.map((c, i) => {
+    const pct = total ? Math.round(c.qty / total * 100) : 0;
+    const isKA = keyAccountsList.includes(c.name);
+    return `<tr>
+      <td style="padding-left:1.25rem;font-family:var(--font-num);color:${i < 3 ? 'var(--gold)' : 'var(--text-3)'}">${i + 1}</td>
+      <td><strong>${c.name}</strong></td>
+      <td>${isKA ? '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:700">大客户</span>' : '<span style="color:var(--text-3);font-size:0.72rem">—</span>'}</td>
+      <td class="td-r">${c.qty.toLocaleString()} 副</td>
+      <td style="text-align:right;padding-right:1.25rem">
+        <div style="display:flex;align-items:center;gap:0.5rem;justify-content:flex-end">
+          <div style="width:60px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${isKA ? 'var(--gold)' : 'var(--navy-light)'};border-radius:3px"></div>
+          </div>
+          <span style="font-family:var(--font-num);font-size:0.72rem;font-weight:700;width:32px;text-align:right">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════
+// Chart Helpers
+// ══════════════════════════════════════════════════
+
+function renderBarChart(elementId, xData, yData, name) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const chart = echarts.init(el);
+  chart.setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+    xAxis: { type: 'category', data: xData, axisLabel: { fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { fontSize: 11 } },
+    series: [{
+      name: name,
+      type: 'bar',
+      data: yData,
+      itemStyle: { color: '#6c8cff', borderRadius: [4, 4, 0, 0] },
+      barMaxWidth: 40,
+    }],
+  });
+  window.addEventListener('resize', () => chart.resize());
+}
+
+function renderPieChart(elementId, data) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const chart = echarts.init(el);
+  chart.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: { orient: 'vertical', right: '5%', top: 'center', textStyle: { fontSize: 11 } },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      center: ['40%', '50%'],
+      avoidLabelOverlap: false,
+      label: { show: false },
+      emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
+      data: data,
+    }],
+  });
+  window.addEventListener('resize', () => chart.resize());
+}
+
+function renderTopTable(elementId, items, total) {
+  const el = document.getElementById(elementId);
+  el.innerHTML = items.map((item, i) => {
+    const pct = total ? Math.round(item.qty / total * 100) : 0;
+    return `<tr>
+      <td style="padding-left:1.25rem;font-family:var(--font-num);color:${i < 3 ? 'var(--gold)' : 'var(--text-3)'}">${i + 1}</td>
+      <td><strong>${item.name}</strong></td>
+      <td class="td-r">${item.qty.toLocaleString()} 副</td>
+      <td style="text-align:right;padding-right:1.25rem">
+        <div style="display:flex;align-items:center;gap:0.5rem;justify-content:flex-end">
+          <div style="width:60px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:var(--navy-light);border-radius:3px"></div>
+          </div>
+          <span style="font-family:var(--font-num);font-size:0.72rem;font-weight:700;width:32px;text-align:right">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════
+// Init
+// ══════════════════════════════════════════════════
+
+document.getElementById('c-end').value = new Date().toISOString().slice(0, 10);
+document.getElementById('m-end').value = new Date().toISOString().slice(0, 10);
+document.getElementById('a-end').value = new Date().toISOString().slice(0, 10);
+
+companyLoaded = true;
+loadCompany();
+</script>
+</body>
+</html>

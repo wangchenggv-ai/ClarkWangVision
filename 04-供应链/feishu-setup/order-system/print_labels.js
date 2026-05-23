@@ -179,6 +179,8 @@ body {
   display: flex;
   flex-direction: column;
   border: 0.3mm solid #ddd;
+  transform: scale(0.8);
+  transform-origin: top left;
 }
 
 /* ── 顶部色带（眼别标识）── */
@@ -550,7 +552,7 @@ body {
   .a4-page { margin: 0; box-shadow: none; }
 }
 
-/* ── 单张标签（75mm × 40mm）── */
+/* ── 单张标签（75mm × 40mm，内容80%）── */
 .label {
   width: 75mm; height: 40mm;
   display: flex; flex-direction: column;
@@ -558,6 +560,8 @@ body {
   border-radius: 1mm;
   overflow: hidden;
   page-break-inside: avoid;
+  transform: scale(0.8);
+  transform-origin: top left;
 }
 
 /* 顶部色带 */

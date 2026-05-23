@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>高视星 · 星图</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --border: #dde6ef;
+  --text: #1a2332;
+  --text-2: #4a5568;
+  --text-3: #8a9ab0;
+  --navy: #1A5276;
+  --navy-dark: #0f3352;
+  --navy-light: #2471a3;
+  --accent: #6c8cff;
+  --gold: #ffd700;
+  --orange: #ff8c42;
+  --green: #27ae60;
+  --red: #e74c3c;
+  --shadow: 0 1px 3px rgba(26,82,118,0.08), 0 4px 16px rgba(26,82,118,0.05);
+  --radius: 16px;
+  --radius-sm: 12px;
+  --font: 'Noto Sans SC', -apple-system, sans-serif;
+  --font-num: 'DM Mono', monospace;
+  --nav-h: 60px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Star colors */
+  --star-bg: #0f1429;
+  --star-surface: #1a2240;
+  --star-accent: #6c8cff;
+  --star-gold: #ffd700;
+  --star-green: #4ade80;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Topbar ── */
+.topbar {
+  background: var(--navy);
+  height: 52px;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1.5rem;
+}
+.topbar-brand {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, #6c8cff 0%, #a78bfa 50%, #ffd700 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.topbar-sep { width: 1px; height: 16px; background: rgba(255,255,255,0.2); }
+.topbar-name {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.7);
+}
+.topbar-tabs {
+  display: flex;
+  align-items: stretch;
+}
+.tab-btn {
+  display: flex;
+  align-items: center;
+  padding: 0 1.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: rgba(255,255,255,0.85); }
+.tab-btn.active { color: #fff; border-bottom-color: #f0a050; }
+.topbar-right {
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+}
+.summer-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  background: rgba(230,126,34,0.25);
+  color: #f0a050;
+  border: 1px solid rgba(230,126,34,0.4);
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+}
+
+/* ── Layout ── */
+.page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 1.25rem 1.5rem calc(var(--nav-h) + var(--safe-bottom) + 1rem);
+}
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+}
+.card-header {
+  padding: 0.9rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--navy-dark);
+}
+.card-sub {
+  font-size: 0.7rem;
+  color: var(--text-3);
+  margin-top: 0.1rem;
+}
+.card-body { padding: 1.25rem; }
+
+/* ── Countdown Bar ── */
+.countdown-bar {
+  background: linear-gradient(135deg, var(--navy-dark), var(--navy));
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.countdown-left h2 {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 0.25rem;
+  font-weight: 400;
+}
+.countdown-left p {
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.9);
+}
+.countdown-nums { display: flex; gap: 1.5rem; }
+.cnum { text-align: center; }
+.cnum-val {
+  font-family: var(--font-num);
+  font-size: 2rem;
+  font-weight: 500;
+  color: #fff;
+  line-height: 1;
+}
+.cnum-label {
+  font-size: 0.62rem;
+  color: rgba(255,255,255,0.45);
+  margin-top: 0.2rem;
+  letter-spacing: 0.06em;
+}
+.progress-track { flex: 1; max-width: 200px; }
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 0.4rem;
+}
+.progress-bar-bg {
+  height: 6px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
+}
+.progress-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #f0a050, #e67e22);
+}
+
+/* ── Star Trail Card (dark) ── */
+.star-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow);
+}
+.star-card .card-title {
+  color: var(--text-3);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 1rem;
+}
+
+/* ── Big Numbers ── */
+.big-num {
+  font-family: var(--font-num);
+  font-size: 2.5rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+.big-num-unit {
+  font-size: 0.9rem;
+  color: var(--text-3);
+  font-family: var(--font);
+  margin-left: 4px;
+}
+
+/* ── Progress Bar (star) ── */
+.star-progress-wrap {
+  background: var(--bg);
+  border-radius: 8px;
+  height: 12px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+.star-progress-fill {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.8s ease;
+  position: relative;
+}
+.star-progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+  animation: shimmer 2s infinite;
+}
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ── Stats Grid ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.stat-item {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  text-align: center;
+}
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+.stat-value {
+  font-family: var(--font-num);
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: var(--navy-dark);
+}
+
+/* ── Status Badge ── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  margin-top: 12px;
+}
+.status-badge.normal { background: rgba(108,140,255,0.15); color: var(--accent); }
+.status-badge.behind { background: rgba(255,140,66,0.15); color: var(--orange); }
+.status-badge.ahead { background: rgba(74,222,128,0.15); color: var(--green); }
+.status-badge.exceeded { background: rgba(255,215,0,0.15); color: var(--gold); }
+.status-badge.no_target { background: rgba(107,114,128,0.15); color: var(--text-3); }
+
+/* ── KPI Cards ── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.25rem;
+}
+.kpi-label {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+.kpi-value {
+  font-size: 1.8rem;
+  font-family: var(--font-num);
+  font-weight: 500;
+  color: var(--navy-dark);
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+.kpi-value span {
+  font-size: 0.82rem;
+  font-family: var(--font);
+  color: var(--text-3);
+  font-weight: 400;
+  margin-left: 0.2rem;
+}
+.kpi-change {
+  font-size: 0.72rem;
+}
+.kpi-change.up { color: var(--green); }
+.kpi-change.neutral { color: var(--text-3); }
+.kpi-bar-bg {
+  height: 4px;
+  background: var(--bg);
+  border-radius: 2px;
+  margin-top: 0.75rem;
+}
+.kpi-bar-fill { height: 100%; border-radius: 2px; }
+
+/* ── Tier Badge ── */
+.tier-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  font-weight: 900;
+  margin: 0 auto 12px;
+}
+.tier-0 { background: rgba(107,114,128,0.2); color: var(--text-3); border: 2px solid var(--text-3); }
+.tier-5 { background: rgba(108,140,255,0.15); color: var(--accent); border: 2px solid var(--accent); }
+.tier-8 { background: rgba(74,222,128,0.15); color: var(--green); border: 2px solid var(--green); }
+.tier-10 { background: rgba(255,215,0,0.15); color: var(--gold); border: 2px solid var(--gold); }
+
+/* ── Store Table ── */
+.board-table { width: 100%; border-collapse: collapse; }
+.board-table th {
+  font-size: 0.65rem;
+  letter-spacing: 0.07em;
+  color: var(--text-3);
+  font-weight: 500;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  background: #fafbfc;
+}
+.board-table th.r { text-align: right; }
+.board-table td {
+  padding: 0.85rem 1rem;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  vertical-align: middle;
+}
+.board-table tr:last-child td { border-bottom: none; }
+.board-table tr:hover td { background: #f8fafc; }
+
+/* ── ECP List ── */
+.ecp-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ecp-item:last-child { border-bottom: none; }
+.ecp-rank {
+  font-family: var(--font-num);
+  font-size: 1.2rem;
+  font-weight: 500;
+  width: 32px;
+  text-align: center;
+  color: var(--text-3);
+}
+.ecp-rank.top3 { color: var(--gold); }
+.ecp-info { flex: 1; }
+.ecp-name { font-size: 0.9rem; font-weight: 500; }
+.ecp-store { font-size: 0.72rem; color: var(--text-3); margin-top: 2px; }
+.ecp-progress { text-align: right; }
+.ecp-count {
+  font-family: var(--font-num);
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+.ecp-bar {
+  width: 60px;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  margin-top: 4px;
+  margin-left: auto;
+}
+.ecp-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--navy-light);
+}
+
+/* ── Price Grid ── */
+.price-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+.price-item {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  text-align: center;
+}
+.price-label {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.price-value {
+  font-family: var(--font-num);
+  font-size: 1.2rem;
+  font-weight: 500;
+  color: var(--navy-dark);
+}
+
+/* ── Rebate Table ── */
+.rebate-table {
+  width: 100%;
+  font-size: 0.8rem;
+  line-height: 1.8;
+}
+.rebate-table td {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.rebate-table tr:last-child td { border-bottom: none; }
+.rebate-rate {
+  font-weight: 600;
+  text-align: right;
+}
+
+
+/* ── Policy ── */
+.policy-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin: 0.75rem 0;
+}
+.policy-item {
+  padding: 1rem;
+  background: var(--bg);
+  border-radius: 8px;
+}
+.policy-item-title {
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 0.5rem;
+}
+.policy-item-content {
+  font-size: 0.82rem;
+  color: var(--text-2);
+}
+.policy-highlight {
+  padding: 1rem;
+  background: #f0f7ff;
+  border-radius: 8px;
+  border-left: 3px solid var(--navy-light);
+}
+.policy-warn {
+  padding: 1rem;
+  background: #fff7ed;
+  border-radius: 8px;
+  border-left: 3px solid var(--orange);
+}
+
+/* ── Empty / Loading ── */
+.empty-tip {
+  text-align: center;
+  color: var(--text-3);
+  font-size: 0.8rem;
+  padding: 2rem 1rem;
+}
+.error-msg {
+  text-align: center;
+  color: var(--orange);
+  padding: 2rem;
+  font-size: 0.85rem;
+}
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border);
+  border-top-color: var(--navy-light);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Chart ── */
+.chart-box { height: 220px; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+  .price-grid { grid-template-columns: 1fr 1fr; }
+  .countdown-nums { gap: 1rem; }
+  .cnum-val { font-size: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .page { max-width: 1280px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-brand">高视星 · 星图</div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-name" id="agent-display">加载中…</div>
+  </div>
+  <div class="topbar-tabs">
+    <button class="tab-btn active" data-tab="star" onclick="switchTab('star')">星图</button>
+    <button class="tab-btn" data-tab="policy" onclick="switchTab('policy')">支持政策</button>
+    <button class="tab-btn" data-tab="ecp" onclick="switchTab('ecp')">星耀榜</button>
+  </div>
+  <div class="topbar-right">
+    <div class="summer-badge">▌ 暑期作战中</div>
+  </div>
+</div>
+
+<!-- ══ Tab 1: 星图 ══ -->
+<div id="tab-star" class="tab-panel active">
+<div class="page">
+
+  <!-- 暑期倒计时 -->
+  <div class="countdown-bar">
+    <div class="countdown-left">
+      <h2>2026暑期战役</h2>
+      <p>7月1日 → 10月8日 · 共99天</p>
+    </div>
+    <div class="countdown-nums">
+      <div class="cnum"><div class="cnum-val" id="days-elapsed">—</div><div class="cnum-label">已过天数</div></div>
+      <div class="cnum"><div class="cnum-val" id="days-left">—</div><div class="cnum-label">剩余天数</div></div>
+    </div>
+    <div class="progress-track">
+      <div class="progress-label"><span>战役进度</span><span id="progress-pct">—</span></div>
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progress-fill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <!-- 星轨卡片（深色） -->
+  <div class="star-card">
+    <div class="card-title">⭐ 年度星轨</div>
+    <div style="text-align:center">
+      <div class="big-num" id="trailPercent" style="color:var(--accent)">0<span class="big-num-unit">%</span></div>
+      <div class="star-progress-wrap">
+        <div class="star-progress-fill" id="trailBar" style="width:0%;background:var(--accent)"></div>
+      </div>
+      <div id="trailStatus"></div>
+    </div>
+    <div class="stats-grid" style="margin-top:16px">
+      <div class="stat-item">
+        <div class="stat-label">年度目标</div>
+        <div class="stat-value" id="trailTarget">—</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">当前完成</div>
+        <div class="stat-value" id="trailCurrent">—</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">剩余副数</div>
+        <div class="stat-value" id="trailRemaining">—</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">月均需达成</div>
+        <div class="stat-value" id="trailPace">—</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:12px;font-size:0.72rem;color:var(--text-3)">
+      数据更新：<span id="trailTime">—</span>
+    </div>
+  </div>
+
+  <!-- 产品KPI -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Ultra双效销售</div>
+      <div class="kpi-value" id="kpi-ultra">—<span>片</span></div>
+      <div class="kpi-change up" id="kpi-ultra-rate">—</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="kpi-ultra-bar" style="width:0%;background:var(--navy-light)"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-3);margin-top:0.4rem" id="kpi-ultra-detail">目标 — 片</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">时空之眼销售</div>
+      <div class="kpi-value" id="kpi-sky">—<span>片</span></div>
+      <div class="kpi-change up" id="kpi-sky-rate">—</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="kpi-sky-bar" style="width:0%;background:var(--orange)"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-3);margin-top:0.4rem" id="kpi-sky-detail">目标 — 片</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">小旋风销售</div>
+      <div class="kpi-value" id="kpi-storm">—<span>片</span></div>
+      <div class="kpi-change neutral" id="kpi-storm-rate">—</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar-fill" id="kpi-storm-bar" style="width:0%;background:var(--green)"></div></div>
+      <div style="font-size:0.68rem;color:var(--text-3);margin-top:0.4rem" id="kpi-storm-detail">目标 — 片</div>
+    </div>
+  </div>
+
+  <!-- 星级档位（深色卡片） -->
+  <div class="star-card">
+    <div class="card-title">🏆 当前返利档位</div>
+    <div style="display:flex;align-items:center;gap:24px">
+      <div style="text-align:center">
+        <div class="tier-badge" id="tierBadge">0%</div>
+        <div style="font-size:0.9rem;font-weight:700;margin-bottom:4px;color:var(--navy-dark)" id="tierLabel">无返利</div>
+        <div style="font-size:0.75rem;color:var(--text-3)" id="tierDesc">年采购量<4000副</div>
+      </div>
+      <div style="flex:1" id="tierNextCard">
+        <div style="font-size:0.72rem;color:var(--text-3);margin-bottom:8px">距下一档</div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <div class="big-num" id="tierNextGap" style="font-size:2rem;color:var(--navy-dark)">—</div>
+          <span style="color:var(--text-3);font-size:0.85rem">副</span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-3);margin-top:4px" id="tierNextLabel"></div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="font-size:0.72rem;color:var(--text-3);margin-bottom:8px">当前供货价</div>
+      <div class="price-grid">
+        <div class="price-item" style="background:var(--bg)">
+          <div class="price-label" style="color:var(--text-3)">时空之眼</div>
+          <div class="price-value" style="color:var(--navy-dark)" id="priceSky">—</div>
+        </div>
+        <div class="price-item" style="background:var(--bg)">
+          <div class="price-label" style="color:var(--text-3)">时空之眼 Ultra</div>
+          <div class="price-value" style="color:var(--navy-dark)" id="priceUltra">—</div>
+        </div>
+        <div class="price-item" style="background:var(--bg)">
+          <div class="price-label" style="color:var(--text-3)">小旋风</div>
+          <div class="price-value" style="color:var(--navy-dark)" id="priceStorm">—</div>
+        </div>
+        <div class="price-item" style="background:var(--bg)">
+          <div class="price-label" style="color:var(--text-3)">年承诺量</div>
+          <div class="price-value" style="color:var(--navy-dark)" id="priceCommit">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 星耀榜 ECP 概览 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">🌟 星耀榜 · ECP排名</div>
+        <div class="card-sub">游学名额剩余 <span id="ecpTripRemaining" style="color:var(--gold);font-weight:600">—</span></div>
+      </div>
+      <a href="#" onclick="switchTab('ecp');return false" style="font-size:0.78rem;color:var(--navy-light);text-decoration:none;font-weight:600">查看完整榜单 →</a>
+    </div>
+    <div class="card-body">
+      <div id="ecpList">
+        <div style="text-align:center;color:var(--text-3);font-size:0.82rem;padding:1rem">加载中…</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══ Tab 2: 支持政策 ══ -->
+<div id="tab-policy" class="tab-panel">
+<div class="page" style="max-width:960px">
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">高视星 2026暑期上量支持政策</div>
+        <div class="card-sub">代理商专属权益手册 · 2026年6月15日代理商大会正式生效</div>
+      </div>
+      <span id="policy-status" style="font-size:0.72rem;padding:0.2rem 0.6rem;border-radius:4px;display:none"></span>
+    </div>
+    <div class="card-body" style="line-height:1.8;font-size:0.85rem">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.5rem;padding:1rem;background:var(--bg);border-radius:8px">
+        <div><span style="color:var(--text-3);font-size:0.72rem">政策有效期</span><br><strong>2026.7.1 - 10.8</strong></div>
+        <div><span style="color:var(--text-3);font-size:0.72rem">适用产品</span><br><strong>Ultra / 时空之眼 / 小旋风</strong></div>
+        <div><span style="color:var(--text-3);font-size:0.72rem">适用对象</span><br><strong>签署暑期计划的代理商</strong></div>
+      </div>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">一、支持体系总览</h3>
+      <p>高视星2026暑期支持分为两类：<strong>标准支持</strong>（所有代理商均可申请）和<strong>资格制支持</strong>（达到既定销量目标后解锁）。</p>
+      <table class="stores-table" style="margin:0.75rem 0">
+        <thead><tr><th>类型</th><th>支持项目</th><th>获取方式</th></tr></thead>
+        <tbody>
+          <tr><td><strong>标准支持</strong></td><td>① 物料支持 ② 样片支持 ③ 培训支持 ④ 数据分析支持 ⑤ IP探店</td><td>填写暑期计划后申请</td></tr>
+          <tr><td><strong>资格制支持</strong></td><td>⑥ CDSA同仁挂牌 ⑦ ECP游学 ⑧ 抗疲劳OK镜种子用户 ⑨ 返利</td><td>达到对应销量目标自动解锁</td></tr>
+        </tbody>
+      </table>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">二、标准支持（全体代理商适用）</h3>
+
+      <div class="policy-grid">
+        <div class="policy-item">
+          <div class="policy-item-title">① 物料支持</div>
+          <div class="policy-item-content">
+            · 宣传物料：患教折页、产品模型、展示道具、产品海报上墙，按终端门店数量配发<br>
+            · 健教物料：《眼球王国奇遇记》、依托新国标，科普儿童裸眼视力和远储不足管理规范的宣传展板（四拼板），每家A类门店配发1套
+          </div>
+        </div>
+        <div class="policy-item">
+          <div class="policy-item-title">② 样片/试戴镜架支持</div>
+          <div class="policy-item-content">
+            · Ultra / 时空之眼 / 小旋风 各产品提供展示样片<br>
+            · Ultra试戴镜架2副（适合6-9岁和10-14岁）
+          </div>
+        </div>
+        <div class="policy-item">
+          <div class="policy-item-title">③ 培训支持</div>
+          <div class="policy-item-content">
+            · 到店培训：公司讲师到店，覆盖产品推荐话术、适应症判断
+          </div>
+        </div>
+        <div class="policy-item">
+          <div class="policy-item-title">④ 数据分析支持</div>
+          <div class="policy-item-content">
+            · 专业数据分析：基于门店提供的高视星戴镜人群的基线和随访数据，协助分析管控效能
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">三、定制支持（满足特定条件）</h3>
+
+      <div class="policy-grid">
+        <div class="policy-item">
+          <div class="policy-item-title">⑤ IP探店支持</div>
+          <div class="policy-item-content">
+            · 权益内容：高视星品牌IP探店打卡，为终端门店ECP维护关系<br>
+            · 资格条件：有潜力能表达的ECP
+          </div>
+        </div>
+        <div class="policy-item">
+          <div class="policy-item-title">活动支持</div>
+          <div class="policy-item-content">
+            · 权益内容：公司讲师到店参与门店举办的会员活动并演讲分享定制主题<br>
+            · 物料支持：定制礼物、科普书籍如北京同仁医院专家推荐《眼球王国奇遇记》（作者：邵蕾、魏文斌教授）<br>
+            · 资格条件：既往6个月平均月销？副，暑期月度销售目标？副
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">四、资格制支持（达标解锁）</h3>
+
+      <div class="policy-grid">
+        <div class="policy-highlight">
+          <div class="policy-item-title">⑥ CDSA同仁挂牌支持</div>
+          <div class="policy-item-content">
+            <strong>资格条件：</strong>终端门店年承诺销量 ≥250副<br>
+            <strong>权益内容：</strong>挂牌为"北京同仁医院高视星CDSA临床协作中心"，享有顶级医院品牌背书<br>
+            <strong>数据价值：</strong>门店临床数据纳入CDSA体系，免费使用病程管理软件一年
+          </div>
+        </div>
+        <div class="policy-highlight">
+          <div class="policy-item-title">⑦ Top ECP游学支持</div>
+          <div class="policy-item-content">
+            <strong>资格条件：</strong>单名验光师/ECP在暑期期间完成 ≥100副销量<br>
+            <strong>权益内容：</strong>全程4天3夜专业游学，高视星承担全程费用<br>
+            <strong>统计周期：</strong>2026年6月15日 - 10月8日，以唯一QR码绑定ECP身份核算
+          </div>
+        </div>
+        <div class="policy-warn">
+          <div class="policy-item-title">⑧ 抗疲劳OK镜种子用户（全国限20家）</div>
+          <div class="policy-item-content">
+            <strong>资格条件：</strong>代理商申报，市场部审核资质<br>
+            <strong>权益内容：</strong>优先获得高视星成人抗疲劳OK镜种子用户招募资格<br>
+            <strong>战略价值：</strong>成人OK镜是下半年核心增长点，种子资格意味着提早3-6个月建立临床案例
+          </div>
+        </div>
+        <div class="policy-item">
+          <div class="policy-item-title">⑨ 其他支持（按需申请）</div>
+          <div class="policy-item-content">额外政策：如有特殊情况，代理商可向区域经理提报</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">五、返利支持 —— 累计解锁新价格体系</h3>
+      <div style="padding:1rem;background:var(--bg);border-radius:8px;margin:0.75rem 0">
+        <div style="font-size:0.82rem;color:var(--text-2);margin-bottom:0.75rem">适用范围：单一代理商暑期期间（1月1日至6月15日）累计进货量</div>
+        <table class="stores-table">
+          <thead><tr><th>累计进货量</th><th>解锁权益</th><th>生效时间</th></tr></thead>
+          <tbody>
+            <tr><td>&lt; 1,000副</td><td>现行价格体系</td><td>—</td></tr>
+            <tr style="background:#edf7f1"><td><strong>≥ 1,000副</strong></td><td><strong>解锁新价格体系（具体折扣待填）</strong></td><td>达标后次月起生效</td></tr>
+          </tbody>
+        </table>
+        <div style="font-size:0.72rem;color:var(--text-3);margin-top:0.5rem">新价格体系具体内容将在6月15日代理商大会上另行公布</div>
+      </div>
+
+      <h3 style="font-size:0.9rem;color:var(--navy-dark);margin:1.5rem 0 0.75rem;border-bottom:2px solid var(--navy-light);padding-bottom:0.4rem">六、暑期备库超量支持 —— 货款分担政策</h3>
+      <div style="padding:1rem;background:#edf7f1;border-radius:8px;border:1px solid #a7f3d0;margin:0.75rem 0">
+        <div style="font-size:0.82rem;color:var(--text-2);margin-bottom:0.75rem">鼓励代理商暑期前大力备货，超过300副的部分高视星承担一半货款，年底结算。</div>
+        <table class="stores-table">
+          <thead><tr><th>备库条件</th><th>支持权益</th><th>结算时间</th></tr></thead>
+          <tbody>
+            <tr><td>≤ 300副</td><td>正常账期，无额外支持</td><td>按合同约定</td></tr>
+            <tr style="background:#d1fae5"><td><strong>&gt; 300副</strong></td><td><strong>超出300副的部分，高视星承担一半货款（代理商实付50%）</strong></td><td><strong>2026年12月31日</strong></td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:0.75rem;padding:0.75rem;background:#fff;border-radius:6px;font-size:0.82rem">
+          <strong>示例说明：</strong><br>
+          · 备库 400副 → 前300副正常付款，超出100副，高视星承担50副货款<br>
+          · 备库 600副 → 前300副正常付款，超出300副，高视星承担150副货款<br>
+          · 备库 800副 → 前300副正常付款，超出500副，高视星承担250副货款
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-3);margin-top:0.5rem">货款分担须在6月15日大会前提出申请，由区域经理核实备库数量后确认。</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 备注 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">代理商备注</div>
+        <div class="card-sub">如有特殊需求或说明，请在此填写</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <textarea id="policy-remark" style="width:100%;min-height:120px;border:1px solid var(--border);border-radius:8px;padding:0.75rem;font-size:0.85rem;font-family:var(--font);resize:vertical;line-height:1.6" placeholder="请输入备注内容..."></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.75rem">
+        <div id="policy-remark-saved" style="font-size:0.72rem;color:var(--green);display:none">✓ 已保存</div>
+        <div style="display:flex;gap:0.65rem">
+          <button class="btn-save" onclick="savePolicyRemark()">保存备注</button>
+          <button class="btn-confirm" id="policy-confirm-btn" onclick="confirmPolicy()">我已阅读并知晓 →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ══ Tab 4: 星耀榜 ══ -->
+<div id="tab-ecp" class="tab-panel">
+<div class="page">
+
+  <!-- 游学名额统计 -->
+  <div class="countdown-bar" style="background:linear-gradient(135deg, rgba(251,191,36,0.2), rgba(245,158,11,0.1));border:1px solid rgba(251,191,36,0.3)">
+    <div class="countdown-left">
+      <h2 style="color:var(--gold)">游学名额统计</h2>
+      <p style="color:var(--text)">单名ECP暑期期间完成≥100副销量，可获4天3夜专业游学</p>
+    </div>
+    <div style="text-align:right">
+      <div style="font-family:var(--font-num);font-size:2rem;font-weight:700;color:var(--gold)" id="tripCount">0/50</div>
+      <div style="font-size:0.72rem;color:var(--text-3)">已达标/总名额</div>
+    </div>
+  </div>
+
+  <!-- 统计卡片 -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">关联ECP</div>
+      <div class="kpi-value" id="ecp-total">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">累计绑定</div>
+      <div class="kpi-value" id="ecp-bound">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">游学名额剩余</div>
+      <div class="kpi-value" id="ecp-trip-remain" style="color:var(--gold)">—</div>
+    </div>
+  </div>
+
+  <!-- 筛选器 -->
+  <div style="display:flex;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap">
+    <button class="btn-auto ecp-filter active" data-filter="all" onclick="setEcpFilter('all')">全部</button>
+    <button class="btn-auto ecp-filter" data-filter="trip" onclick="setEcpFilter('trip')" style="background:var(--orange)">游学达标</button>
+    <button class="btn-auto ecp-filter" data-filter="progress" onclick="setEcpFilter('progress')">进行中</button>
+    <button class="btn-auto ecp-filter" data-filter="top10" onclick="setEcpFilter('top10')">TOP 10</button>
+  </div>
+
+  <!-- ECP排行榜 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">ECP视光师排名</div>
+        <div class="card-sub">扫码绑定累计 · 按累计副数降序</div>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="board-table" id="ecp-table">
+        <thead>
+          <tr>
+            <th style="padding-left:1.25rem;width:60px">排名</th>
+            <th>ECP视光师</th>
+            <th class="r">累计副数</th>
+            <th class="r">档位</th>
+            <th class="r">进度</th>
+            <th class="r" style="padding-right:1.25rem">游学状态</th>
+          </tr>
+        </thead>
+        <tbody id="ecp-tbody">
+          <tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:2rem">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+const API = '';
+
+// ══════════════════════════════════════════════════
+// Tab Switching
+// ══════════════════════════════════════════════════
+
+let starLoaded = false;
+let policyLoaded = false;
+let ecpLoaded = false;
+let allEcpData = [];
+let currentEcpFilter = 'all';
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+
+  if (tab === 'star' && !starLoaded) { starLoaded = true; loadStarData(); }
+  if (tab === 'policy' && !policyLoaded) { policyLoaded = true; loadPolicy(); }
+  if (tab === 'ecp' && !ecpLoaded) { ecpLoaded = true; loadEcpTab(); }
+}
+
+// ══════════════════════════════════════════════════
+// Star Tab (merged: trail + tier + ecp + dashboard)
+// ══════════════════════════════════════════════════
+
+const STATUS_MAP = {
+  normal:   { label: "正常推进", cls: "normal" },
+  behind:   { label: "需要加速", cls: "behind" },
+  ahead:    { label: "超额推进", cls: "ahead" },
+  exceeded: { label: "已超额完成", cls: "exceeded" },
+  no_target:{ label: "未设定目标", cls: "no_target" },
+};
+
+const TIER_MAP = {
+  "0%":  { cls: "tier-0",  label: "无返利",         desc: "年采购量<4,000副" },
+  "5%":  { cls: "tier-5",  label: "5%返利档",       desc: "年采购量 4,000-5,999副" },
+  "8%":  { cls: "tier-8",  label: "8%返利档",       desc: "年采购量 6,000-9,999副" },
+  "10%": { cls: "tier-10", label: "10%返利档(最高)", desc: "年采购量 ≥10,000副" },
+};
+
+function pct(a, b) { return (!b) ? 0 : Math.min(100, Math.round(a / b * 100)); }
+
+function initCountdown() {
+  const S = new Date('2026-07-01').getTime();
+  const E = new Date('2026-10-08T23:59:59').getTime();
+  const now = Date.now();
+  const el = Math.max(0, Math.floor((now - S) / 86400000));
+  const lf = Math.max(0, Math.ceil((E - now) / 86400000));
+  const p = Math.min(100, Math.round(el / 99 * 100));
+  document.getElementById('days-elapsed').textContent = el;
+  document.getElementById('days-left').textContent = lf;
+  document.getElementById('progress-pct').textContent = p + '%';
+  document.getElementById('progress-fill').style.width = p + '%';
+}
+
+async function loadStarData() {
+  initCountdown();
+  loadAgent();
+  loadTrail();
+  loadTier();
+  loadECP();
+  loadDashboard();
+}
+
+async function loadAgent() {
+  try {
+    const r = await fetch(`${API}/api/agent?t=${token}`);
+    const d = await r.json();
+    document.getElementById('agent-display').textContent = d.name || '未知代理商';
+  } catch {
+    document.getElementById('agent-display').textContent = '无法获取信息';
+  }
+}
+
+async function loadTrail() {
+  try {
+    const r = await fetch(`${API}/api/starmap/star-trail?t=${token}`);
+    if (!r.ok) throw new Error((await r.json()).error || '请求失败');
+    const d = await r.json();
+
+    const st = STATUS_MAP[d.status] || STATUS_MAP.normal;
+    document.getElementById('trailPercent').innerHTML = `${d.progressPercent}<span class="big-num-unit">%</span>`;
+    document.getElementById('trailPercent').style.color = `var(--${st.cls === 'normal' ? 'accent' : st.cls === 'behind' ? 'orange' : st.cls === 'ahead' ? 'green' : st.cls === 'exceeded' ? 'gold' : 'text-3'})`;
+
+    const bar = document.getElementById('trailBar');
+    bar.style.width = Math.min(100, d.progressPercent) + '%';
+    bar.style.background = `var(--${st.cls === 'normal' ? 'accent' : st.cls === 'behind' ? 'orange' : st.cls === 'ahead' ? 'green' : st.cls === 'exceeded' ? 'gold' : 'text-3'})`;
+
+    document.getElementById('trailStatus').innerHTML = `<span class="status-badge ${st.cls}">${st.label}</span>`;
+
+    document.getElementById('trailTarget').textContent = d.yearlyTarget ? d.yearlyTarget.toLocaleString() : '—';
+    document.getElementById('trailCurrent').textContent = d.currentVolume.toLocaleString();
+    document.getElementById('trailRemaining').textContent = d.remainingVolume.toLocaleString();
+    document.getElementById('trailPace').textContent = d.monthlyPaceNeeded > 0 ? d.monthlyPaceNeeded.toLocaleString() : '—';
+
+    const t = new Date(d.lastUpdateTime);
+    document.getElementById('trailTime').textContent = `${t.getMonth() + 1}/${t.getDate()} ${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}`;
+  } catch (e) {
+    document.getElementById('trailPercent').innerHTML = '<span style="font-size:1rem;color:var(--orange)">加载失败</span>';
+  }
+}
+
+async function loadTier() {
+  try {
+    const r = await fetch(`${API}/api/starmap/star-tier?t=${token}`);
+    if (!r.ok) throw new Error((await r.json()).error || '请求失败');
+    const d = await r.json();
+
+    const tier = TIER_MAP[d.rebatePercent] || TIER_MAP["0%"];
+    const badge = document.getElementById('tierBadge');
+    badge.textContent = d.rebatePercent;
+    badge.className = 'tier-badge ' + tier.cls;
+    document.getElementById('tierLabel').textContent = tier.label;
+    document.getElementById('tierDesc').textContent = tier.desc;
+
+    if (d.nextRebateTier) {
+      document.getElementById('tierNextGap').textContent = d.volumeToNextRebate.toLocaleString();
+      document.getElementById('tierNextLabel').textContent = `距 ${d.nextRebateTier.min.toLocaleString()} 副（${(d.nextRebateTier.rate * 100).toFixed(0)}%返利）`;
+      document.getElementById('tierNextCard').style.display = 'block';
+    } else {
+      document.getElementById('tierNextCard').style.display = 'none';
+    }
+
+    const p = d.currentPriceTier || {};
+    document.getElementById('priceSky').textContent = p.sky ? `¥${p.sky}` : '—';
+    document.getElementById('priceUltra').textContent = p.ultra ? `¥${p.ultra}` : '—';
+    document.getElementById('priceStorm').textContent = p.storm ? `¥${p.storm}` : '—';
+    document.getElementById('priceCommit').textContent = p.min ? `${p.min.toLocaleString()}副` : '—';
+  } catch (e) {
+    document.getElementById('tierBadge').textContent = '—';
+  }
+}
+
+async function loadECP() {
+  try {
+    const r = await fetch(`${API}/api/starmap/ecp-board?t=${token}`);
+    if (!r.ok) throw new Error((await r.json()).error || '请求失败');
+    const d = await r.json();
+
+    document.getElementById('ecpTripRemaining').textContent = d.studyTripRemaining;
+
+    const list = document.getElementById('ecpList');
+    if (!d.leaderboard || d.leaderboard.length === 0) {
+      list.innerHTML = '<div class="empty-tip">暂无ECP数据</div>';
+    } else {
+      list.innerHTML = d.leaderboard.map(ecp => `
+        <div class="ecp-item">
+          <div class="ecp-rank ${ecp.rank <= 3 ? 'top3' : ''}">#${ecp.rank}</div>
+          <div class="ecp-info">
+            <div class="ecp-name">${ecp.name}</div>
+            <div class="ecp-store">${ecp.store || '—'}</div>
+          </div>
+          <div class="ecp-progress">
+            <div class="ecp-count">${ecp.boundCount}<span style="font-size:0.7rem;color:var(--text-3)">/100</span></div>
+            <div class="ecp-bar"><div class="ecp-bar-fill" style="width:${ecp.progress}%"></div></div>
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch (e) {
+    document.getElementById('ecpList').innerHTML = '<div class="error-msg">加载失败</div>';
+  }
+}
+
+// ── ECP Tab ──
+async function loadEcpTab() {
+  try {
+    const r = await fetch(`${API}/api/starmap/ecp-board?t=${token}`);
+    if (!r.ok) throw new Error((await r.json()).error || '请求失败');
+    const d = await r.json();
+    allEcpData = d.leaderboard || [];
+
+    // Update stats
+    document.getElementById('ecp-total').textContent = d.totalECP || allEcpData.length;
+    document.getElementById('ecp-bound').textContent = allEcpData.reduce((s, e) => s + e.boundCount, 0);
+    document.getElementById('ecp-trip-remain').textContent = d.studyTripRemaining || 0;
+
+    // Update trip counter
+    const tripCount = allEcpData.filter(e => e.boundCount >= 100).length;
+    document.getElementById('tripCount').textContent = `${tripCount}/50`;
+
+    renderEcpTable();
+  } catch (e) {
+    document.getElementById('ecp-tbody').innerHTML =
+      `<tr><td colspan="6" style="text-align:center;color:var(--orange);padding:2rem">加载失败：${e.message}</td></tr>`;
+  }
+}
+
+function setEcpFilter(filter) {
+  currentEcpFilter = filter;
+  document.querySelectorAll('.ecp-filter').forEach(b =>
+    b.classList.toggle('active', b.dataset.filter === filter)
+  );
+  renderEcpTable();
+}
+
+function renderEcpTable() {
+  const tbody = document.getElementById('ecp-tbody');
+  let filtered = [...allEcpData];
+
+  if (currentEcpFilter === 'trip') filtered = filtered.filter(e => e.boundCount >= 100);
+  else if (currentEcpFilter === 'progress') filtered = filtered.filter(e => e.boundCount > 0 && e.boundCount < 100);
+  else if (currentEcpFilter === 'top10') filtered = filtered.slice(0, 10);
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text-3);padding:2rem">暂无数据</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map((ecp, i) => {
+    const rank = ecp.rank || (i + 1);
+    const isTop3 = rank <= 3;
+    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+    const progress = Math.min(100, Math.round(ecp.boundCount / 100 * 100));
+    const tierClass = ecp.tier === '达标' ? 'color:var(--green)' : ecp.tier === '进行中' ? 'color:var(--navy-light)' : 'color:var(--text-3)';
+    const hasTrip = ecp.boundCount >= 100;
+    const tripText = hasTrip ? '✓ 达标' : `${100 - ecp.boundCount}副`;
+    const tripColor = hasTrip ? 'var(--gold)' : 'var(--text-3)';
+
+    return `
+      <tr ${isTop3 ? 'style="background:rgba(251,191,36,0.03)"' : ''}>
+        <td style="padding-left:1.25rem">
+          <span style="font-family:var(--font-num);font-weight:600;${isTop3 ? 'color:var(--gold);font-size:1.1rem' : 'color:var(--text-3)'}">${medal}${rank}</span>
+        </td>
+        <td>
+          <div style="display:flex;align-items:center;gap:0.75rem">
+            <div style="width:36px;height:36px;border-radius:50%;background:${isTop3 ? 'rgba(251,191,36,0.15)' : 'var(--bg)'};display:flex;align-items:center;justify-content:center;font-size:1rem">${isTop3 ? '⭐' : '👤'}</div>
+            <div>
+              <div style="font-weight:600;font-size:0.85rem">${ecp.name}</div>
+              <div style="font-size:0.72rem;color:var(--text-3)">${ecp.store || '—'}</div>
+            </div>
+          </div>
+        </td>
+        <td class="r">
+          <span style="font-family:var(--font-num);font-size:1.1rem;font-weight:600">${ecp.boundCount}</span>
+          <span style="font-size:0.72rem;color:var(--text-3)">副</span>
+        </td>
+        <td class="r">
+          <span style="font-size:0.78rem;font-weight:500;${tierClass}">${ecp.tier || '未达标'}</span>
+        </td>
+        <td class="r">
+          <div style="display:flex;align-items:center;gap:0.5rem;justify-content:flex-end">
+            <div style="width:60px;height:4px;background:var(--bg);border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${progress}%;background:var(--navy-light);border-radius:2px"></div>
+            </div>
+            <span style="font-family:var(--font-num);font-size:0.72rem;font-weight:600;color:var(--text-2)">${progress}%</span>
+          </div>
+        </td>
+        <td class="r" style="padding-right:1.25rem">
+          <span style="font-size:0.78rem;font-weight:600;color:${tripColor}">${tripText}</span>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function loadDashboard() {
+  try {
+    const r = await fetch(`${API}/api/summer-dashboard?t=${token}`);
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    renderKPI(d.plan, d.summary || {});
+  } catch {
+    // dashboard data optional, don't break
+  }
+}
+
+function renderKPI(plan, summary) {
+  const items = [
+    { id: 'ultra', in: summary.ultraIn || 0, target: summary.targetUltra || 0, color: 'var(--navy-light)' },
+    { id: 'sky', in: summary.skyIn || 0, target: summary.targetSky || 0, color: 'var(--orange)' },
+    { id: 'storm', in: summary.stormIn || 0, target: summary.targetStorm || 0, color: 'var(--green)' },
+  ];
+  for (const item of items) {
+    const p = pct(item.in, item.target);
+    document.getElementById(`kpi-${item.id}`).innerHTML = `${item.in.toLocaleString()}<span>片</span>`;
+    document.getElementById(`kpi-${item.id}-rate`).textContent = `▲ 完成率 ${p}%`;
+    document.getElementById(`kpi-${item.id}-bar`).style.width = p + '%';
+    document.getElementById(`kpi-${item.id}-bar`).style.background = item.color;
+    document.getElementById(`kpi-${item.id}-detail`).textContent = `目标 ${item.target.toLocaleString()} 片`;
+  }
+}
+
+// ══════════════════════════════════════════════════
+// Policy Tab
+// ══════════════════════════════════════════════════
+
+async function loadPolicy() {
+  try {
+    const r = await fetch(`${API}/api/summer-plan?t=${token}`);
+    const d = await r.json();
+    const plan = d.plan;
+    if (plan) {
+      const remark = plan.policy_remark || '';
+      document.getElementById('policy-remark').value = remark;
+      if (plan.policy_confirmed) {
+        const statusEl = document.getElementById('policy-status');
+        statusEl.style.display = 'inline';
+        statusEl.style.background = '#edf7f1';
+        statusEl.style.color = '#065f46';
+        statusEl.textContent = '✓ 已确认 ' + new Date(plan.policy_confirmed).toLocaleDateString('zh-CN');
+        document.getElementById('policy-confirm-btn').disabled = true;
+        document.getElementById('policy-confirm-btn').textContent = '✓ 已确认知晓';
+        document.getElementById('policy-confirm-btn').style.background = '#219a52';
+      }
+    }
+  } catch {}
+}
+
+async function savePolicyRemark() {
+  const remark = document.getElementById('policy-remark').value.trim();
+  try {
+    await fetch(`${API}/api/summer-policy?t=${token}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remark }),
+    });
+    const ok = document.getElementById('policy-remark-saved');
+    ok.style.display = 'inline';
+    setTimeout(() => { ok.style.display = 'none'; }, 3000);
+  } catch (e) { alert('保存失败：' + e.message); }
+}
+
+async function confirmPolicy() {
+  if (!confirm('确认已阅读并知晓《2026暑期上量支持政策》？')) return;
+  const btn = document.getElementById('policy-confirm-btn');
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+  const remark = document.getElementById('policy-remark').value.trim();
+  try {
+    await fetch(`${API}/api/summer-policy?t=${token}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ remark }),
+    });
+    btn.textContent = '✓ 已确认知晓';
+    btn.style.background = '#219a52';
+    const statusEl = document.getElementById('policy-status');
+    statusEl.style.display = 'inline';
+    statusEl.style.background = '#edf7f1';
+    statusEl.style.color = '#065f46';
+    statusEl.textContent = '✓ 已确认 ' + new Date().toLocaleDateString('zh-CN');
+  } catch (e) {
+    alert('提交失败：' + e.message);
+    btn.disabled = false;
+    btn.textContent = '我已阅读并知晓 →';
+  }
+}
+
+// ══════════════════════════════════════════════════
+// Init
+// ══════════════════════════════════════════════════
+
+if (!token) {
+  document.getElementById('agent-display').textContent = '无效访问链接';
+} else {
+  starLoaded = true;
+  loadStarData();
+}
+</script>
+</body>
+</html>

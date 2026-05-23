@@ -79,12 +79,12 @@ export const TABLES = {
   // ── 分析 ──
   ai_analysis: "tbl8W9F9K2RbaL0k",
 
-  // ── 财务结算 ──
-  agent_pricing: "tbl7eFXyw8s2fkYN",
-  agent_deposit_log: "tblObRYwlLa0Giua",
-  return_exchange: "tbldW8XLtXPf0lZC",
-  rebate_rule: "tblq2OW1BQ6JRNgu",
-  rebate_record: "tblvtvJdtVLh6Ijy",
+  // ── 财务结算（暂不启用，表未创建）──
+  agent_pricing: "",           // 定价表
+  agent_deposit_log: "",       // 预存款流水
+  return_exchange: "",         // 退换货登记
+  rebate_rule: "",             // 返利规则
+  rebate_record: "",           // 返利记录
 
   // ── 业务看板 ──
   sales_manager: "tblXXXXXXXXXXXXX",  // 销售经理映射表（待创建）

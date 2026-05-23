@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="UTF-8">
+<title>标签打印 — 2 张</title>
+<style>
+body{font-family:"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;font-size:8pt;background:#fff}
+.toolbar{position:fixed;top:0;left:0;right:0;z-index:100;background:#1a1a2e;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;font-size:13px}
+.toolbar button{background:#c0392b;color:#fff;border:none;padding:8px 20px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer}
+.labels-wrap{padding-top:50px}
+@page{size:75mm 40mm;margin:0}
+*{margin:0;padding:0;box-sizing:border-box}
+.label{width:75mm;height:40mm;position:relative;overflow:hidden}
+.label-inner{width:75mm;height:40mm;position:relative;font-family:"PingFang SC","Microsoft YaHei",sans-serif;font-size:12pt;transform:scale(0.8);transform-origin:top left;left:4mm}
+.lbl-name{position:absolute;left:5mm;top:3mm;width:35mm;height:7mm;font-size:12pt;line-height:7mm;overflow:hidden;white-space:nowrap}
+.lbl-eye{position:absolute;left:38mm;top:4mm;width:10mm;height:6mm;font-size:12pt;line-height:6mm}
+.lbl-tbl{position:absolute;left:15mm;top:10mm}
+.lbl-tbl table{border-collapse:collapse;width:55mm;height:15mm}
+.lbl-tbl th{font-size:11pt;text-align:center;padding:1mm 0;border:1px solid #000}
+.lbl-tbl td{font-size:14pt;text-align:center;padding:1mm 0;border:1px solid #000;font-family:"SF Mono","Consolas","Courier New",monospace}
+.lbl-sku{position:absolute;left:5mm;top:26mm;width:45mm;height:5mm;font-size:10pt;line-height:5mm;overflow:hidden;white-space:nowrap}
+.lbl-bin{position:absolute;left:5mm;top:31mm;width:45mm;height:6mm;font-size:11pt;line-height:6mm;font-family:"SF Mono","Consolas","Courier New",monospace;font-weight:700;letter-spacing:0.5px}
+.lbl-bin .lbl-serial{background:#1a1a2e;color:#fff;padding:0 1.5mm;border-radius:1mm;margin-right:1.5mm}
+.lbl-barcode{position:absolute;left:5mm;top:36mm;width:42mm;height:7mm}
+.lbl-barcode svg{width:42mm;height:5mm;display:block}
+.lbl-barcode .lc-text{font-size:7pt;font-family:"SF Mono","Consolas",monospace;color:#333;margin-top:0.5mm}
+.lbl-qr{position:absolute;left:52mm;top:26mm;width:18mm;height:18mm}
+.lbl-qr img{width:18mm;height:18mm;display:block}
+.label{page-break-after:always;margin:0 auto}
+.label:last-child{page-break-after:auto}
+@media print{.toolbar{display:none} .labels-wrap{padding-top:0} .label{border:none}}
+</style></head><body>
+<div class="toolbar no-print">
+  <span>GAUSH | CLEAR 标签打印 — 2 张</span>
+  <button onclick="window.print()">打印</button>
+</div>
+<div class="labels-wrap">
+<div class="label"><div class="label-inner">
+<div class="lbl-name">张小明</div>
+<div class="lbl-eye">右眼</div>
+<div class="lbl-tbl"><table>
+  <tr><th>球镜</th><th>柱镜</th><th>轴位</th></tr>
+  <tr><td>-1.00</td><td>+0.00</td><td>--</td></tr>
+</table></div>
+<div class="lbl-sku">高视星® Ultra双效</div>
+<div class="lbl-bin"><span class="lbl-serial">003</span>A-01-3-03</div>
+<div class="lbl-barcode"><svg class="barcode" jsbarcode-value="ULT-100-000" jsbarcode-format="CODE128" jsbarcode-width="1.5" jsbarcode-height="28" jsbarcode-displayValue="false" jsbarcode-margin="1"></svg><div class="lc-text">ULT-100-000</div></div>
+<div class="lbl-qr"><img src="data:image/png;base64,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" alt="QR"></div>
+</div></div>
+<div class="label"><div class="label-inner">
+<div class="lbl-name">张小明</div>
+<div class="lbl-eye">左眼</div>
+<div class="lbl-tbl"><table>
+  <tr><th>球镜</th><th>柱镜</th><th>轴位</th></tr>
+  <tr><td>-1.25</td><td>-0.50</td><td>180</td></tr>
+</table></div>
+<div class="lbl-sku">高视星® Ultra双效</div>
+<div class="lbl-bin"><span class="lbl-serial">008</span>A-01-2-02</div>
+<div class="lbl-barcode"><svg class="barcode" jsbarcode-value="ULT-125-050" jsbarcode-format="CODE128" jsbarcode-width="1.5" jsbarcode-height="28" jsbarcode-displayValue="false" jsbarcode-margin="1"></svg><div class="lc-text">ULT-125-050</div></div>
+<div class="lbl-qr"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAAAklEQVR4AewaftIAAAjrSURBVO3BUW7lRhIAwUxC979yrj8LDwY5tDRjb6Mi7C+sdYiLtQ5ysdZBLtY6yMVaB/nib6j8aRWTyp9W8UnlTsWk8qTijspU8UTlTsWkMlVMKk8qJpU/rWK6WOsgF2sd5GKtg3zxCyp+msqdiu9SmSomlUnlScWkMlVMKk9U3lB5S2WqmFSmiu+q+Gkqdy7WOsjFWge5WOsgX/wDKm9VvKHyXRV3KiaVTxWTylQxqTxRuVPxVsWk8kbFpPKp4jtU3qp442Ktg1ysdZCLtQ7yxX9UxaTyqeINlbdUpopJ5U7FJ5U3VKaKn6YyVXxSmSr+ay7WOsjFWge5WOsgX/xHqUwVT1SmijsVT1QmlX+byqeKqWJSmVSmiknl/9HFWge5WOsgF2sd5GKtg3zxD1T8bhVPVO6oTBVvVUwq31UxqbxR8VbFGxU/reJ3u1jrIBdrHeRirYN88QtU/jSVqeJJxaRyR2Wq+KQyVUwqU8Wk8qnip6lMFZPKVDGpTBWfVKaKOyp/2sVaB7lY6yAXax3ki79R8f+gYlJ5o+JJxaRyR+WtikllqphUPlVMKt+h8lbFv+1irYNcrHWQi7UOYn/hD1C5U3FH5UnFpHKnYlL5VPEdKk8q7qg8qZhUpopJZaqYVD5V3FGZKiaVTxWTylQxqUwV08VaB7lY6yAXax3ki7+hcqdiUnlS8YbKk4o7FZPKpPJEZap4o+KnVXxXxaTy01TeqviOi7UOcrHWQS7WOsjFWgexv/BAZaqYVH5axaTypGJSmSp+mspU8URlqphU/m0Vn1TuVEwqU8VbKlPFnYu1DnKx1kEu1jrIF7+g4k7FpPKp4g2VJxXfoTJVfFJ5Q2Wq+FTxHRVPVO5U3FH5E1SmiqnijYu1DnKx1kEu1jrIF/8SlTsVT1SmijcqJpVPFZPKnYonKlPFVDGpTCpvVbxR8UnljspbFXdUpoo7F2sd5GKtg1ysdRD7Cx9U3qj4aSpvVbyhMlU8UblT8V0qdyo+qUwVb6hMFZ9U7lRMKk8q3lCZKqaLtQ5ysdZBLtY6yBe/oOKOylTxROW7KiaVqWJSmSqeqPxuKncqJpUnKncq7qh8qphU7lRMKp9U7lRMFXcu1jrIxVoHuVjrIF/8ApU7FZPKk4o3VD6pTBU/rWJSmSreUnlD5UnFHZU/TWWq+KTyky7WOsjFWge5WOsgF2sd5Iu/UXFH5btUporvUvlpKm+oTBVPKu6oTBVPVKaKSeW/oGJSmVSmijsXax3kYq2DXKx1EPsLH1SmijdUPlW8oTJV/Beo/LSKSWWq+C6VOxVPVH5axaTyRsV0sdZBLtY6yMVaB/niH1CZKqaKJypvqPy0iknlScUbKt+lMlV8Upkq7lTcUXlSMan8tIpJ5c7FWge5WOsgF2sd5IsfoPJWxaRyp+KTylRxR+WtiknlTsVU8UTlDZVPFZPKVDGpvFUxqUwVd1Q+qUwVk8pUcedirYNcrHWQi7UO8sVvUPFEZap4q+InVXxSuVMxqUwVTyomlaliUvmkckdlqviuiu+qmFSmijcu1jrIxVoHuVjrIBdrHeSLX6AyVUwqT1SmikllqphUPlVMKlPFHZWp4lPFHZXvUpkq3qqYVKaKOypvVdxRmSo+qUwV33Gx1kEu1jrIxVoH+eIXVLyh8qliUpkq3lK5o3KnYlJ5UvH/SGWquFPxRGWqmCqeVEwqU8UbF2sd5GKtg1ysdZAv/kbFpDJVvKUyVdxReatiUrmjMlV8UnmjYlJ5UjGp3Kn4aRWTyqeKN1Smik8qb6hMFdPFWge5WOsgF2sd5Iu/oTJVTCpTxROVSWWq+N0qvktlqphUporvqphUPlVMFZPKd6lMFZPKv+1irYNcrHWQi7UO8sUPUHlScUflTsV3qdypeFLxhspbFXcqnqjcUXmr4k7FHZUnFXcq7lysdZCLtQ5ysdZBLtY6iP2FByq/W8VbKncq7qhMFf8FKj+tYlKZKp6oTBWTylsVd1SmijsXax3kYq2DXKx1kC/+hsrvVnFH5XereEvljYonKlPFpPLTKu6ofKq4U/GWyp2KSWWqmC7WOsjFWge5WOsgX/yNijsqdyqeqEwVU8Wk8rupfKp4o2JS+VRxR+VOxXepTBVPVKaKSWWq+C6VqeLOxVoHuVjrIBdrHcT+wgeVqWJSmSomlU8Vb6g8qZhUpopJ5bsq7qh8V8Wk8lbFpDJVTCpTxXepPKmYVN6omC7WOsjFWge5WOsgX/wClaliUpkqnqhMFXcqfreKTyp3VKaKSeWnVXyXyh2VTxWTylQxVTxRuVMxqdy5WOsgF2sd5GKtg3zxCyq+S2WquFPxRGWquFPxu6lMFZ9U3qiYVL6rYlKZKp5UTCpTxaTypGJSmSruXKx1kIu1DnKx1kEu1jrIF/+Ayh2VTxWTylTxXSq/m8pU8bupvFXx01TeUHlSMalMFW9crHWQi7UOcrHWQewv/AepPKm4o/JdFZPKGxVPVO5UfJfKVDGpTBWfVKaKN1S+q+LOxVoHuVjrIBdrHeSLv6Hyp1VMFZPKJ5U3KiaV76p4S2WqmFQmlanik8qdit9NZap4UjGpTBVvXKx1kIu1DnKx1kG++AUVP03ljsqTikllqphUporvUrlT8VbFHZUnFW9UTCpvVbylMlVMKlPFnYu1DnKx1kEu1jrIF/+AylsVb1Q8UbmjMlXcUflUMVXcUXlSMan8NJXfTeW7Kt5QmSqmi7UOcrHWQS7WOsjFWgf54v+EypOKSWVSmSqmirdUfreKt1SmijdUPlW8oTJVvFUxqdy5WOsgF2sd5GKtg3zxf6xiUrlT8ZbKVHGn4onKVDGp3FH5VHFH5Y2KJypvqDypmFSmijsXax3kYq2DXKx1kC/+gYr/ApWpYlK5ozJVfKp4Q2WqeKtiUpkqnlS8oTKpfKqYKiaVqWJS+VQxqUwVk8pUMV2sdZCLtQ5ysdZBvvgFKv+2iicqU8V3qbxRMal8qrijMlVMKp8q3lD5aRWTyhOVqeJOxZ2LtQ5ysdZBLtY6iP2FtQ5xsdZBLtY6yMVaB/kfsgHbkiKr5RMAAAAASUVORK5CYII=" alt="QR"></div>
+</div></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>JsBarcode(".barcode").init();</script>
+</body></html>

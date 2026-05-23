@@ -758,13 +758,20 @@ async function simulateDelivery() {
   if (!records.length) { console.log("  未找到订单。"); return; }
 
   const now = Date.now();
-  const f = records[0].fields;
-
-  // 已签收状态已废弃，已发货为终态，此命令仅作记录用途
   const signedAt = new Date(now).toLocaleString("zh-CN");
-  console.log(`  ℹ️  deliver 命令已废弃：已发货为终态，无需签收确认`);
-  console.log(`  时间: ${signedAt}`);
 
+  // 更新订单主表
+  const toSign = records.filter(r => (rawVal(r.fields["订单状态"]) || "") === "已发货");
+  if (!toSign.length) { console.log("  无可签收的已发货订单。"); return; }
+  for (const rec of toSign) {
+    await updateRecord(rec.record_id, {
+      "订单状态": "已签收", "签收时间": now, "物流状态": "已签收",
+    });
+  }
+  console.log(`  ✅ ${ORDER_NO} 状态已更新为已签收（${toSign.length}条）`);
+
+  // 飞书签收卡片
+  const f = records[0].fields;
   await notify(deliveredCard({
     orderNo:      ORDER_NO,
     customerName: rawVal(f["顾客姓名"]),
@@ -828,10 +835,24 @@ async function startWebhookServer() {
         if (!records.length) { res.writeHead(404); res.end('{"error":"not found"}'); return; }
 
         const now = Date.now();
-        const f = records[0].fields;
-
-        // 已签收状态已废弃，已发货为终态，仅发送飞书通知，不更新订单状态
         const signedAt = new Date(now).toLocaleString("zh-CN");
+
+        // 更新订单主表：已签收 + 签收时间 + 物流状态
+        const toSign = records.filter(r => (rawVal(r.fields["订单状态"]) || "") === "已发货");
+        for (const rec of toSign) {
+          await updateRecord(rec.record_id, {
+            "订单状态": "已签收", "签收时间": now, "物流状态": "已签收",
+          });
+        }
+
+        // 同步镜片明细表
+        const lensDetails = await listRecords(`CurrentValue.[订单编号]="${orderNo}"`);
+        // 注意：listRecords 默认查订单主表，镜片明细表需要单独查
+        // 这里用 getLensDetailsByOrder 不可用（在 server.js 中），跳过明细同步
+        // webhook 场景下明细表状态可由 server.js deliver 端点补录
+
+        // 飞书签收卡片
+        const f = records[0].fields;
         await notify(deliveredCard({
           orderNo,
           customerName: rawVal(f["顾客姓名"]),
@@ -843,7 +864,7 @@ async function startWebhookServer() {
           lensCount:    records.length,
         }));
 
-        console.log(`  ✅ ${orderNo} 已签收，飞书通知已发`);
+        console.log(`  ✅ ${orderNo} 已签收（${toSign.length}条），飞书通知已发`);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ success: true, orderNo, signedAt }));
       });

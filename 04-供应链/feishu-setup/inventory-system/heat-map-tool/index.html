@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ultra Stock Manager</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f5f5; color: #333; }
+.header { background: #1a1a2e; color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; }
+.header h1 { font-size: 18px; font-weight: 500; }
+.header .status { font-size: 12px; opacity: 0.7; }
+.tabs { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; padding: 0 24px; }
+.tab { padding: 12px 24px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 14px; color: #666; }
+.tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 500; }
+.main { padding: 16px 24px; }
+.card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.heatmap-container { overflow-x: auto; }
+.heatmap { border-collapse: collapse; font-size: 12px; }
+.heatmap th { background: #f0f0f0; padding: 4px 8px; font-weight: 500; white-space: nowrap; }
+.heatmap td { width: 52px; height: 32px; text-align: center; cursor: pointer; border: 1px solid #e8e8e8; transition: all 0.15s; font-weight: 500; font-size: 11px; }
+.heatmap td:hover { outline: 2px solid #1a73e8; outline-offset: -1px; }
+.legend { display: flex; gap: 12px; align-items: center; margin-top: 12px; font-size: 12px; color: #666; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-color { width: 16px; height: 16px; border-radius: 3px; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 100; justify-content: center; align-items: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: #fff; border-radius: 12px; padding: 24px; width: 360px; max-width: 90vw; }
+.modal h3 { margin-bottom: 16px; font-size: 16px; }
+.modal label { display: block; margin-bottom: 12px; font-size: 13px; color: #555; }
+.modal label span { display: block; margin-bottom: 4px; }
+.modal input, .modal select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
+.modal .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+.modal .btn { flex: 1; padding: 10px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 500; }
+.modal .btn-primary { background: #1a73e8; color: #fff; }
+.modal .btn-secondary { background: #f0f0f0; color: #333; }
+.modal .info { background: #f8f9fa; padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+.toast { position: fixed; top: 20px; right: 20px; background: #333; color: #fff; padding: 10px 20px; border-radius: 8px; font-size: 13px; z-index: 200; display: none; }
+.toast.show { display: block; animation: fadeIn 0.3s; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+.summary { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
+.summary .stat { background: #fff; border-radius: 8px; padding: 16px 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.stat .num { font-size: 28px; font-weight: 600; color: #1a73e8; }
+.stat .label { font-size: 12px; color: #888; margin-top: 4px; }
+.error-box { background: #fff3f3; border: 1px solid #ffcdd2; border-radius: 8px; padding: 24px; text-align: center; }
+.error-box h3 { color: #c62828; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Ultra Stock Manager</h1>
+    <div class="status" id="status">Loading...</div>
+  </div>
+  <button onclick="location.reload()" style="background:#333;color:#fff;border:1px solid #555;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:12px;">Refresh</button>
+</div>
+
+<div class="tabs">
+  <div class="tab" onclick="switchTab(0)">Stock Out</div>
+  <div class="tab" onclick="switchTab(1)">Stock In</div>
+  <div class="tab active" onclick="switchTab(2)">Heatmap</div>
+</div>
+
+<div class="main">
+  <div id="content"></div>
+</div>
+
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3 id="modalTitle">Stock Out</h3>
+    <div class="info" id="modalInfo"></div>
+    <label><span>Quantity</span><input type="number" id="modalQty" min="1" value="1"></label>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitModal()">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SPH = [0,-0.25,-0.50,-0.75,-1.00,-1.25,-1.50,-1.75,-2.00,-2.25,-2.50,-2.75,-3.00,-3.25,-3.50,-3.75,-4.00,-4.25,-4.50,-4.75,-5.00,-5.25,-5.50,-5.75,-6.00];
+const CYL = [0,-0.25,-0.50,-0.75,-1.00,-1.25,-1.50,-1.75];
+let stockMap = {};
+let currentCell = null;
+let currentMode = 'out';
+
+async function checkHealth() {
+  try {
+    const res = await fetch('/api/health');
+    const data = await res.json();
+    return data.ok;
+  } catch (e) {
+    showError('Cannot connect to server');
+    return false;
+  }
+}
+
+function showError(msg) {
+  document.getElementById('status').textContent = 'Error';
+  document.getElementById('content').innerHTML = `
+    <div class="error-box">
+      <h3>Connection Error</h3>
+      <p>${msg}</p>
+    </div>
+  `;
+}
+
+async function loadStock() {
+  const ok = await checkHealth();
+  if (!ok) return;
+  
+  document.getElementById('status').textContent = 'Loading...';
+  try {
+    const res = await fetch('/api/stock');
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    
+    stockMap = {};
+    let total = 0, zeroCount = 0;
+    
+    data.records.forEach(r => {
+      const key = r.sph + '|' + r.cyl;
+      stockMap[key] = { sph: r.sph, cyl: r.cyl, stock: r.stock };
+      total += r.stock;
+      if (r.stock === 0) zeroCount++;
+    });
+    
+    document.getElementById('status').textContent = 
+      `${data.records.length} items | Total: ${total} | Zero: ${zeroCount}`;
+    
+    if (currentTab === 2) renderHeatmap();
+    
+  } catch (e) {
+    document.getElementById('status').textContent = 'Error: ' + e.message;
+  }
+}
+
+function heatColor(val) {
+  if (val <= 0) return '#4a0000';
+  if (val <= 2) return '#c62828';
+  if (val <= 5) return '#d84315';
+  if (val <= 9) return '#ef6c00';
+  if (val <= 15) return '#f9a825';
+  if (val <= 30) return '#558b2f';
+  return '#2e7d32';
+}
+
+function renderHeatmap() {
+  let total = 0, zeroCount = 0;
+  Object.values(stockMap).forEach(d => {
+    total += d.stock;
+    if (d.stock === 0) zeroCount++;
+  });
+  
+  let html = '<div class="summary">';
+  html += `<div class="stat"><div class="num">${total}</div><div class="label">Total</div></div>`;
+  html += `<div class="stat"><div class="num" style="color:${zeroCount>0?'#c62828':'#2e7d32'}">${zeroCount}</div><div class="label">Zero Stock</div></div>`;
+  html += '</div>';
+  
+  html += `<div class="card">
+    <div style="margin-bottom:12px;font-size:13px;color:#666">SPH × CYL Matrix (Click to adjust)</div>
+    <div class="heatmap-container">
+      <table class="heatmap"><tr><th>SPH\\CYL</th>`;
+  
+  CYL.forEach(c => html += `<th>${c.toFixed(2)}</th>`);
+  html += '</tr>';
+  
+  SPH.forEach(s => {
+    html += `<tr><td style="padding-right:8px;font-weight:500;background:#f8f8f8">${s.toFixed(2)}</td>`;
+    CYL.forEach(c => {
+      const key = s + '|' + c;
+      const d = stockMap[key];
+      const val = d ? d.stock : 0;
+      const color = heatColor(val);
+      html += `<td style="background:${color}" onclick="openModal(${s},${c})" title="SPH:${s} CYL:${c} Stock:${val}">${val}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</table></div>';
+  html += `<div class="legend">
+    <span>Stock Level:</span>
+    <div class="legend-item"><div class="legend-color" style="background:#2e7d32"></div>>30</div>
+    <div class="legend-item"><div class="legend-color" style="background:#f9a825"></div>10-30</div>
+    <div class="legend-item"><div class="legend-color" style="background:#ef6c00"></div>3-9</div>
+    <div class="legend-item"><div class="legend-color" style="background:#c62828"></div>1-2</div>
+    <div class="legend-item"><div class="legend-color" style="background:#4a0000"></div>0</div>
+  </div></div>`;
+  
+  document.getElementById('content').innerHTML = html;
+}
+
+function openModal(sph, cyl) {
+  const key = sph + '|' + cyl;
+  const d = stockMap[key];
+  currentCell = { sph, cyl, stock: d ? d.stock : 0 };
+  currentMode = 'edit';
+  
+  document.getElementById('modalTitle').textContent = 'Edit Stock';
+  document.getElementById('modalInfo').innerHTML = `<strong>SPH: ${sph.toFixed(2)} / CYL: ${cyl.toFixed(2)}</strong><br>Current: ${currentCell.stock}`;
+  document.getElementById('modalQty').value = currentCell.stock;
+  document.getElementById('modal').classList.add('open');
+  document.getElementById('modalQty').focus();
+  document.getElementById('modalQty').select();
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+async function submitModal() {
+  if (!currentCell) return;
+  
+  const qty = parseInt(document.getElementById('modalQty').value);
+  if (isNaN(qty) || qty < 0) {
+    toast('Invalid quantity');
+    return;
+  }
+  
+  closeModal();
+  toast('Saving...');
+  
+  try {
+    const res = await fetch('/api/stock/edit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sph: currentCell.sph, cyl: currentCell.cyl, value: qty })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    
+    toast('Saved: ' + currentCell.stock + ' → ' + qty);
+    await loadStock();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+function renderStockForm(type) {
+  const title = type === 'out' ? 'Stock Out' : 'Stock In';
+  const color = type === 'out' ? '#1a73e8' : '#34a853';
+  const bgColor = type === 'out' ? '#f0f7ff' : '#f0fff0';
+  
+  return `<div class="card" style="max-width:400px">
+    <h3 style="margin-bottom:16px">${title}</h3>
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <label>
+        <span style="font-size:13px;color:#555;display:block;margin-bottom:4px">SPH</span>
+        <select id="formSph" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px">
+          ${SPH.map(s => `<option value="${s}">${s.toFixed(2)}</option>`).join('')}
+        </select>
+      </label>
+      <label>
+        <span style="font-size:13px;color:#555;display:block;margin-bottom:4px">CYL</span>
+        <select id="formCyl" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px">
+          ${CYL.map(c => `<option value="${c}">${c.toFixed(2)}</option>`).join('')}
+        </select>
+      </label>
+    </div>
+    
+    <div id="formInfo" style="display:none;padding:12px;border-radius:6px;margin-bottom:12px;font-size:13px">Loading...</div>
+    
+    <label>
+      <span style="font-size:13px;color:#555;display:block;margin-bottom:4px">Quantity</span>
+      <input type="number" id="formQty" min="1" value="1" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:16px">
+    </label>
+    
+    <button onclick="submitStockForm('${type}')" style="width:100%;margin-top:16px;padding:12px;background:${color};color:#fff;border:none;border-radius:6px;font-size:16px;font-weight:500;cursor:pointer">${title}</button>
+    
+    <div id="formResult" style="margin-top:12px;font-size:13px"></div>
+  </div>`;
+}
+
+let formLookupTimer = null;
+
+function lookupFormStock() {
+  clearTimeout(formLookupTimer);
+  formLookupTimer = setTimeout(async () => {
+    const sph = parseFloat(document.getElementById('formSph').value);
+    const cyl = parseFloat(document.getElementById('formCyl').value);
+    const info = document.getElementById('formInfo');
+    
+    try {
+      const res = await fetch('/api/stock/by-key?sph=' + sph + '&cyl=' + cyl);
+      const data = await res.json();
+      
+      if (!data.ok) {
+        info.style.display = 'block';
+        info.style.background = '#fff3f3';
+        info.innerHTML = 'Not found';
+        return;
+      }
+      
+      info.style.display = 'block';
+      info.style.background = data.stock <= 2 ? '#fff3f3' : data.stock <= 9 ? '#fff8e1' : '#f0fff0';
+      info.innerHTML = `<strong>Stock:</strong> ${data.stock}`;
+      info.dataset.sph = data.sph;
+      info.dataset.cyl = data.cyl;
+      info.dataset.stock = data.stock;
+    } catch (e) {
+      info.style.display = 'block';
+      info.innerHTML = 'Error';
+    }
+  }, 200);
+}
+
+async function submitStockForm(type) {
+  const info = document.getElementById('formInfo');
+  const sph = parseFloat(info.dataset.sph);
+  const cyl = parseFloat(info.dataset.cyl);
+  const qty = parseInt(document.getElementById('formQty').value);
+  
+  if (!sph || !cyl) {
+    toast('Please select SPH and CYL');
+    return;
+  }
+  if (!qty || qty <= 0) {
+    toast('Invalid quantity');
+    return;
+  }
+  
+  toast('Processing...');
+  
+  try {
+    const api = type === 'out' ? '/api/stock/out' : '/api/stock/in';
+    const res = await fetch(api, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sph, cyl, qty })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    
+    document.getElementById('formResult').innerHTML = 
+      `<span style="color:#2e7d32">${type === 'out' ? 'Out' : 'In'}: ${qty} (${data.old} → ${data.new})</span>`;
+    info.style.display = 'none';
+    await loadStock();
+  } catch (e) {
+    toast('Error: ' + e.message);
+  }
+}
+
+let currentTab = 2;
+function switchTab(idx) {
+  currentTab = idx;
+  document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === idx));
+  
+  const content = document.getElementById('content');
+  if (idx === 0) {
+    content.innerHTML = renderStockForm('out');
+    lookupFormStock();
+    document.getElementById('formSph').addEventListener('change', lookupFormStock);
+    document.getElementById('formCyl').addEventListener('change', lookupFormStock);
+  } else if (idx === 1) {
+    content.innerHTML = renderStockForm('in');
+    lookupFormStock();
+    document.getElementById('formSph').addEventListener('change', lookupFormStock);
+    document.getElementById('formCyl').addEventListener('change', lookupFormStock);
+  } else if (idx === 2) {
+    renderHeatmap();
+  }
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+  if (e.key === 'Enter' && document.getElementById('modal').classList.contains('open')) {
+    submitModal();
+  }
+});
+
+loadStock().then(() => switchTab(2));
+</script>
+</body>
+</html>

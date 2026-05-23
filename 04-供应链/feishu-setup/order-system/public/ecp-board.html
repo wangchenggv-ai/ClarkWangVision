@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>星耀榜 · ECP排名</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e1a;
+  --surface: #111827;
+  --surface-2: #1a2332;
+  --card: #1e293b;
+  --border: rgba(255,255,255,0.06);
+  --text: #f1f5f9;
+  --text-2: #94a3b8;
+  --text-3: #64748b;
+  --gold: #fbbf24;
+  --gold-glow: rgba(251,191,36,0.15);
+  --silver: #9ca3af;
+  --bronze: #d97706;
+  --blue: #3b82f6;
+  --blue-glow: rgba(59,130,246,0.15);
+  --green: #22c55e;
+  --green-glow: rgba(34,197,94,0.15);
+  --orange: #f97316;
+  --orange-glow: rgba(249,115,22,0.15);
+  --purple: #a855f7;
+  --purple-glow: rgba(168,85,247,0.15);
+  --radius: 16px;
+  --radius-sm: 12px;
+  --font: 'Noto Sans SC', -apple-system, sans-serif;
+  --font-num: 'DM Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Header ── */
+.header {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  padding: 2rem 1.5rem 1.5rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.header::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 30% 50%, rgba(251,191,36,0.08) 0%, transparent 50%),
+              radial-gradient(circle at 70% 50%, rgba(59,130,246,0.08) 0%, transparent 50%);
+  pointer-events: none;
+}
+.header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  position: relative;
+}
+.header-brand {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.6);
+  letter-spacing: 2px;
+}
+.header-agent {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.4);
+}
+.header-title {
+  font-size: 1.8rem;
+  font-weight: 900;
+  letter-spacing: 4px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+  position: relative;
+}
+.header-sub {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.5);
+}
+.header-stats {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 1.25rem;
+  position: relative;
+}
+.header-stat {
+  text-align: center;
+}
+.header-stat-val {
+  font-family: var(--font-num);
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.header-stat-label {
+  font-size: 0.68rem;
+  color: var(--text-3);
+  margin-top: 0.2rem;
+}
+
+/* ── Filters ── */
+.filters {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.filter-btn {
+  padding: 0.5rem 1rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.filter-btn:hover { background: var(--card); color: var(--text); }
+.filter-btn.active {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+/* ── Content ── */
+.content {
+  padding: 1rem 1.5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Top 3 Podium ── */
+.podium {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  padding: 1rem 0;
+}
+.podium-item {
+  flex: 1;
+  max-width: 180px;
+  text-align: center;
+  position: relative;
+}
+.podium-rank {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-num);
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin: 0 auto 0.75rem;
+  position: relative;
+}
+.podium-rank::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid;
+  opacity: 0.5;
+}
+.podium-1 .podium-rank {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #000;
+  width: 64px;
+  height: 64px;
+  font-size: 1.5rem;
+}
+.podium-1 .podium-rank::after { border-color: var(--gold); }
+.podium-2 .podium-rank {
+  background: linear-gradient(135deg, #9ca3af, #6b7280);
+  color: #000;
+}
+.podium-2 .podium-rank::after { border-color: var(--silver); }
+.podium-3 .podium-rank {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  color: #000;
+}
+.podium-3 .podium-rank::after { border-color: var(--bronze); }
+.podium-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  margin: 0 auto 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+}
+.podium-1 .podium-avatar {
+  width: 72px;
+  height: 72px;
+  font-size: 2rem;
+  background: linear-gradient(135deg, rgba(251,191,36,0.2), rgba(245,158,11,0.2));
+}
+.podium-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+.podium-1 .podium-name { font-size: 1.1rem; }
+.podium-store {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  margin-bottom: 0.5rem;
+}
+.podium-count {
+  font-family: var(--font-num);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+.podium-1 .podium-count { font-size: 1.5rem; color: var(--gold); }
+.podium-label {
+  font-size: 0.68rem;
+  color: var(--text-3);
+}
+.podium-bar {
+  height: 80px;
+  background: var(--surface-2);
+  border-radius: 8px 8px 0 0;
+  margin-top: 0.75rem;
+  position: relative;
+  overflow: hidden;
+}
+.podium-bar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  border-radius: 8px 8px 0 0;
+}
+.podium-1 .podium-bar { height: 120px; }
+.podium-1 .podium-bar::after { background: linear-gradient(180deg, rgba(251,191,36,0.3), rgba(251,191,36,0.1)); }
+.podium-2 .podium-bar::after { background: linear-gradient(180deg, rgba(156,163,175,0.3), rgba(156,163,175,0.1)); }
+.podium-3 .podium-bar::after { background: linear-gradient(180deg, rgba(217,119,6,0.3), rgba(217,119,6,0.1)); }
+
+/* ── Leaderboard Table ── */
+.leaderboard {
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.leaderboard-header {
+  display: grid;
+  grid-template-columns: 60px 1fr 120px 100px 100px 80px;
+  padding: 0.75rem 1rem;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.leaderboard-header span {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.leaderboard-header span:nth-child(n+3) { text-align: right; }
+
+.leaderboard-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 120px 100px 100px 80px;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
+  align-items: center;
+}
+.leaderboard-row:last-child { border-bottom: none; }
+.leaderboard-row:hover { background: rgba(255,255,255,0.03); }
+.leaderboard-row.top3 { background: rgba(251,191,36,0.03); }
+
+.rank-cell {
+  font-family: var(--font-num);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-3);
+}
+.rank-cell.top3 { color: var(--gold); font-size: 1.1rem; }
+.rank-cell .rank-medal {
+  font-size: 1.2rem;
+  margin-right: 0.25rem;
+}
+
+.info-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.info-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.info-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.info-store {
+  font-size: 0.72rem;
+  color: var(--text-3);
+  margin-top: 0.15rem;
+}
+
+.count-cell {
+  text-align: right;
+}
+.count-num {
+  font-family: var(--font-num);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.count-label {
+  font-size: 0.68rem;
+  color: var(--text-3);
+}
+
+.tier-cell {
+  text-align: right;
+}
+.tier-badge {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.tier-达标 { background: var(--green-glow); color: var(--green); }
+.tier-进行中 { background: var(--blue-glow); color: var(--blue); }
+.tier-未达标 { background: rgba(100,116,139,0.2); color: var(--text-3); }
+
+.progress-cell {
+  text-align: right;
+}
+.progress-bar-mini {
+  width: 60px;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  margin-left: auto;
+  margin-bottom: 0.25rem;
+  overflow: hidden;
+}
+.progress-bar-mini-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--blue);
+}
+.progress-pct {
+  font-family: var(--font-num);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.trip-cell {
+  text-align: right;
+}
+.trip-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.trip-yes { background: var(--gold-glow); color: var(--gold); }
+.trip-no { background: rgba(100,116,139,0.1); color: var(--text-3); }
+
+/* ── Trip Counter ── */
+.trip-counter {
+  background: linear-gradient(135deg, var(--gold-glow), rgba(251,191,36,0.05));
+  border: 1px solid rgba(251,191,36,0.2);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.trip-counter-left h3 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gold);
+  margin-bottom: 0.25rem;
+}
+.trip-counter-left p {
+  font-size: 0.78rem;
+  color: var(--text-2);
+}
+.trip-counter-right {
+  text-align: right;
+}
+.trip-counter-num {
+  font-family: var(--font-num);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.trip-counter-label {
+  font-size: 0.72rem;
+  color: var(--text-3);
+}
+
+/* ── Empty State ── */
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: var(--text-3);
+}
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+.empty-text {
+  font-size: 0.9rem;
+}
+
+/* ── Loading ── */
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-3);
+}
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(59,130,246,0.2);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 1rem;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .podium { gap: 0.5rem; }
+  .podium-item { max-width: 120px; }
+  .podium-1 .podium-avatar { width: 56px; height: 56px; font-size: 1.5rem; }
+  .podium-1 .podium-rank { width: 48px; height: 48px; font-size: 1.2rem; }
+
+  .leaderboard-header,
+  .leaderboard-row {
+    grid-template-columns: 50px 1fr 80px 60px;
+  }
+  .leaderboard-header span:nth-child(4),
+  .leaderboard-header span:nth-child(5),
+  .leaderboard-row .tier-cell,
+  .leaderboard-row .trip-cell {
+    display: none;
+  }
+
+  .trip-counter { flex-direction: column; gap: 1rem; text-align: center; }
+  .trip-counter-right { text-align: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-top">
+    <div class="header-brand">高视星</div>
+    <div class="header-agent" id="agentName">加载中...</div>
+  </div>
+  <div class="header-title">星 耀 榜</div>
+  <div class="header-sub">ECP视光师排名 · 扫码绑定累计</div>
+  <div class="header-stats">
+    <div class="header-stat">
+      <div class="header-stat-val" id="totalECP">—</div>
+      <div class="header-stat-label">关联ECP</div>
+    </div>
+    <div class="header-stat">
+      <div class="header-stat-val" id="totalBound">—</div>
+      <div class="header-stat-label">累计绑定</div>
+    </div>
+    <div class="header-stat">
+      <div class="header-stat-val" id="tripRemaining">—</div>
+      <div class="header-stat-label">游学名额</div>
+    </div>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="filters">
+  <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">全部</button>
+  <button class="filter-btn" data-filter="trip" onclick="setFilter('trip')">游学达标</button>
+  <button class="filter-btn" data-filter="progress" onclick="setFilter('progress')">进行中</button>
+  <button class="filter-btn" data-filter="top10" onclick="setFilter('top10')">TOP 10</button>
+</div>
+
+<!-- Content -->
+<div class="content">
+
+  <!-- Trip Counter -->
+  <div class="trip-counter">
+    <div class="trip-counter-left">
+      <h3>游学名额统计</h3>
+      <p>单名ECP暑期期间完成≥100副销量，可获4天3夜专业游学</p>
+    </div>
+    <div class="trip-counter-right">
+      <div class="trip-counter-num" id="tripCount">0/50</div>
+      <div class="trip-counter-label">已达标/总名额</div>
+    </div>
+  </div>
+
+  <!-- Top 3 Podium -->
+  <div class="podium" id="podium">
+    <!-- Filled by JS -->
+  </div>
+
+  <!-- Leaderboard -->
+  <div class="leaderboard" id="leaderboard">
+    <div class="leaderboard-header">
+      <span>排名</span>
+      <span>ECP视光师</span>
+      <span>累计副数</span>
+      <span>档位</span>
+      <span>进度</span>
+      <span>游学</span>
+    </div>
+    <div id="leaderboard-body">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div>加载榜单数据...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+const API = '';
+
+let allData = [];
+let currentFilter = 'all';
+
+// ── Load Data ──
+async function loadData() {
+  try {
+    // Load agent info
+    const agentRes = await fetch(`${API}/api/agent?t=${token}`);
+    const agent = await agentRes.json();
+    document.getElementById('agentName').textContent = agent.name || '未知代理商';
+
+    // Load ECP board
+    const res = await fetch(`${API}/api/starmap/ecp-board?t=${token}`);
+    if (!res.ok) throw new Error((await res.json()).error || '请求失败');
+    const data = await res.json();
+
+    allData = data.leaderboard || [];
+
+    // Update header stats
+    document.getElementById('totalECP').textContent = data.totalECP || allData.length;
+    document.getElementById('totalBound').textContent = allData.reduce((s, e) => s + e.boundCount, 0);
+    document.getElementById('tripRemaining').textContent = data.studyTripRemaining || 0;
+
+    // Update trip counter
+    const tripCount = allData.filter(e => e.boundCount >= 100).length;
+    document.getElementById('tripCount').textContent = `${tripCount}/50`;
+
+    renderPodium();
+    renderLeaderboard();
+  } catch (e) {
+    document.getElementById('leaderboard-body').innerHTML =
+      `<div class="empty-state"><div class="empty-icon">⚠️</div><div class="empty-text">加载失败：${e.message}</div></div>`;
+  }
+}
+
+// ── Render Podium ──
+function renderPodium() {
+  const podium = document.getElementById('podium');
+  const top3 = allData.slice(0, 3);
+
+  if (top3.length === 0) {
+    podium.style.display = 'none';
+    return;
+  }
+
+  // Reorder: 2nd, 1st, 3rd for visual podium
+  const ordered = [];
+  if (top3[1]) ordered.push({ ...top3[1], podiumClass: 'podium-2' });
+  if (top3[0]) ordered.push({ ...top3[0], podiumClass: 'podium-1' });
+  if (top3[2]) ordered.push({ ...top3[2], podiumClass: 'podium-3' });
+
+  podium.innerHTML = ordered.map((ecp, i) => {
+    const rank = ecp.rank || (i === 0 ? 2 : i === 1 ? 1 : 3);
+    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉';
+    const avatar = rank === 1 ? '👑' : '⭐';
+    return `
+      <div class="podium-item ${ecp.podiumClass}">
+        <div class="podium-rank">${rank}</div>
+        <div class="podium-avatar">${avatar}</div>
+        <div class="podium-name">${ecp.name}</div>
+        <div class="podium-store">${ecp.store || '—'}</div>
+        <div class="podium-count">${ecp.boundCount}</div>
+        <div class="podium-label">累计副数</div>
+        <div class="podium-bar"></div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Render Leaderboard ──
+function renderLeaderboard() {
+  const body = document.getElementById('leaderboard-body');
+
+  let filtered = [...allData];
+  if (currentFilter === 'trip') filtered = filtered.filter(e => e.boundCount >= 100);
+  else if (currentFilter === 'progress') filtered = filtered.filter(e => e.boundCount > 0 && e.boundCount < 100);
+  else if (currentFilter === 'top10') filtered = filtered.slice(0, 10);
+
+  if (filtered.length === 0) {
+    body.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">暂无数据</div></div>`;
+    return;
+  }
+
+  body.innerHTML = filtered.map((ecp, i) => {
+    const rank = ecp.rank || (i + 1);
+    const isTop3 = rank <= 3;
+    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+    const progress = Math.min(100, Math.round(ecp.boundCount / 100 * 100));
+    const tierClass = ecp.tier === '达标' ? 'tier-达标' : ecp.tier === '进行中' ? 'tier-进行中' : 'tier-未达标';
+    const hasTrip = ecp.boundCount >= 100;
+
+    return `
+      <div class="leaderboard-row ${isTop3 ? 'top3' : ''}">
+        <div class="rank-cell ${isTop3 ? 'top3' : ''}">
+          ${medal ? `<span class="rank-medal">${medal}</span>` : ''}${rank}
+        </div>
+        <div class="info-cell">
+          <div class="info-avatar">${isTop3 ? '⭐' : '👤'}</div>
+          <div>
+            <div class="info-name">${ecp.name}</div>
+            <div class="info-store">${ecp.store || '—'}</div>
+          </div>
+        </div>
+        <div class="count-cell">
+          <div class="count-num">${ecp.boundCount}</div>
+          <div class="count-label">副</div>
+        </div>
+        <div class="tier-cell">
+          <span class="tier-badge ${tierClass}">${ecp.tier || '未达标'}</span>
+        </div>
+        <div class="progress-cell">
+          <div class="progress-bar-mini">
+            <div class="progress-bar-mini-fill" style="width:${progress}%"></div>
+          </div>
+          <div class="progress-pct">${progress}%</div>
+        </div>
+        <div class="trip-cell">
+          <span class="trip-badge ${hasTrip ? 'trip-yes' : 'trip-no'}">
+            ${hasTrip ? '✓ 达标' : `${100 - ecp.boundCount}副`}
+          </span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Filter ──
+function setFilter(filter) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.filter === filter)
+  );
+  renderLeaderboard();
+}
+
+// ── Init ──
+if (!token) {
+  document.getElementById('agentName').textContent = '无效访问链接';
+  document.getElementById('leaderboard-body').innerHTML =
+    '<div class="empty-state"><div class="empty-icon">🔗</div><div class="empty-text">缺少访问参数</div></div>';
+} else {
+  loadData();
+}
+</script>
+</body>
+</html>

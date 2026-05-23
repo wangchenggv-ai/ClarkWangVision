@@ -1,0 +1,13 @@
+{
+  "legacyEditor": false,
+  "livePreview": true,
+  "readableLineLength": true,
+  "defaultViewMode": "source",
+  "showLineNumber": false,
+  "spellcheck": false,
+  "autoPairBrackets": true,
+  "autoPairMarkdown": true,
+  "foldHeading": true,
+  "foldIndent": true,
+  "showUnsupportedFiles": false
+}

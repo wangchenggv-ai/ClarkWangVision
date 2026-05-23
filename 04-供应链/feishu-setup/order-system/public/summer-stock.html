@@ -80,11 +80,9 @@ body { font-family: 'Noto Sans SC', sans-serif; background: var(--bg); color: va
 }
 .heat-table td.sku-label { font-weight: 600; color: var(--navy); text-align: left; padding-left: 0; cursor: default; }
 .heat-c0 { background: #f5f7fa; color: var(--text-3); }
-.heat-c1 { background: #dbeafe; color: #1e40af; }
-.heat-c2 { background: #bfdbfe; color: #1d4ed8; }
-.heat-c3 { background: #93c5fd; color: #1e3a8a; }
-.heat-c4 { background: #3b82f6; color: #fff; }
-.heat-c5 { background: #1d4ed8; color: #fff; font-weight: 700; }
+.heat-tier-A { background: #27ae60; color: #fff; font-weight: 700; }
+.heat-tier-B { background: #e67e22; color: #fff; font-weight: 600; }
+.heat-tier-C { background: #bdc3c7; color: #555; }
 .heat-table td:not(.sku-label):hover { transform: scale(1.1); z-index: 1; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
 .heat-table td.selected { outline: 2px solid var(--navy-dark); outline-offset: -1px; }
 
@@ -133,6 +131,43 @@ body { font-family: 'Noto Sans SC', sans-serif; background: var(--bg); color: va
 /* 产品分块 */
 .product-block { margin-bottom: 0.5rem; }
 .product-block-title { font-size: 0.75rem; font-weight: 700; color: var(--text-2); margin-bottom: 0.5rem; letter-spacing: 0.04em; }
+
+/* 产品切换 Tab */
+.product-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.product-tab {
+  padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer;
+  font-size: 0.78rem; font-weight: 600; color: var(--text-2);
+  background: #f0f4f8; border: 1px solid var(--border); transition: all 0.15s;
+}
+.product-tab.active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.product-tab:hover:not(.active) { background: #e2e8f0; }
+
+/* 快速分配栏 */
+.auto-alloc-bar {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.6rem 0.75rem; background: #f8fafc; border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 1rem;
+}
+.auto-input {
+  border: 1px solid var(--border); border-radius: 4px; padding: 0.3rem 0.5rem;
+  font-family: 'DM Mono', monospace; font-size: 0.82rem; width: 80px;
+}
+.btn-auto {
+  padding: 0.35rem 0.75rem; background: var(--green); color: #fff; border: none;
+  border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600;
+}
+.btn-auto:hover { background: #219a52; }
+
+/* 热力图单元格内容 */
+.heat-table td { position: relative; min-width: 52px; height: 38px; font-size: 0.75rem; font-weight: 700; }
+
+.qty-badge {
+  position: absolute; top: -4px; right: -4px;
+  background: var(--navy); color: #fff;
+  font-size: 0.55rem; font-weight: 700; font-family: 'DM Mono', monospace;
+  padding: 0.1rem 0.3rem; border-radius: 8px; min-width: 16px; text-align: center;
+  z-index: 2; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
 </style>
 </head>
 <body>
@@ -204,58 +239,73 @@ const params = new URLSearchParams(location.search);
 const token = params.get('t') || '';
 const API = '';
 
-// SKU 定义（3大类）
-const PRODUCTS = [
-  {
-    name: 'Ultra双效',
-    key: 'ultra',
-    sphs: [0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4, -4.5, -5, -5.5, -6],
-    cyls: [0, -0.25, -0.5, -0.75, -1, -1.25, -1.5, -1.75, -2],
-  },
-  {
-    name: '时空之眼',
-    key: 'sky',
-    sphs: [0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4, -4.5, -5, -5.5, -6],
-    cyls: [0, -0.25, -0.5, -0.75, -1, -1.25, -1.5, -1.75, -2],
-  },
-  {
-    name: '小旋风',
-    key: 'storm',
-    sphs: [0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4, -4.5, -5, -5.5, -6],
-    cyls: [0, -0.25, -0.5, -0.75, -1, -1.25, -1.5, -1.75, -2],
-  },
+// SPH / CYL 轴（0.25D 步长，与 Excel 一致）
+const SPHS = [0, -0.25, -0.5, -0.75, -1, -1.25, -1.5, -1.75, -2, -2.25, -2.5, -2.75, -3, -3.25, -3.5, -3.75, -4, -4.25, -4.5, -4.75, -5, -5.25, -5.5, -5.75, -6];
+const CYLS = [0, -0.25, -0.5, -0.75, -1, -1.25, -1.5, -1.75, -2];
+
+// 「备库参数比例」— 3个月历史订单加权比例（SPH×CYL）
+// 来源：参数分级比例.xlsx → 备库参数比例 Sheet
+const PROPORTION = [
+  [0.036383,0.002128,0.008936,0.006383,0.005532,0.003191,0.003191,0.000851,0.002553],
+  [0.009787,0.002340,0.005957,0.003617,0.002766,0.001489,0.001064,0.000000,0.000638],
+  [0.016383,0.001915,0.011489,0.005319,0.003191,0.002128,0.001489,0.001064,0.000638],
+  [0.023617,0.001277,0.016809,0.006809,0.004681,0.001489,0.001489,0.001064,0.000851],
+  [0.029787,0.002979,0.019362,0.011064,0.005957,0.002766,0.001702,0.001277,0.000638],
+  [0.032766,0.003404,0.020426,0.007872,0.005319,0.004043,0.002128,0.000638,0.000638],
+  [0.023404,0.001915,0.023191,0.009362,0.006170,0.002979,0.001915,0.001277,0.001702],
+  [0.021702,0.001277,0.015532,0.010000,0.006809,0.002766,0.003404,0.001915,0.001277],
+  [0.017660,0.002340,0.017872,0.009362,0.006809,0.001702,0.002766,0.001915,0.001489],
+  [0.018936,0.001915,0.015957,0.007447,0.004894,0.004255,0.001915,0.001064,0.001277],
+  [0.014043,0.001064,0.014894,0.009149,0.005319,0.005745,0.004681,0.001915,0.001702],
+  [0.013617,0.000213,0.014894,0.007234,0.004681,0.003191,0.003617,0.002340,0.000638],
+  [0.011915,0.001489,0.011064,0.005106,0.003404,0.003404,0.004468,0.001489,0.001915],
+  [0.007660,0.000426,0.008936,0.005532,0.006170,0.003404,0.003404,0.000426,0.001277],
+  [0.005319,0.000638,0.008511,0.004468,0.004681,0.002979,0.002553,0.001702,0.000426],
+  [0.004681,0.000213,0.006170,0.004468,0.002340,0.003191,0.003617,0.001064,0.001064],
+  [0.003830,0.000213,0.006170,0.005319,0.002340,0.003191,0.000851,0.001277,0.001915],
+  [0.004681,0.000000,0.004681,0.004043,0.004255,0.003191,0.002128,0.001489,0.000638],
+  [0.004468,0.000213,0.004043,0.004681,0.002340,0.003404,0.001277,0.002128,0.000426],
+  [0.002553,0.000213,0.003404,0.001915,0.002340,0.000851,0.002340,0.001064,0.001064],
+  [0.003617,0.000000,0.002340,0.002340,0.002979,0.002340,0.000851,0.000851,0.001064],
+  [0.001915,0.000213,0.003404,0.000638,0.002553,0.002979,0.001915,0.001277,0.001489],
+  [0.002128,0.000426,0.000851,0.000851,0.001064,0.001277,0.001915,0.000638,0.000213],
+  [0.001064,0.000000,0.000638,0.001064,0.000426,0.001277,0.000638,0.001277,0.000213],
+  [0.000851,0.000000,0.000426,0.000426,0.002128,0.001277,0.000638,0.000000,0.000638],
 ];
 
-// 模拟热力权重（实际应从库存表读历史出库量）
-const HEAT_WEIGHTS = {};
-for (const p of PRODUCTS) {
-  for (const sph of p.sphs) {
-    for (const cyl of p.cyls) {
-      const key = `${p.name}|${sph}|${cyl}`;
-      // 常规范围（-3~0, -1~0）权重较高
-      const sphScore = sph >= -3 ? 5 : sph >= -4.5 ? 3 : 1;
-      const cylScore = cyl >= -1 ? 5 : cyl >= -1.5 ? 3 : 1;
-      HEAT_WEIGHTS[key] = Math.round((sphScore + cylScore) / 2);
-    }
-  }
+// A/B/C 分级：A（≥1%）= 70% 备库量，B（0.3%~1%）= 15%，C（<0.3%）= 15%
+function getTier(proportion) {
+  const pct = proportion * 100;
+  if (pct >= 1) return 'A';
+  if (pct >= 0.3) return 'B';
+  return 'C';
 }
+
+// 3 个产品共用同一份比例（历史数据未区分产品）
+const PRODUCTS = [
+  { name: 'Ultra双效', key: 'ultra' },
+  { name: '时空之眼', key: 'sky' },
+  { name: '小旋风', key: 'storm' },
+];
 
 let plan = null;
 let selectedItems = []; // {sku, sph, cyl, qty}
+let currentProduct = 0; // 当前显示的产品索引
 
 async function init() {
-  if (!token) return;
-  try {
-    const r = await fetch(`${API}/api/agent?t=${token}`);
-    const d = await r.json();
-    document.getElementById('agent-name').textContent = d.name || '';
-  } catch {}
+  if (token) {
+    try {
+      const r = await fetch(`${API}/api/agent?t=${token}`);
+      const d = await r.json();
+      document.getElementById('agent-name').textContent = d.name || '';
+    } catch {}
 
-  try {
-    const r = await fetch(`${API}/api/summer-plan?t=${token}`);
-    const d = await r.json();
-    plan = d.plan;
-  } catch {}
+    try {
+      const r = await fetch(`${API}/api/summer-plan?t=${token}`);
+      const d = await r.json();
+      plan = d.plan;
+    } catch {}
+  }
 
   renderTargetCard();
   renderHeatmap();
@@ -289,40 +339,55 @@ function renderTargetCard() {
   `).join('');
 }
 
-function heatClass(w) {
-  if (w >= 5) return 'heat-c5';
-  if (w >= 4) return 'heat-c4';
-  if (w >= 3) return 'heat-c3';
-  if (w >= 2) return 'heat-c2';
-  if (w >= 1) return 'heat-c1';
-  return 'heat-c0';
+function heatClass(proportion) {
+  if (proportion <= 0) return 'heat-c0';
+  const tier = getTier(proportion);
+  return 'heat-tier-' + tier;
 }
 
 function renderHeatmap() {
   const body = document.getElementById('heatmap-body');
-  body.innerHTML = PRODUCTS.map(p => `
+  const p = PRODUCTS[currentProduct];
+  const tabHtml = PRODUCTS.map((prod, i) =>
+    `<span class="product-tab${i === currentProduct ? ' active' : ''}" onclick="switchProduct(${i})">${prod.name}</span>`
+  ).join('');
+
+  body.innerHTML = `
+    <div class="product-tabs">${tabHtml}</div>
+    <div class="auto-alloc-bar">
+      <span style="font-size:0.75rem;color:var(--text-2)">快速填入：</span>
+      <input type="number" id="auto-total" placeholder="总片数" min="1" style="width:80px" class="auto-input">
+      <button class="btn-auto" onclick="autoAllocate()">按比例分配</button>
+      <span style="font-size:0.68rem;color:var(--text-3);margin-left:0.5rem">A(≥1%)占70% · B(0.3~1%)占15% · C(<0.3%)占15%</span>
+    </div>
     <div class="heat-section">
-      <div class="heat-title">${p.name} <span class="heat-badge">点击选择</span></div>
+      <div class="heat-title">${p.name} <span class="heat-badge">点击选择 · 比例来自3月历史</span></div>
       <div class="heat-table-wrap">
         <table class="heat-table">
           <thead>
             <tr>
               <th class="row-header">SPH \\ CYL</th>
-              ${p.cyls.map(c => `<th>${c.toFixed(2)}</th>`).join('')}
+              ${CYLS.map(c => `<th>${c === 0 ? '0' : c.toFixed(2)}</th>`).join('')}
             </tr>
           </thead>
           <tbody>
-            ${p.sphs.map(sph => `
+            ${SPHS.map((sph, ri) => `
               <tr>
-                <td class="sku-label">${sph.toFixed(2)}</td>
-                ${p.cyls.map(cyl => {
-                  const key = `${p.name}|${sph}|${cyl}`;
-                  const w = HEAT_WEIGHTS[key] || 0;
+                <td class="sku-label">${sph === 0 ? '0' : sph.toFixed(2)}</td>
+                ${CYLS.map((cyl, ci) => {
+                  const prop = PROPORTION[ri][ci];
+                  const pct = (prop * 100).toFixed(2);
+                  const tier = getTier(prop);
                   const isSelected = selectedItems.some(i => i.sku === p.name && i.sph === sph && i.cyl === cyl);
-                  return `<td class="${heatClass(w)}${isSelected ? ' selected' : ''}"
+                  const sel = selectedItems.find(i => i.sku === p.name && i.sph === sph && i.cyl === cyl);
+                  const qtyBadge = sel ? `<div class="qty-badge">${sel.qty}</div>` : '';
+                  const cls = prop <= 0 ? 'heat-c0' : `heat-tier-${tier}`;
+                  return `<td class="${cls}${isSelected ? ' selected' : ''}"
                     data-sku="${p.name}" data-sph="${sph}" data-cyl="${cyl}"
                     onclick="toggleCell(this,'${p.name}',${sph},${cyl})"
-                    title="${p.name} SPH${sph} CYL${cyl}">${w > 0 ? w : '·'}</td>`;
+                    title="${p.name} SPH ${sph} CYL ${cyl}\n占比 ${pct}% [${tier}]">
+                    ${qtyBadge}${prop > 0 ? tier : '·'}
+                  </td>`;
                 }).join('')}
               </tr>
             `).join('')}
@@ -330,7 +395,12 @@ function renderHeatmap() {
         </table>
       </div>
     </div>
-  `).join('');
+  `;
+}
+
+function switchProduct(idx) {
+  currentProduct = idx;
+  renderHeatmap();
 }
 
 function toggleCell(el, sku, sph, cyl) {
@@ -339,9 +409,52 @@ function toggleCell(el, sku, sph, cyl) {
     selectedItems.splice(idx, 1);
     el.classList.remove('selected');
   } else {
-    selectedItems.push({ sku, sph, cyl, qty: 10 });
+    selectedItems.push({ sku, sph, cyl, qty: 5 });
     el.classList.add('selected');
   }
+  renderSelectedList();
+}
+
+function autoAllocate() {
+  const total = parseInt(document.getElementById('auto-total').value);
+  if (!total || total < 1) return alert('请输入总片数');
+
+  // 清除当前产品已选
+  const sku = PRODUCTS[currentProduct].name;
+  selectedItems = selectedItems.filter(i => i.sku !== sku);
+
+  // 按 A/B/C 分级分配
+  // A(≥1%): 总量×70%，B(0.3~1%): 总量×15%，C(<0.3%): 总量×15%
+  const aTotal = Math.round(total * 0.7);
+  const bTotal = Math.round(total * 0.15);
+  const cTotal = total - aTotal - bTotal;
+
+  // 收集各 tier 的格子及其比例
+  const buckets = { A: [], B: [], C: [] };
+  for (let ri = 0; ri < SPHS.length; ri++) {
+    for (let ci = 0; ci < CYLS.length; ci++) {
+      const prop = PROPORTION[ri][ci];
+      if (prop <= 0) continue;
+      const tier = getTier(prop);
+      buckets[tier].push({ sph: SPHS[ri], cyl: CYLS[ci], prop });
+    }
+  }
+
+  // 按比例在各 tier 内分配
+  function allocateTier(tierBucket, tierTotal) {
+    const sumProp = tierBucket.reduce((s, c) => s + c.prop, 0);
+    if (sumProp <= 0 || tierTotal <= 0) return;
+    for (const cell of tierBucket) {
+      const qty = Math.max(1, Math.round(cell.prop / sumProp * tierTotal));
+      selectedItems.push({ sku, sph: cell.sph, cyl: cell.cyl, qty });
+    }
+  }
+
+  allocateTier(buckets.A, aTotal);
+  allocateTier(buckets.B, bTotal);
+  allocateTier(buckets.C, cTotal);
+
+  renderHeatmap();
   renderSelectedList();
 }
 

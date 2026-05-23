@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  agent:
+    build: .
+    ports:
+      - "3230:3230"
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

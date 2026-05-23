@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>随货同行单 ORD-20260516-DEMO01</title>
+<style>
+  @page { size: A4; margin: 12mm 14mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; font-size: 10pt; color: #1a1a2e; background: #fff; }
+  .header { display: flex; align-items: flex-end; justify-content: space-between;
+            border-bottom: 1.5pt solid #c0392b; padding-bottom: 4mm; margin-bottom: 5mm; }
+  .brand { display: flex; flex-direction: column; gap: 1mm; }
+  .brand-name { font-size: 18pt; font-weight: 900; letter-spacing: 3px; color: #c0392b; }
+  .brand-sub  { font-size: 7.5pt; color: #888; letter-spacing: 1.5px; }
+  .doc-title  { text-align: right; }
+  .doc-title h1 { font-size: 16pt; font-weight: 800; letter-spacing: 4px; color: #1a1a2e; }
+  .doc-title p  { font-size: 7pt; color: #aaa; margin-top: 1mm; letter-spacing: 1px; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 3mm;
+          background: #fdf5f5; border: 0.5pt solid #f0d0d0; border-radius: 2mm;
+          padding: 4mm 5mm; margin-bottom: 5mm; }
+  .meta-item { display: flex; flex-direction: column; gap: 0.8mm; }
+  .meta-label { font-size: 6pt; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+  .meta-value { font-size: 10pt; font-weight: 700; color: #1a1a2e; }
+  .meta-value.mono { font-family: "Courier New", monospace; font-size: 9pt; }
+  .meta-value.red  { color: #c0392b; }
+  .rx-title { font-size: 8pt; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+              color: #c0392b; margin-bottom: 2.5mm; padding-left: 2mm;
+              border-left: 2pt solid #c0392b; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8mm; }
+  thead th { background: #1a1a2e; color: white; font-size: 8pt; font-weight: 600;
+             letter-spacing: 0.5px; padding: 3mm 4mm; text-align: center; }
+  thead th:first-child { text-align: left; padding-left: 4mm; }
+  tbody tr { border-bottom: 0.4pt solid #eee; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  td.eye { width: 14mm; font-size: 16pt; font-weight: 900; text-align: center;
+           padding: 3mm 0; line-height: 1; }
+  td.eye span { font-size: 6pt; font-weight: 400; display: block; margin-top: 0.5mm; }
+  td.eye-r { color: #c0392b; }
+  td.eye-l { color: #2980b9; }
+  td.sku  { padding: 3mm 4mm; font-size: 9pt; font-weight: 600; }
+  td.rx   { padding: 3mm; text-align: center; font-family: "Courier New",monospace;
+            font-size: 13pt; font-weight: 700; color: #c0392b; }
+  .sign-section { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5mm; margin-bottom: 6mm; }
+  .sign-box { border: 0.5pt solid #ddd; border-radius: 2mm; padding: 4mm; min-height: 22mm; }
+  .sign-box h3 { font-size: 7pt; color: #aaa; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2mm; }
+  .sign-box .sign-line { border-bottom: 0.5pt solid #ccc; margin: 10mm 2mm 2mm; }
+  .sign-box .sign-hint { font-size: 6pt; color: #ccc; text-align: center; }
+  .footer { border-top: 0.5pt solid #eee; padding-top: 3mm; display: flex;
+            justify-content: space-between; align-items: center; }
+  .footer-left { font-size: 6.5pt; color: #bbb; }
+  .footer-right { font-size: 6pt; color: #ccc; font-family: "Courier New",monospace; }
+  @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none; } }
+  .print-btn { position: fixed; bottom: 20px; right: 20px; padding: 13px 28px;
+               background: #c0392b; color: white; border: none; border-radius: 8px;
+               font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+</style>
+</head>
+<body>
+<button class="print-btn no-print" onclick="window.print()">打印 / 导出 PDF</button>
+<div class="header">
+  <div class="brand">
+    <div class="brand-name">GAUSH | CLEAR</div>
+    <div class="brand-sub">高视星 · 随货同行单</div>
+  </div>
+  <div class="doc-title">
+    <h1>随货同行单</h1>
+    <p>PACKING SLIP / DELIVERY NOTE</p>
+  </div>
+</div>
+<div class="meta">
+  <div class="meta-item">
+    <div class="meta-label">订单号 Order No.</div>
+    <div class="meta-value mono red">ORD-20260516-DEMO01</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">顾客 Customer</div>
+    <div class="meta-value">张小明</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">收货地址 Address</div>
+    <div class="meta-value" style="font-size:8pt">北京市朝阳区建国路88号</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">代理商 Agent</div>
+    <div class="meta-value">北京明视眼镜 <span style="font-size:7pt;color:#aaa">AG-012</span></div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">发货日期 Ship Date</div>
+    <div class="meta-value">2026-05-16</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">镜片数量 Qty</div>
+    <div class="meta-value red">2 片</div>
+  </div>
+</div>
+<div class="rx-title">处方参数 Prescription</div>
+<table>
+  <thead><tr><th>眼别</th><th>SKU / 型号</th><th>SPH 球镜</th><th>CYL 柱镜</th><th>AXIS 轴位</th></tr></thead>
+  <tbody>
+    <tr>
+      <td class="eye eye-r">R<br><span>右眼</span></td>
+      <td class="sku">Ultra双效</td>
+      <td class="rx">-1.00</td>
+      <td class="rx">+0.00</td>
+      <td class="rx">—</td>
+    </tr>
+
+    <tr>
+      <td class="eye eye-l">L<br><span>左眼</span></td>
+      <td class="sku">Ultra双效</td>
+      <td class="rx">-1.25</td>
+      <td class="rx">-0.50</td>
+      <td class="rx">180</td>
+    </tr></tbody>
+</table>
+<div class="sign-section">
+  <div class="sign-box">
+    <h3>发货方签章 Shipper</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">高视星 / GAUSH CLEAR</div>
+  </div>
+  <div class="sign-box">
+    <h3>代理商签章 Agent</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">北京明视眼镜</div>
+  </div>
+  <div class="sign-box">
+    <h3>顾客签收 Customer Sign</h3>
+    <div class="sign-line"></div>
+    <div class="sign-hint">签收日期：&nbsp;&nbsp;&nbsp;&nbsp;年&nbsp;&nbsp;月&nbsp;&nbsp;日</div>
+  </div>
+</div>
+<div class="footer">
+  <div class="footer-left">高视星 GAUSH CLEAR &nbsp;|&nbsp; 本单据随货附带，请妥善保存</div>
+  <div class="footer-right">打印时间 2026/5/16 09:49:59 &nbsp;|&nbsp; ORD-20260516-DEMO01</div>
+</div>
+</body></html>

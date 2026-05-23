@@ -132,6 +132,8 @@
     <div class="tab" data-tab="stock" onclick="sw('stock')">库存总览</div>
     <div class="tab" data-tab="production" onclick="sw('production')">排产管理</div>
     <div class="tab" data-tab="consignment" onclick="sw('consignment')">寄售管理</div>
+    <div class="tab" data-tab="consumption" onclick="sw('consumption')">消耗分析</div>
+    <div class="tab" data-tab="prodSuggest" onclick="sw('prodSuggest')">生产建议</div>
   </div>
 
   <div class="wrap">
@@ -255,6 +257,45 @@
         <div id="stmtResult"></div>
       </div>
     </div>
+
+    <!-- Tab 6: Consumption Summary -->
+    <div class="pnl" id="p-consumption">
+      <div class="form-row">
+        <label>起始日期</label>
+        <input type="date" id="consStartDate">
+        <label>结束日期</label>
+        <input type="date" id="consEndDate">
+        <label>SKU</label>
+        <select id="consFilterSku"><option value="">全部</option></select>
+        <button class="btn btn-primary btn-sm" onclick="loadConsumption()">查询</button>
+      </div>
+      <div id="consMetrics" class="metric-grid" style="margin-bottom:16px"></div>
+      <div class="section">
+        <div class="section-title">SKU 消耗对比</div>
+        <div id="consSkuTable"></div>
+      </div>
+      <div class="section">
+        <div class="section-title">度数消耗热力图 <span style="font-size:11px;color:var(--text-muted);font-weight:400" id="consHeatLabel"></span></div>
+        <div class="form-row" style="margin-bottom:8px">
+          <label>选择SKU</label>
+          <select id="consHeatSku" onchange="renderConsHeatmap()"></select>
+        </div>
+        <div class="heat-wrap" id="consHeatWrap"></div>
+      </div>
+    </div>
+
+    <!-- Tab 7: Production Suggestions -->
+    <div class="pnl" id="p-prodSuggest">
+      <div id="suggestMetrics" class="metric-grid" style="margin-bottom:16px"></div>
+      <div class="section">
+        <div class="section-title">补货建议 <span style="font-size:11px;color:var(--text-muted);font-weight:400" id="suggestCount"></span></div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:12px;margin-right:12px"><input type="checkbox" id="suggestSelectAll" onchange="toggleSuggestAll()"> 全选</label>
+          <button class="btn btn-primary btn-sm" onclick="createProductionOrders()">一键生成排产单</button>
+        </div>
+        <div id="suggestTable"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Modal -->
@@ -331,6 +372,8 @@ function loadTab(name) {
   else if (name === 'stock') { initStockSelects(); loadStock(); }
   else if (name === 'production') { initProdSelects(); loadProduction(); }
   else if (name === 'consignment') { initConsSelects(); }
+  else if (name === 'consumption') { initConsTab(); loadConsumption(); }
+  else if (name === 'prodSuggest') { loadSuggestions(); }
 }
 
 // ── Util ──
@@ -558,6 +601,136 @@ async function genStatement() {
   const d = await api('/monthly-statement?month='+month);
   document.getElementById('stmtResult').innerHTML = `<div class="metric-card ok" style="margin-top:8px"><div class="v">${d.generated||0}</div><div class="l">${month} 月度对账单已生成（待确认）</div></div>`;
   toast('对账单已生成','success');
+}
+
+// ══════════════════════════════════════════════════
+// Tab 6: Consumption Summary
+// ══════════════════════════════════════════════════
+let _consData = null;
+function initConsTab() {
+  const opts = '<option value="">全部</option>' + SKUS.map(s=>`<option>${s}</option>`).join('');
+  document.getElementById('consFilterSku').innerHTML = opts;
+  document.getElementById('consHeatSku').innerHTML = SKUS.map((s,i)=>`<option value="${s}"${i===0?' selected':''}>${s}</option>`).join('');
+  const today = new Date();
+  const weekAgo = new Date(today); weekAgo.setDate(today.getDate() - 7);
+  document.getElementById('consEndDate').value = today.toISOString().slice(0,10);
+  document.getElementById('consStartDate').value = weekAgo.toISOString().slice(0,10);
+}
+async function loadConsumption() {
+  const start = document.getElementById('consStartDate').value;
+  const end = document.getElementById('consEndDate').value;
+  const sku = document.getElementById('consFilterSku').value;
+  if (!start || !end) { toast('请选择日期范围','error'); return; }
+  const d = await api(`/consumption-summary?startDate=${start}&endDate=${end}&sku=${encodeURIComponent(sku)}`);
+  _consData = d;
+  const c = d.current, p = d.previous;
+  const trendPct = p.totalLenses > 0 ? Math.round((c.totalLenses - p.totalLenses) / p.totalLenses * 100) : (c.totalLenses > 0 ? 100 : 0);
+  const trendIcon = trendPct > 0 ? '↑' : trendPct < 0 ? '↓' : '→';
+  const trendColor = trendPct > 0 ? 'danger' : trendPct < 0 ? 'ok' : 'info';
+  let topSku = '--', topCount = 0;
+  for (const [sku, cnt] of Object.entries(c.bySku)) { if (cnt > topCount) { topCount = cnt; topSku = sku; } }
+  document.getElementById('consMetrics').innerHTML = [
+    { v: c.totalLenses?.toLocaleString(), l: `${d.daysBack}天消耗(片)`, c: 'info' },
+    { v: c.orderCount, l: '发货订单数', c: 'info' },
+    { v: h(topSku), l: 'TOP消耗SKU', c: 'warn' },
+    { v: `${trendIcon} ${Math.abs(trendPct)}%`, l: '环比上周', c: trendColor },
+  ].map(m => `<div class="metric-card ${m.c}"><div class="v">${m.v??'--'}</div><div class="l">${m.l}</div></div>`).join('');
+
+  // SKU table
+  const allSkus = new Set([...Object.keys(c.bySku), ...Object.keys(p.bySku)]);
+  const rows = [...allSkus].sort((a,b) => (c.bySku[b]||0) - (c.bySku[a]||0)).map(sku => {
+    const cur = c.bySku[sku] || 0;
+    const prev = p.bySku[sku] || 0;
+    const pct = prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? 100 : 0);
+    const arrow = pct > 0 ? `<span style="color:var(--error)">↑${pct}%</span>` : pct < 0 ? `<span style="color:var(--success)">↓${Math.abs(pct)}%</span>` : '→';
+    const stk = d.skuStockMap[sku] || {};
+    return `<tr><td>${h(sku)}</td><td style="font-weight:600">${cur}</td><td>${prev}</td><td>${arrow}</td>
+      <td>${stk.stock?.toLocaleString()||'--'}</td><td>${stk.safety?.toLocaleString()||'--'}</td></tr>`;
+  }).join('');
+  document.getElementById('consSkuTable').innerHTML = rows
+    ? `<table class="tbl"><thead><tr><th>SKU</th><th>本期消耗</th><th>上期消耗</th><th>环比</th><th>当前库存</th><th>安全库存</th></tr></thead><tbody>${rows}</tbody></table>`
+    : '<p style="color:var(--text-muted);padding:16px">该时段无消耗数据</p>';
+  renderConsHeatmap();
+}
+function renderConsHeatmap() {
+  if (!_consData) return;
+  const sku = document.getElementById('consHeatSku').value;
+  document.getElementById('consHeatLabel').textContent = sku;
+  const byDegree = _consData.current.byDegree || {};
+  let maxVal = 0;
+  for (const [k, v] of Object.entries(byDegree)) {
+    if (k.startsWith(sku + '|')) maxVal = Math.max(maxVal, v);
+  }
+  let html = '<table class="heat-table"><thead><tr><th>SPH \\ CYL</th>';
+  for (const c of CYL_RANGE) html += `<th>${c.toFixed(2)}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const s of SPH_RANGE) {
+    html += `<tr><th style="text-align:right;padding-right:6px">${s.toFixed(2)}</th>`;
+    for (const c of CYL_RANGE) {
+      const key = `${sku}|${s.toFixed(2)}|${c.toFixed(2)}`;
+      const val = byDegree[key] || 0;
+      if (val === 0) { html += '<td class="cell-empty">-</td>'; continue; }
+      const intensity = maxVal > 0 ? val / maxVal : 0;
+      const cls = intensity > 0.7 ? 'cell-danger' : intensity > 0.3 ? 'cell-warn' : 'cell-ok';
+      html += `<td class="${cls}">${val}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  document.getElementById('consHeatWrap').innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════
+// Tab 7: Production Suggestions
+// ══════════════════════════════════════════════════
+let _suggestData = [];
+async function loadSuggestions() {
+  const d = await api('/production-suggestions');
+  _suggestData = (d.suggestions || []).map(s => ({ ...s, checked: true, qty: s.netGap }));
+  const totalSkus = new Set(_suggestData.map(s => s.sku)).size;
+  const totalQty = _suggestData.reduce((a, s) => a + s.netGap, 0);
+  document.getElementById('suggestMetrics').innerHTML = [
+    { v: totalSkus, l: '需补货SKU数', c: totalSkus > 0 ? 'warn' : 'ok' },
+    { v: totalQty.toLocaleString(), l: '总净缺口(片)', c: totalQty > 0 ? 'danger' : 'ok' },
+    { v: _suggestData.length, l: '补货行数', c: 'info' },
+  ].map(m => `<div class="metric-card ${m.c}"><div class="v">${m.v??'--'}</div><div class="l">${m.l}</div></div>`).join('');
+  document.getElementById('suggestCount').textContent = `共 ${_suggestData.length} 行`;
+  document.getElementById('suggestSelectAll').checked = true;
+  renderSuggestTable();
+}
+function renderSuggestTable() {
+  if (!_suggestData.length) { document.getElementById('suggestTable').innerHTML = '<p style="color:var(--text-muted);padding:16px">暂无补货建议，库存充足</p>'; return; }
+  const rows = _suggestData.map((s, i) => `<tr>
+    <td><input type="checkbox" ${s.checked?'checked':''} onchange="toggleSuggest(${i},this.checked)"></td>
+    <td>${h(s.sku)}</td><td>${s.sph}</td><td>${s.cyl}</td>
+    <td style="color:var(--text-muted);font-size:12px">${h(s.serialNo||'--')}</td>
+    <td style="color:var(--text-muted);font-size:12px">${h(s.location||'--')}</td>
+    <td>${s.currentStock}</td><td>${s.safetyStock}</td>
+    <td style="color:var(--error);font-weight:600">${s.gap}</td>
+    <td style="color:var(--brand)">${s.inTransit}</td>
+    <td style="color:var(--error);font-weight:700">${s.netGap}</td>
+    <td><input type="number" min="1" value="${s.qty}" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:13px" onchange="_suggestData[${i}].qty=parseInt(this.value)||1"></td>
+  </tr>`).join('');
+  document.getElementById('suggestTable').innerHTML = `<table class="tbl"><thead><tr>
+    <th style="width:30px"></th><th>SKU</th><th>SPH</th><th>CYL</th>
+    <th>序列号</th><th>货位</th>
+    <th>当前库存</th><th>安全库存</th><th>缺口</th><th>在途</th><th>净缺口</th><th>建议产量</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+function toggleSuggest(idx, checked) { _suggestData[idx].checked = checked; }
+function toggleSuggestAll() {
+  const checked = document.getElementById('suggestSelectAll').checked;
+  _suggestData.forEach(s => s.checked = checked);
+  renderSuggestTable();
+}
+async function createProductionOrders() {
+  const items = _suggestData.filter(s => s.checked).map(s => ({ sku: s.sku, sph: s.sph, cyl: s.cyl, qty: s.qty }));
+  if (!items.length) { toast('请至少勾选一行','error'); return; }
+  const ok = await showModal('确认生成排产单', `将为 <b>${items.length}</b> 个度数组合生成排产工单，确认？`);
+  if (!ok) return;
+  const d = await adminApi('/production-orders/batch-create', { items });
+  toast(`生成 ${d.created} 条工单，跳过 ${d.skipped} 条`, 'success');
+  loadSuggestions();
 }
 
 // ── Init ──

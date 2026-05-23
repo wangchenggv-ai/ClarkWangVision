@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多焦点 OK 镜计算引擎 · GaoShiXing</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,600;1,300&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#050810; --s1:#090e1a; --s2:#0d1525; --border:#162035; --border2:#1e2e48;
+  --cf:#ff6b35; --cn:#00e5c0; --add:#f5c518; --far:#6eb5ff; --warn:#ff4466; --ok:#44dd88;
+  --text:#b8ccd8; --muted:#3a5060; --bright:#e8f4ff;
+  --mono:'IBM Plex Mono',monospace; --serif:'Cormorant Garamond',serif;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);font-size:12px;min-height:100vh;overflow-x:hidden}
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--s1)}
+.hdr-title{font-family:var(--serif);font-size:18px;font-weight:300;color:var(--bright);letter-spacing:.06em}
+.hdr-sub{font-size:9px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;margin-top:2px}
+.hdr-badge{display:flex;gap:8px;align-items:center}
+.badge{font-size:8px;padding:3px 10px;letter-spacing:.18em;text-transform:uppercase;border:1px solid}
+.badge-cf{color:var(--cf);border-color:var(--cf)}
+.badge-cn{color:var(--cn);border-color:var(--cn)}
+.layout{display:grid;grid-template-columns:300px 1fr;height:calc(100vh - 50px)}
+.sidebar{background:var(--s1);border-right:1px solid var(--border);overflow-y:auto;display:flex;flex-direction:column}
+.main{display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+.patient-tabs{display:flex;border-bottom:1px solid var(--border)}
+.ptab{flex:1;padding:8px;text-align:center;font-size:9px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:.2s}
+.ptab.active{color:var(--bright);border-bottom-color:var(--cn)}
+.patient-card{padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:.15s;position:relative}
+.patient-card:hover{background:var(--s2)}
+.patient-card.selected{background:var(--s2);border-left:2px solid var(--cn)}
+.pc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.pc-id{font-size:11px;color:var(--bright);font-weight:500}
+.pc-design{font-size:8px;padding:2px 6px;border:1px solid}
+.pc-design.cf{color:var(--cf);border-color:var(--cf)}
+.pc-design.cn{color:var(--cn);border-color:var(--cn)}
+.pc-params{display:grid;grid-template-columns:1fr 1fr;gap:3px 12px}
+.pc-param{font-size:9px;color:var(--muted)} .pc-param span{color:var(--text)}
+.pc-status{display:flex;gap:6px;margin-top:8px;align-items:center}
+.dot{width:5px;height:5px;border-radius:50%}
+.dot-ok{background:var(--ok)} .dot-warn{background:var(--warn)}
+.pc-status-txt{font-size:8px;letter-spacing:.1em;text-transform:uppercase}
+.input-section{padding:14px 16px;border-bottom:1px solid var(--border)}
+.sec-title{font-size:8px;color:var(--muted);letter-spacing:.2em;text-transform:uppercase;margin-bottom:10px}
+.field{margin-bottom:8px}
+.field label{display:block;font-size:8px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px}
+.field input,.field select{width:100%;background:var(--bg);border:1px solid var(--border2);color:var(--text);padding:5px 8px;font-family:var(--mono);font-size:11px;outline:none;transition:.2s}
+.field input:focus,.field select:focus{border-color:var(--cn);color:var(--bright)}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.design-toggle{display:grid;grid-template-columns:1fr 1fr;gap:1px;margin-bottom:12px}
+.dtoggle{padding:7px;text-align:center;font-size:10px;cursor:pointer;border:1px solid var(--border2);color:var(--muted);transition:.2s;letter-spacing:.1em}
+.dtoggle.cf-active{background:rgba(255,107,53,.12);border-color:var(--cf);color:var(--cf)}
+.dtoggle.cn-active{background:rgba(0,229,192,.1);border-color:var(--cn);color:var(--cn)}
+.calc-btn{width:100%;padding:10px;background:rgba(0,229,192,.08);border:1px solid var(--cn);color:var(--cn);font-family:var(--mono);font-size:10px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;transition:.2s;margin-top:4px}
+.calc-btn:hover{background:rgba(0,229,192,.18)}
+.refresh-btn{width:100%;padding:6px;background:transparent;border:1px solid var(--border2);color:var(--muted);font-family:var(--mono);font-size:8px;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;margin-top:8px;transition:.2s}
+.refresh-btn:hover{color:var(--bright);border-color:var(--text)}
+.main-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--s1);padding:0 16px}
+.mtab{padding:10px 16px;font-size:9px;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:.2s}
+.mtab.active{color:var(--bright);border-bottom-color:var(--cn)}
+.panel{display:none;height:100%;overflow:auto;padding:16px}
+.panel.active{display:flex;flex-direction:column;gap:14px}
+.results-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border)}
+.res-cell{background:var(--s1);padding:12px 14px}
+.res-label{font-size:8px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;margin-bottom:5px}
+.res-val{font-family:var(--serif);font-size:22px;font-weight:600;color:var(--bright);line-height:1}
+.res-unit{font-size:9px;color:var(--muted);margin-top:2px;font-family:var(--mono)}
+.res-val.ok{color:var(--ok)} .res-val.warn{color:var(--warn)} .res-val.add{color:var(--add)} .res-val.cn-c{color:var(--cn)}
+.params-table{background:var(--s1);border:1px solid var(--border)}
+.pt-title{padding:10px 14px;border-bottom:1px solid var(--border);font-size:9px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;display:flex;justify-content:space-between}
+.pt-row{display:grid;grid-template-columns:2fr 1fr 1fr 2fr;border-bottom:1px solid var(--border);padding:8px 14px;align-items:center}
+.pt-row:last-child{border-bottom:none}
+.pt-row.header{background:var(--s2);font-size:8px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.pt-zone{font-size:10px;color:var(--text)}
+.pt-val{font-size:11px;color:var(--bright);font-weight:500;text-align:center}
+.pt-note{font-size:9px;color:var(--muted)}
+.canvas-row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);flex:1;min-height:300px}
+.canvas-cell{background:var(--s1);position:relative;overflow:hidden}
+.cv-label{position:absolute;top:10px;left:12px;font-size:8px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;z-index:2;pointer-events:none}
+canvas.epi{width:100%;height:100%;display:block}
+.fu-table{background:var(--s1);border:1px solid var(--border);overflow:hidden}
+.fu-row{display:grid;grid-template-columns:80px 70px 70px 80px 80px 1fr;border-bottom:1px solid var(--border);padding:8px 14px;align-items:center;gap:8px}
+.fu-row.header{background:var(--s2);font-size:8px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.fu-cell{font-size:10px;color:var(--text)}
+.fu-cell.good{color:var(--ok)} .fu-cell.warn{color:var(--warn)} .fu-cell.neutral{color:var(--add)}
+.delta{font-size:9px} .delta.pos{color:var(--ok)} .delta.neg{color:var(--warn)}
+.chart-wrap{background:var(--s1);border:1px solid var(--border);position:relative;height:220px}
+.chart-title{padding:8px 14px;border-bottom:1px solid var(--border);font-size:8px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;display:flex;justify-content:space-between}
+canvas.chart{width:100%;height:calc(100% - 32px);display:block}
+.cohort-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);height:280px}
+.cohort-cell{background:var(--s1);position:relative}
+canvas.cohort{width:100%;height:100%;display:block}
+.cohort-label{position:absolute;top:8px;left:12px;font-size:8px;color:var(--muted);letter-spacing:.15em;text-transform:uppercase;pointer-events:none}
+.statusbar{display:flex;gap:24px;padding:8px 16px;background:var(--s2);border-top:1px solid var(--border);font-size:8px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;flex-shrink:0}
+.sb-item span{color:var(--text)}
+.loading{display:flex;align-items:center;justify-content:center;padding:20px;color:var(--muted);font-size:10px}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2)}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div>
+    <div class="hdr-title">多焦点 OK 镜计算引擎</div>
+    <div class="hdr-sub">Multifocal OK Lens · Epithelial Redistribution Engine · Phase 1 · API-Powered</div>
+  </div>
+  <div class="hdr-badge">
+    <div class="badge badge-cf">CF Design</div>
+    <div class="badge badge-cn">CN Design</div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="patient-tabs">
+      <div class="ptab active" onclick="switchSidebar('list')">病例库</div>
+      <div class="ptab" onclick="switchSidebar('input')">新建病例</div>
+    </div>
+    <div id="sidebar-list"><div class="loading">加载中...</div></div>
+    <div id="sidebar-input" style="display:none;padding:14px 16px;flex:1;overflow-y:auto">
+      <div class="sec-title">基本信息</div>
+      <div class="field-row">
+        <div class="field"><label>患者ID</label><input id="in-id" value="PT-011"/></div>
+        <div class="field"><label>年龄</label><input id="in-age" type="number" value="44"/></div>
+      </div>
+      <div class="field"><label>眼别</label><select id="in-eye"><option>OD 右眼</option><option>OS 左眼</option></select></div>
+      <div class="sec-title" style="margin-top:12px">角膜参数</div>
+      <div class="field-row">
+        <div class="field"><label>K1 (mm)</label><input id="in-k1" type="number" step=".01" value="7.82"/></div>
+        <div class="field"><label>K2 (mm)</label><input id="in-k2" type="number" step=".01" value="7.68"/></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>e 值</label><input id="in-e" type="number" step=".01" value="0.42"/></div>
+        <div class="field"><label>HVID (mm)</label><input id="in-hvid" type="number" step=".01" value="11.8"/></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>上皮中央厚度 (μm)</label><input id="in-epi" type="number" value="52"/></div>
+        <div class="field"><label>明光瞳孔 (mm)</label><input id="in-pupil" type="number" step=".1" value="2.6"/></div>
+      </div>
+      <div class="sec-title" style="margin-top:12px">屈光参数</div>
+      <div class="field-row">
+        <div class="field"><label>球镜 (D)</label><input id="in-sph" type="number" step=".25" value="-1.50"/></div>
+        <div class="field"><label>柱镜 (D)</label><input id="in-cyl" type="number" step=".25" value="-0.25"/></div>
+      </div>
+      <div class="field"><label>ADD 目标 (D)</label><input id="in-add" type="number" step=".25" value="1.00"/></div>
+      <div class="sec-title" style="margin-top:12px">设计选择</div>
+      <div class="design-toggle">
+        <div class="dtoggle" id="dtog-cf" onclick="setDesign('CF')">CF<br><span style="font-size:8px;opacity:.7">中央看远</span></div>
+        <div class="dtoggle cn-active" id="dtog-cn" onclick="setDesign('CN')">CN<br><span style="font-size:8px;opacity:.7">中央看近</span></div>
+      </div>
+      <button class="calc-btn" onclick="addNewPatient()">▶ 计算并加入病例库</button>
+      <div id="new-patient-status" style="margin-top:8px;font-size:9px;text-align:center"></div>
+    </div>
+    <div class="statusbar" style="margin-top:auto">
+      <div class="sb-item">病例数 <span id="sb-n">-</span></div>
+      <div class="sb-item">CF <span id="sb-cf">-</span></div>
+      <div class="sb-item">CN <span id="sb-cn">-</span></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="main-tabs">
+      <div class="mtab active" onclick="switchTab('results')">计算结果</div>
+      <div class="mtab" onclick="switchTab('epi')">上皮预测图</div>
+      <div class="mtab" onclick="switchTab('followup')">随访对比</div>
+      <div class="mtab" onclick="switchTab('cohort')">队列分析</div>
+    </div>
+
+    <div class="panel active" id="tab-results">
+      <div class="results-grid" id="res-grid"></div>
+      <div class="params-table" id="params-table"></div>
+      <div class="chart-wrap">
+        <div class="chart-title">
+          <span>屈光功率径向分布 D(r) — 预测值</span>
+          <span id="chart-design-label" style="color:var(--cn)">CN Design</span>
+        </div>
+        <canvas class="chart" id="cv-power"></canvas>
+      </div>
+    </div>
+
+    <div class="panel" id="tab-epi">
+      <div class="canvas-row">
+        <div class="canvas-cell">
+          <div class="cv-label">俯视热图 · 上皮厚度</div>
+          <canvas class="epi" id="cv-top"></canvas>
+        </div>
+        <div class="canvas-cell">
+          <div class="cv-label">纵切面 · 鼻侧 → 颞侧</div>
+          <canvas class="epi" id="cv-cross"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="tab-followup">
+      <div class="chart-wrap" style="height:200px">
+        <div class="chart-title"><span>实测 ADD vs 预测 ADD（随访数据）</span><span style="color:var(--muted)">N=10 模拟病例</span></div>
+        <canvas class="chart" id="cv-fu-chart"></canvas>
+      </div>
+      <div class="fu-table">
+        <div class="fu-row header">
+          <div>患者ID</div><div>设计</div><div>目标ADD</div><div>预测ADD</div><div>实测ADD</div><div>误差 / 备注</div>
+        </div>
+        <div id="fu-rows"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="tab-cohort">
+      <div class="cohort-grid">
+        <div class="cohort-cell">
+          <div class="cohort-label">度数 vs 实测ADD（散点）</div>
+          <canvas class="cohort" id="cv-scatter1"></canvas>
+        </div>
+        <div class="cohort-cell">
+          <div class="cohort-label">上皮中央厚度 vs ADD达成率</div>
+          <canvas class="cohort" id="cv-scatter2"></canvas>
+        </div>
+        <div class="cohort-cell">
+          <div class="cohort-label">瞳孔直径 vs 视觉质量评分</div>
+          <canvas class="cohort" id="cv-scatter3"></canvas>
+        </div>
+        <div class="cohort-cell">
+          <div class="cohort-label">预测 vs 实测 ADD（校准图）</div>
+          <canvas class="cohort" id="cv-scatter4"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// STATE — loaded from API
+// ══════════════════════════════════════════════════════════════════
+
+let allPatients = [];
+let allLensParams = {};   // patientId → lensParamsResponse
+let selectedId = null;
+let currentDesign = 'CN';
+
+// ══════════════════════════════════════════════════════════════════
+// API HELPERS
+// ══════════════════════════════════════════════════════════════════
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || 'API error');
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function loadPatients() {
+  const data = await api('/api/patients/');
+  allPatients = data;
+  // Load calculations for each patient
+  const promises = data.map(async p => {
+    try {
+      const calc = await api(`/api/patients/${p.id}/calculate`);
+      allLensParams[p.id] = calc;
+    } catch (e) {
+      console.warn(`Calc failed for ${p.patient_id}:`, e);
+    }
+  });
+  await Promise.all(promises);
+  if (allPatients.length > 0 && !selectedId) {
+    selectedId = allPatients[0].id;
+  }
+}
+
+function getPatient(id) {
+  return allPatients.find(p => p.id === id);
+}
+
+function getLensParams(id) {
+  return allLensParams[id];
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EPITHELIAL PROFILE FUNCTIONS (client-side for Canvas)
+// ══════════════════════════════════════════════════════════════════
+
+function predictEpiProfile(p) {
+  const { k1, k2, sph, epi_central, design, add_target } = p;
+  const absS = Math.abs(sph);
+  if (design === 'CF') {
+    return r => {
+      const central = -absS * 3.8 * Math.exp(-Math.pow(r / 1.2, 2));
+      const addPeak = absS * 3.8 * 0.55 * Math.exp(-Math.pow((r - 2.0) / 0.65, 2));
+      const outer = absS * 1.2 * Math.exp(-Math.pow((r - 3.3) / 0.5, 2));
+      return epi_central + central + addPeak + outer;
+    };
+  } else {
+    return r => {
+      const addMound = +add_target * 9 * Math.exp(-Math.pow(r / 1.1, 2));
+      const farTrough = -absS * 4.5 * Math.exp(-Math.pow((r - 2.2) / 0.75, 2));
+      const outer = 2.5 * Math.exp(-Math.pow((r - 3.5) / 0.5, 2));
+      return epi_central + addMound + farTrough + outer;
+    };
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SIDEBAR
+// ══════════════════════════════════════════════════════════════════
+
+function renderSidebar() {
+  const container = document.getElementById('sidebar-list');
+  if (allPatients.length === 0) {
+    container.innerHTML = '<div class="loading">无病例数据，请先创建或运行 seed 脚本</div>';
+    return;
+  }
+  container.innerHTML = '';
+  allPatients.forEach(p => {
+    const lp = getLensParams(p.id);
+    if (!lp) return;
+    const good = lp.actual_add >= p.add_target * 0.8;
+    const div = document.createElement('div');
+    div.className = 'patient-card' + (p.id === selectedId ? ' selected' : '');
+    div.innerHTML = `
+      <div class="pc-head">
+        <span class="pc-id">${p.patient_id} · ${p.age}y · ${p.eye}</span>
+        <span class="pc-design ${p.design.toLowerCase()}">${p.design}</span>
+      </div>
+      <div class="pc-params">
+        <div class="pc-param">球镜 <span>${p.sph}D</span></div>
+        <div class="pc-param">ADD目标 <span>+${p.add_target}D</span></div>
+        <div class="pc-param">K均值 <span>${((p.k1+p.k2)/2).toFixed(2)}</span></div>
+        <div class="pc-param">上皮 <span>${p.epi_central}μm</span></div>
+      </div>
+      <div class="pc-status">
+        <div class="dot ${good?'dot-ok':'dot-warn'}"></div>
+        <span class="pc-status-txt" style="color:${good?'var(--ok)':'var(--warn)'}">
+          实测ADD ${lp.actual_add}D ${good?'达标':'欠矫'}
+        </span>
+      </div>`;
+    div.onclick = () => { selectedId = p.id; renderAll(); };
+    container.appendChild(div);
+  });
+  document.getElementById('sb-n').textContent = allPatients.length;
+  document.getElementById('sb-cf').textContent = allPatients.filter(p => p.design === 'CF').length;
+  document.getElementById('sb-cn').textContent = allPatients.filter(p => p.design === 'CN').length;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// RESULTS TAB
+// ══════════════════════════════════════════════════════════════════
+
+function renderResults() {
+  const p = getPatient(selectedId);
+  const lp = getLensParams(selectedId);
+  if (!p || !lp) return;
+
+  const addOk = lp.calculation.predicted_add >= p.add_target * 0.8;
+  const grid = document.getElementById('res-grid');
+  const items = [
+    { label:'BOZR₁（中央）', val: lp.calculation.bozr1, unit:'mm', cls:'' },
+    { label:'BOZR₂（旁中央）', val: lp.calculation.bozr2, unit:'mm', cls:'' },
+    { label:'预测 ADD', val: '+'+lp.calculation.predicted_add+'D', unit:p.design+' 设计', cls: addOk?'add':'warn' },
+    { label:'实测 ADD（模拟）', val: '+'+lp.actual_add+'D', unit:'随访T2', cls: lp.actual_add>=p.add_target*0.8?'ok':'warn' },
+    { label:'RC₁ 内反转弧', val: lp.calculation.rc1, unit:'mm', cls:'' },
+    { label:'RC₂ 外反转弧', val: lp.calculation.rc2, unit:'mm', cls:'' },
+    { label:'夜间眩光风险', val: lp.calculation.night_glare, unit:'评估', cls: lp.calculation.night_glare==='高'?'warn':lp.calculation.night_glare==='中'?'add':'ok' },
+    { label:'适配评分', val: lp.calculation.fit_score, unit:'综合评估', cls: lp.calculation.fit_score==='优'?'ok':'add' },
+  ];
+  grid.innerHTML = items.map(i => `
+    <div class="res-cell">
+      <div class="res-label">${i.label}</div>
+      <div class="res-val ${i.cls}">${i.val}</div>
+      <div class="res-unit">${i.unit}</div>
+    </div>`).join('');
+
+  const tbl = document.getElementById('params-table');
+  const zonesCF = [
+    { zone:'Zone 1 · 中央治疗区', r:'Ø 0–3.0mm', bozr:lp.calculation.bozr1+'mm', func:'矫正近视 / 远视力' },
+    { zone:'Zone 2 · ADD 环（旁中央）', r:'Ø 3.0–5.0mm', bozr:lp.calculation.bozr2+'mm', func:'ADD +'+p.add_target+'D（堆积）' },
+    { zone:'RC₁ 内反转弧', r:'宽 1.0mm', bozr:lp.calculation.rc1+'mm', func:'驱动上皮旁中央堆积' },
+    { zone:'RC₂ 外反转弧', r:'宽 1.0mm', bozr:lp.calculation.rc2+'mm', func:'周边离焦控制' },
+    { zone:'定位弧', r:'宽 0.5mm×2', bozr:lp.calculation.fa+'mm', func:'镜片居中固定' },
+    { zone:'总直径', r:'—', bozr:lp.calculation.td+'mm', func:'基于HVID '+p.hvid+'mm' },
+  ];
+  const zonesCN = [
+    { zone:'Zone 1 · 中央 ADD 区', r:'Ø 0–3.0mm', bozr:lp.calculation.bozr1+'mm', func:'ADD +'+p.add_target+'D（直接内建）' },
+    { zone:'Zone 2 · 远视力区（旁中央）', r:'Ø 3.0–5.6mm', bozr:lp.calculation.bozr2+'mm', func:'矫正近视 '+p.sph+'D' },
+    { zone:'RC₁ 内反转弧', r:'宽 1.0mm', bozr:lp.calculation.rc1+'mm', func:'旁中央变薄驱动' },
+    { zone:'RC₂ 外反转弧', r:'宽 1.0mm', bozr:lp.calculation.rc2+'mm', func:'周边离焦控制' },
+    { zone:'定位弧', r:'宽 0.5mm×2', bozr:lp.calculation.fa+'mm', func:'镜片居中固定' },
+    { zone:'总直径', r:'—', bozr:lp.calculation.td+'mm', func:'基于HVID '+p.hvid+'mm' },
+  ];
+  const zones = p.design === 'CF' ? zonesCF : zonesCN;
+  tbl.innerHTML = `
+    <div class="pt-title">
+      <span>镜片参数输出 · ${p.patient_id} · ${p.design} Design</span>
+      <span style="color:${p.design==='CN'?'var(--cn)':'var(--cf)'}">${p.design === 'CN' ? '中央看近方案' : '中央看远方案'}</span>
+    </div>
+    <div class="pt-row header"><div>区域</div><div>径向范围</div><div>曲率半径</div><div>功能</div></div>
+    ${zones.map(z=>`<div class="pt-row">
+      <div class="pt-zone">${z.zone}</div>
+      <div class="pt-val">${z.r}</div>
+      <div class="pt-val">${z.bozr}</div>
+      <div class="pt-note">${z.func}</div>
+    </div>`).join('')}`;
+
+  document.getElementById('chart-design-label').textContent = p.design + ' Design';
+  document.getElementById('chart-design-label').style.color = p.design === 'CN' ? 'var(--cn)' : 'var(--cf)';
+  drawPowerChart(p);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// POWER CHART (port from original)
+// ══════════════════════════════════════════════════════════════════
+
+function drawPowerChart(p) {
+  const canvas = document.getElementById('cv-power');
+  const container = canvas.parentElement;
+  canvas.width = container.offsetWidth;
+  canvas.height = container.offsetHeight - 32;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#07090c'; ctx.fillRect(0, 0, W, H);
+
+  const padL=48, padR=16, padT=16, padB=32, plotW=W-padL-padR, plotH=H-padT-padB;
+  const maxR=5.0, minD=-1.5, maxD=2.5;
+  const toX = r => padL + (r/maxR)*plotW;
+  const toY = d => padT + plotH - ((d-minD)/(maxD-minD))*plotH;
+
+  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=0.5;
+  [-1,0,1,2].forEach(d=>{ctx.beginPath();ctx.moveTo(padL,toY(d));ctx.lineTo(padL+plotW,toY(d));ctx.stroke();});
+  ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(padL,toY(0));ctx.lineTo(padL+plotW,toY(0));ctx.stroke();ctx.setLineDash([]);
+
+  const accentAdd = p.design==='CN' ? 'rgba(0,229,192,0.06)' : 'rgba(245,197,24,0.06)';
+  const accentFar = p.design==='CN' ? 'rgba(110,181,255,0.06)' : 'rgba(255,107,53,0.06)';
+  ctx.fillStyle=accentAdd; const addR = p.design==='CN' ? 1.5 : 2.5; ctx.fillRect(toX(0),padT,toX(addR)-toX(0),plotH);
+  ctx.fillStyle=accentFar; const farR0=p.design==='CN'?1.5:0, farR1=p.design==='CN'?3.5:1.5; ctx.fillRect(toX(farR0),padT,toX(farR1)-toX(farR0),plotH);
+
+  const color = p.design==='CN' ? '#00e5c0' : '#ff6b35';
+  ctx.beginPath();
+  for(let i=0;i<=300;i++){
+    const r=(i/300)*maxR; let D;
+    if(p.design==='CN'){
+      if(r<1.5) D = p.add_target * Math.exp(-Math.pow(r/1.0,2)) * 1.05;
+      else if(r<3.0) D = p.sph * (1 - Math.exp(-Math.pow((r-1.5)/0.8,2)));
+      else D = p.sph * 0.3 * Math.exp(-Math.pow((r-3.5)/0.6,2));
+    } else {
+      if(r<1.5) D = p.sph * (1 - Math.exp(-Math.pow(r/0.8,2)));
+      else if(r<2.8) D = p.add_target * Math.exp(-Math.pow((r-2.0)/0.7,2)) * 0.72;
+      else D = 0.1 * Math.exp(-Math.pow((r-3.3)/0.5,2));
+    }
+    const x=toX(r), y=toY(D); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.strokeStyle=color;ctx.lineWidth=2;ctx.stroke();
+
+  ctx.fillStyle='rgba(160,190,210,0.6)';ctx.font='8px IBM Plex Mono,monospace';ctx.textAlign='right';
+  [-1,0,1,2].forEach(d=>{ctx.fillText(d+'D',padL-4,toY(d)+3);});
+  ctx.textAlign='center';
+  [0,1,2,3,4,5].forEach(r=>{ctx.fillText(r+'mm',toX(r),padT+plotH+14);});
+  ctx.fillStyle=color; ctx.fillText(p.design==='CN'?'ADD区':'矫正区',toX(0.8),padT+10);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EPI TOPOGRAPHY (port from original)
+// ══════════════════════════════════════════════════════════════════
+
+function renderEpi() {
+  const p = getPatient(selectedId); if (!p) return;
+  const fn = predictEpiProfile(p);
+  drawTopView(fn, p.design);
+  drawCrossSection(fn, p.design, p);
+}
+
+function thicknessColor(t, design) {
+  const norm=Math.max(0,Math.min(1,(t-35)/35));
+  const stops = design==='CF'
+    ? [[0,[15,25,70]],[0.3,[25,90,160]],[0.5,[40,160,150]],[0.65,[200,195,50]],[0.82,[255,130,25]],[1,[255,215,170]]]
+    : [[0,[8,18,55]],[0.3,[18,75,135]],[0.5,[25,155,170]],[0.62,[0,215,175]],[0.78,[90,235,195]],[1,[210,255,240]]];
+  for(let i=0;i<stops.length-1;i++){
+    const [t0,c0]=stops[i],[t1,c1]=stops[i+1];
+    if(norm>=t0&&norm<=t1){const f=(norm-t0)/(t1-t0);return c0.map((v,k)=>Math.round(v+(c1[k]-v)*f));}
+  }
+  return stops[stops.length-1][1];
+}
+
+function drawTopView(fn, design) {
+  const canvas=document.getElementById('cv-top'),cell=canvas.parentElement;
+  canvas.width=cell.offsetWidth;canvas.height=cell.offsetHeight;
+  const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+  ctx.fillStyle='#07090c';ctx.fillRect(0,0,W,H);
+  const cx=W/2,cy=H/2,pxMm=Math.min(W,H)*0.42/5.0;
+  const img=ctx.createImageData(W,H);
+  for(let py=0;py<H;py++)for(let px=0;px<W;px++){
+    const dx=(px-cx)/pxMm,dy=(py-cy)/pxMm,r=Math.sqrt(dx*dx+dy*dy);
+    if(r>5.0)continue;const t=fn(r),[rr,gg,bb]=thicknessColor(t,design);
+    const alpha=r>4.5?Math.max(0,(5.0-r)/0.5):1.0,idx=(py*W+px)*4;
+    img.data[idx]=rr;img.data[idx+1]=gg;img.data[idx+2]=bb;img.data[idx+3]=Math.round(alpha*255);
+  }
+  ctx.putImageData(img,0,0);
+  const rings=design==='CF'
+    ?[{r:1.5,c:'rgba(255,100,50,.7)',l:'远视力'},{r:2.5,c:'rgba(245,197,24,.6)',l:'ADD'},{r:3.5,c:'rgba(167,139,250,.5)',l:'离焦'}]
+    :[{r:1.5,c:'rgba(0,229,192,.7)',l:'ADD'},{r:2.8,c:'rgba(110,181,255,.6)',l:'远视力'},{r:3.5,c:'rgba(167,139,250,.5)',l:'离焦'}];
+  rings.forEach(({r,c,l})=>{
+    ctx.beginPath();ctx.arc(cx,cy,r*pxMm,0,Math.PI*2);ctx.strokeStyle=c;ctx.lineWidth=1.2;ctx.setLineDash([4,3]);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle=c;ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='left';
+    ctx.fillText(l,cx+Math.cos(-0.8)*r*pxMm+4,cy+Math.sin(-0.8)*r*pxMm);
+  });
+  const bH=70,bW=9,bX=14,bY=cy-bH/2;
+  const grad=ctx.createLinearGradient(0,bY+bH,0,bY);
+  (design==='CF'
+    ?['#141946','#1960a0','#28a096','#c8c332','#ff821a','#ffd7aa']
+    :['#080c38','#124b87','#19a0aa','#00d7af','#5aebca','#d2fff5']
+  ).forEach((c,i,a)=>grad.addColorStop(i/(a.length-1),c));
+  ctx.fillStyle=grad;ctx.fillRect(bX,bY,bW,bH);
+  ctx.strokeStyle='rgba(255,255,255,.15)';ctx.lineWidth=.5;ctx.strokeRect(bX,bY,bW,bH);
+  ctx.fillStyle='rgba(180,210,230,.55)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='left';
+  ctx.fillText('70μm',bX+bW+3,bY+4);ctx.fillText('35μm',bX+bW+3,bY+bH+3);
+  const sbX=W-16-pxMm,sbY=H-14;
+  ctx.strokeStyle='rgba(200,220,240,.45)';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(sbX,sbY);ctx.lineTo(sbX+pxMm,sbY);ctx.stroke();
+  ctx.fillStyle='rgba(200,220,240,.45)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='center';ctx.fillText('1mm',sbX+pxMm/2,sbY-4);
+}
+
+function drawCrossSection(fn, design, p) {
+  const canvas=document.getElementById('cv-cross'),cell=canvas.parentElement;
+  canvas.width=cell.offsetWidth;canvas.height=cell.offsetHeight;
+  const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+  ctx.fillStyle='#07090c';ctx.fillRect(0,0,W,H);
+  const padL=46,padR=16,padT=28,padB=36,plotW=W-padL-padR,plotH=H-padT-padB;
+  const maxR=5.0,minT=32,maxT=72,stromaTop=33;
+  const toX=r=>padL+((r+maxR)/(2*maxR))*plotW;
+  const toY=t=>padT+plotH-((t-minT)/(maxT-minT))*plotH;
+  const shades=design==='CF'
+    ?[{r0:-1.5,r1:1.5,c:'rgba(255,100,50,.06)'},{r0:1.5,r1:2.8,c:'rgba(245,197,24,.07)'},{r0:-2.8,r1:-1.5,c:'rgba(245,197,24,.07)'},{r0:2.8,r1:4,c:'rgba(167,139,250,.05)'},{r0:-4,r1:-2.8,c:'rgba(167,139,250,.05)'}]
+    :[{r0:-1.5,r1:1.5,c:'rgba(0,229,192,.07)'},{r0:1.5,r1:2.8,c:'rgba(110,181,255,.07)'},{r0:-2.8,r1:-1.5,c:'rgba(110,181,255,.07)'},{r0:2.8,r1:4,c:'rgba(167,139,250,.05)'},{r0:-4,r1:-2.8,c:'rgba(167,139,250,.05)'}];
+  shades.forEach(({r0,r1,c})=>{ctx.fillStyle=c;ctx.fillRect(toX(r0),padT,toX(r1)-toX(r0),plotH);});
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=.5;
+  [35,40,45,50,55,60,65,70].forEach(t=>{ctx.beginPath();ctx.moveTo(padL,toY(t));ctx.lineTo(padL+plotW,toY(t));ctx.stroke();});
+  ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(255,255,255,.14)';ctx.lineWidth=.8;
+  ctx.beginPath();ctx.moveTo(padL,toY(50));ctx.lineTo(padL+plotW,toY(50));ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(180,210,230,.3)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='left';ctx.fillText('base',padL+4,toY(50)-3);
+  const sg=ctx.createLinearGradient(0,toY(stromaTop),0,H);sg.addColorStop(0,'rgba(18,55,115,.55)');sg.addColorStop(1,'rgba(4,12,38,.8)');
+  ctx.fillStyle=sg;ctx.fillRect(padL,toY(stromaTop)+1,plotW,H-toY(stromaTop));
+  ctx.strokeStyle='rgba(48,115,195,.35)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,toY(stromaTop));ctx.lineTo(padL+plotW,toY(stromaTop));ctx.stroke();
+  const steps=500,pts=[];for(let i=steps;i>=0;i--)pts.push({r:-(i/steps)*maxR,t:fn((i/steps)*maxR)});for(let i=1;i<=steps;i++)pts.push({r:(i/steps)*maxR,t:fn((i/steps)*maxR)});
+  const ac=design==='CN'?'#00e5c0':'#ff6b35',eg=ctx.createLinearGradient(0,padT,0,padT+plotH);eg.addColorStop(0,ac+'aa');eg.addColorStop(1,ac+'15');
+  ctx.beginPath();ctx.moveTo(toX(pts[0].r),toY(pts[0].t));pts.forEach(pt=>ctx.lineTo(toX(pt.r),toY(pt.t)));
+  ctx.lineTo(toX(pts[pts.length-1].r),toY(stromaTop));ctx.lineTo(toX(pts[0].r),toY(stromaTop));ctx.closePath();ctx.fillStyle=eg;ctx.fill();
+  ctx.beginPath();ctx.moveTo(toX(pts[0].r),toY(pts[0].t));pts.forEach(pt=>ctx.lineTo(toX(pt.r),toY(pt.t)));ctx.strokeStyle=ac;ctx.lineWidth=2;ctx.stroke();
+  function arrow(x,y1,y2,col,lbl,side){if(Math.abs(y2-y1)<4)return;ctx.strokeStyle=col;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,y1);ctx.lineTo(x,y2);ctx.stroke();[y1,y2].forEach(y=>{ctx.beginPath();ctx.moveTo(x-3,y);ctx.lineTo(x+3,y);ctx.stroke();});ctx.fillStyle=col;ctx.font='bold 8px IBM Plex Mono,monospace';ctx.textAlign=side==='r'?'left':'right';ctx.fillText(lbl,side==='r'?x+5:x-5,(y1+y2)/2+3);}
+  if(design==='CF'){arrow(toX(0.3),toY(50),toY(fn(0)),'rgba(255,107,53,.9)','−6μm','r');arrow(toX(2.3),toY(50),toY(fn(2.0)),'rgba(245,197,24,.9)','+8μm','r');
+    ctx.fillStyle='rgba(245,197,24,.7)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='center';const lp=getLensParams(selectedId);ctx.fillText('ADD≈+'+lp.calculation.predicted_add+'D',toX(2.0),padT+10);}
+  else{arrow(toX(0.3),toY(50),toY(fn(0)),'rgba(0,229,192,.9)','+9μm','r');arrow(toX(2.5),toY(50),toY(fn(2.2)),'rgba(110,181,255,.9)','−7μm','r');
+    ctx.fillStyle='rgba(0,229,192,.8)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='center';const lp=getLensParams(selectedId);ctx.fillText('ADD≈+'+lp.calculation.predicted_add+'D',toX(0),padT+10);}
+  const zl=design==='CF'?[{r:0,l:'远视力',c:'rgba(255,107,53,.7)'},{r:2.15,l:'ADD',c:'rgba(245,197,24,.7)'},{r:-2.15,l:'ADD',c:'rgba(245,197,24,.7)'},{r:3.3,l:'离焦',c:'rgba(167,139,250,.65)'},{r:-3.3,l:'离焦',c:'rgba(167,139,250,.65)'}]:[{r:0,l:'ADD',c:'rgba(0,229,192,.8)'},{r:2.15,l:'远视力',c:'rgba(110,181,255,.75)'},{r:-2.15,l:'远视力',c:'rgba(110,181,255,.75)'},{r:3.4,l:'离焦',c:'rgba(167,139,250,.65)'},{r:-3.4,l:'离焦',c:'rgba(167,139,250,.65)'}];
+  ctx.font='7px IBM Plex Mono,monospace';zl.forEach(({r,l,c})=>{ctx.fillStyle=c;ctx.textAlign='center';ctx.fillText(l,toX(r),padT+22);});
+  ctx.strokeStyle='rgba(255,255,255,.12)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(padL,padT);ctx.lineTo(padL,padT+plotH);ctx.stroke();ctx.beginPath();ctx.moveTo(padL,padT+plotH);ctx.lineTo(padL+plotW,padT+plotH);ctx.stroke();
+  ctx.fillStyle='rgba(150,180,200,.55)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='right';[35,40,45,50,55,60,65,70].forEach(t=>{ctx.fillText(t,padL-4,toY(t)+3);});
+  ctx.textAlign='center';[-4,-3,-2,-1,0,1,2,3,4].forEach(r=>{ctx.fillText(r===0?'0':(r>0?`+${r}`:`${r}`),toX(r),padT+plotH+12);});
+  ctx.fillStyle='rgba(120,160,180,.45)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='center';ctx.fillText('半径 (mm)',padL+plotW/2,H-4);
+  ctx.save();ctx.translate(10,padT+plotH/2);ctx.rotate(-Math.PI/2);ctx.fillText('上皮厚度 (μm)',0,0);ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FOLLOWUP TAB
+// ══════════════════════════════════════════════════════════════════
+
+function renderFollowup() {
+  const container = document.getElementById('fu-rows');
+  container.innerHTML = allPatients.map(p => {
+    const lp = getLensParams(p.id); if (!lp) return '';
+    const delta = (lp.actual_add - lp.calculation.predicted_add).toFixed(2);
+    const deltaClass = Math.abs(delta) < 0.1 ? 'neutral' : delta > 0 ? 'good' : 'warn';
+    const note = Math.abs(lp.actual_add - p.add_target) < 0.15 ? '达标' : lp.actual_add < p.add_target * 0.75 ? '欠矫—需调参' : '边缘';
+    const noteClass = note==='达标'?'good':note.includes('欠矫')?'warn':'neutral';
+    return `<div class="fu-row">
+      <div class="fu-cell">${p.patient_id}</div>
+      <div class="fu-cell" style="color:${p.design==='CN'?'var(--cn)':'var(--cf)'}">${p.design}</div>
+      <div class="fu-cell">+${p.add_target}D</div>
+      <div class="fu-cell">+${lp.calculation.predicted_add}D</div>
+      <div class="fu-cell ${lp.actual_add>=p.add_target*0.8?'good':'warn'}">+${lp.actual_add}D</div>
+      <div class="fu-cell"><span class="delta ${deltaClass}">${delta>0?'+':''}${delta}D</span>&nbsp;<span class="${noteClass}">${note}</span></div>
+    </div>`;
+  }).join('');
+
+  const canvas=document.getElementById('cv-fu-chart'),container2=canvas.parentElement;
+  canvas.width=container2.offsetWidth;canvas.height=container2.offsetHeight-32;
+  const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;
+  ctx.fillStyle='#07090c';ctx.fillRect(0,0,W,H);
+  const padL=40,padR=16,padT=14,padB=28,plotW=W-padL-padR,plotH=H-padT-padB;
+  const n=allPatients.length,bW=plotW/(n*3+1),maxD=2.0,toY=d=>padT+plotH-(d/maxD)*plotH;
+  ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=.5;[0.5,1.0,1.5,2.0].forEach(d=>{ctx.beginPath();ctx.moveTo(padL,toY(d));ctx.lineTo(padL+plotW,toY(d));ctx.stroke();});
+  allPatients.forEach((p,i)=>{
+    const lp=getLensParams(p.id); if(!lp) return;
+    const x0=padL+i*(bW*3+bW*0.5);
+    const ac=p.design==='CN'?'rgba(0,229,192,.7)':'rgba(255,107,53,.7)',ac2=p.design==='CN'?'rgba(0,229,192,.35)':'rgba(255,107,53,.35)';
+    ctx.fillStyle=ac2;const py=toY(lp.calculation.predicted_add);ctx.fillRect(x0,py,bW,padT+plotH-py);
+    ctx.fillStyle=ac;const ay=toY(lp.actual_add);ctx.fillRect(x0+bW+1,ay,bW,padT+plotH-ay);
+    ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=1;ctx.setLineDash([2,2]);
+    const ty=toY(p.add_target);ctx.beginPath();ctx.moveTo(x0,ty);ctx.lineTo(x0+bW*2+1,ty);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(150,180,200,.4)';ctx.font='6px IBM Plex Mono,monospace';ctx.textAlign='center';ctx.fillText(p.patient_id.split('-')[1],x0+bW,padT+plotH+12);
+  });
+  ctx.fillStyle='rgba(255,107,53,.7)';ctx.fillRect(padL,padT,10,6);ctx.fillStyle='rgba(0,229,192,.7)';ctx.fillRect(padL+50,padT,10,6);
+  ctx.fillStyle='rgba(180,210,230,.5)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='left';ctx.fillText('CF实测',padL+13,padT+6);ctx.fillText('CN实测',padL+63,padT+6);
+  ctx.strokeStyle='rgba(255,255,255,.3)';ctx.lineWidth=1;ctx.setLineDash([2,2]);ctx.beginPath();ctx.moveTo(padL+110,padT+3);ctx.lineTo(padL+122,padT+3);ctx.stroke();ctx.setLineDash([]);ctx.fillText('目标ADD',padL+125,padT+6);
+  ctx.fillStyle='rgba(150,180,200,.55)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='right';[0,0.5,1.0,1.5,2.0].forEach(d=>{ctx.fillText('+'+d+'D',padL-4,toY(d)+3);});
+}
+
+// ══════════════════════════════════════════════════════════════════
+// COHORT TAB
+// ══════════════════════════════════════════════════════════════════
+
+function renderCohort() {
+  const data = allPatients.map(p => {
+    const lp = getLensParams(p.id); if (!lp) return null;
+    return { ...p, ...lp.calculation, actual_add: lp.actual_add };
+  }).filter(Boolean);
+
+  drawScatter('cv-scatter1', data, p=>Math.abs(p.sph), p=>p.actual_add, '近视度数 |D|', '实测ADD (D)', 0,5,0,2);
+  drawScatter('cv-scatter2', data, p=>p.epi_central, p=>p.actual_add/p.add_target, '上皮中央厚度 (μm)', 'ADD达成率', 44,58,0.5,1.1);
+  drawScatter('cv-scatter3', data, p=>p.pupil, p=>p.fit_score==='优'?1:p.fit_score==='可'?0.6:0.3, '明光瞳孔 (mm)', '适配评分', 2.3,3.3,0,1.2);
+  drawScatter('cv-scatter4', data, p=>p.predicted_add, p=>p.actual_add, '预测ADD (D)', '实测ADD (D)', 0.3,1.4,0.3,1.4, true);
+}
+
+function drawScatter(id, data, xFn, yFn, xL, yL, xMin, xMax, yMin, yMax, diagonal) {
+  const canvas=document.getElementById(id),cell=canvas.parentElement;
+  canvas.width=cell.offsetWidth;canvas.height=cell.offsetHeight;
+  const ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height;ctx.fillStyle='#07090c';ctx.fillRect(0,0,W,H);
+  const padL=40,padR=12,padT=28,padB=36,plotW=W-padL-padR,plotH=H-padT-padB;
+  const toX=v=>padL+(v-xMin)/(xMax-xMin)*plotW,toY=v=>padT+plotH-(v-yMin)/(yMax-yMin)*plotH;
+  ctx.strokeStyle='rgba(255,255,255,.04)';ctx.lineWidth=.5;
+  for(let i=0;i<=4;i++){const xv=xMin+i*(xMax-xMin)/4,yv=yMin+i*(yMax-yMin)/4;ctx.beginPath();ctx.moveTo(toX(xv),padT);ctx.lineTo(toX(xv),padT+plotH);ctx.stroke();ctx.beginPath();ctx.moveTo(padL,toY(yv));ctx.lineTo(padL+plotW,toY(yv));ctx.stroke();}
+  if(diagonal){ctx.strokeStyle='rgba(255,255,255,.15)';ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(toX(xMin),toY(yMin));ctx.lineTo(toX(xMax),toY(yMax));ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(180,210,230,.35)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='center';ctx.fillText('理想预测线',toX((xMin+xMax)/2)+20,toY((yMin+yMax)/2)-8);}
+  data.forEach(p=>{const x=toX(xFn(p)),y=toY(yFn(p)),c=p.design==='CN'?'#00e5c0':'#ff6b35';ctx.beginPath();ctx.arc(x,y,4.5,0,Math.PI*2);ctx.fillStyle=c+'88';ctx.fill();ctx.strokeStyle=c;ctx.lineWidth=1.2;ctx.stroke();});
+  ctx.strokeStyle='rgba(255,255,255,.12)';ctx.lineWidth=.8;ctx.beginPath();ctx.moveTo(padL,padT);ctx.lineTo(padL,padT+plotH);ctx.stroke();ctx.beginPath();ctx.moveTo(padL,padT+plotH);ctx.lineTo(padL+plotW,padT+plotH);ctx.stroke();
+  ctx.fillStyle='rgba(150,180,200,.55)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='center';ctx.fillText(xL,padL+plotW/2,H-4);ctx.save();ctx.translate(10,padT+plotH/2);ctx.rotate(-Math.PI/2);ctx.fillText(yL,0,0);ctx.restore();
+  ctx.fillStyle='rgba(255,107,53,.7)';ctx.beginPath();ctx.arc(padL+10,padT+8,4,0,Math.PI*2);ctx.fill();ctx.fillStyle='rgba(0,229,192,.7)';ctx.beginPath();ctx.arc(padL+45,padT+8,4,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(160,190,210,.5)';ctx.font='7px IBM Plex Mono,monospace';ctx.textAlign='left';ctx.fillText('CF',padL+16,padT+11);ctx.fillText('CN',padL+51,padT+11);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UI CONTROL
+// ══════════════════════════════════════════════════════════════════
+
+function switchTab(name) {
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.mtab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('.mtab').forEach((t,i)=>{
+    const names=['results','epi','followup','cohort'];
+    if(i<names.length&&names[i]===name)t.classList.add('active');
+  });
+  if(name==='epi') setTimeout(renderEpi,30);
+  if(name==='followup') setTimeout(renderFollowup,30);
+  if(name==='cohort') setTimeout(renderCohort,30);
+}
+
+document.querySelectorAll('.mtab').forEach((t,i)=>{
+  const names=['results','epi','followup','cohort'];
+  t.onclick=()=>switchTab(names[i]);
+});
+
+function switchSidebar(mode) {
+  document.querySelectorAll('.ptab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.ptab')[mode==='list'?0:1].classList.add('active');
+  document.getElementById('sidebar-list').style.display = mode==='list'?'block':'none';
+  document.getElementById('sidebar-input').style.display = mode==='input'?'flex':'none';
+}
+
+function setDesign(d) {
+  currentDesign = d;
+  document.getElementById('dtog-cf').className='dtoggle'+(d==='CF'?' cf-active':'');
+  document.getElementById('dtog-cn').className='dtoggle'+(d==='CN'?' cn-active':'');
+}
+
+async function addNewPatient() {
+  const statusEl = document.getElementById('new-patient-status');
+  statusEl.style.color = 'var(--cn)';
+  statusEl.textContent = '计算中...';
+
+  const data = {
+    patient_id: document.getElementById('in-id').value || 'PT-'+(allPatients.length+1).toString().padStart(3,'0'),
+    age: +document.getElementById('in-age').value,
+    eye: document.getElementById('in-eye').value.startsWith('OD') ? 'OD' : 'OS',
+    k1: +document.getElementById('in-k1').value,
+    k2: +document.getElementById('in-k2').value,
+    e_value: +document.getElementById('in-e').value,
+    hvid: +document.getElementById('in-hvid').value,
+    epi_central: +document.getElementById('in-epi').value,
+    pupil: +document.getElementById('in-pupil').value,
+    sph: +document.getElementById('in-sph').value,
+    cyl: +document.getElementById('in-cyl').value,
+    add_target: +document.getElementById('in-add').value,
+    design: currentDesign,
+    profile_source: 'parametric',
+  };
+
+  try {
+    const patient = await api('/api/patients/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    const calc = await api(`/api/patients/${patient.id}/calculate`);
+    allPatients.push(patient);
+    allLensParams[patient.id] = calc;
+    selectedId = patient.id;
+    switchSidebar('list');
+    renderAll();
+    statusEl.style.color = 'var(--ok)';
+    statusEl.textContent = '已创建';
+    setTimeout(() => { statusEl.textContent = ''; }, 2000);
+  } catch (e) {
+    statusEl.style.color = 'var(--warn)';
+    statusEl.textContent = '错误: ' + e.message;
+  }
+}
+
+function renderAll() {
+  renderSidebar();
+  if (selectedId) renderResults();
+  const active = document.querySelector('.panel.active');
+  if (active && active.id === 'tab-epi') renderEpi();
+  if (active && active.id === 'tab-followup') renderFollowup();
+  if (active && active.id === 'tab-cohort') renderCohort();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+
+window.addEventListener('load', async () => {
+  try {
+    await loadPatients();
+  } catch (e) {
+    document.getElementById('sidebar-list').innerHTML =
+      '<div class="loading" style="color:var(--warn)">加载失败: ' + e.message +
+      '<br><small>请确认服务器已启动 (python app.py)</small></div>';
+    return;
+  }
+  renderAll();
+  window.addEventListener('resize', () => {
+    if (selectedId) renderResults();
+    const active=document.querySelector('.panel.active');
+    if(active&&active.id==='tab-epi')renderEpi();
+    if(active&&active.id==='tab-followup')renderFollowup();
+    if(active&&active.id==='tab-cohort')renderCohort();
+  });
+});
+</script>
+</body>
+</html>

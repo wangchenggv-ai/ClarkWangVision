@@ -1,12 +1,5 @@
 import { createHash, randomBytes } from "crypto";
 
-const AGENT_RE = /AG\d{3}/i;
-
-export function extractAgentId(filename) {
-  const match = filename.match(AGENT_RE);
-  return match ? match[0].toUpperCase() : "";
-}
-
 export function genOrderNo() {
   const d = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const r = randomBytes(4).toString("hex").toUpperCase();

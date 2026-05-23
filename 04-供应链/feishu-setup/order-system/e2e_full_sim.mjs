@@ -72,6 +72,12 @@ if (orderNumbers.length === 0) fail("下单成功但未返回订单号");
 const summary = submitRes.data.summary || {};
 pass(`订单 ${orderNumbers[0]} — ${summary.totalPatients || '?'} 顾客 / ${summary.totalLenses || '?'} 镜片`);
 
+// ── Step 1.5: 等待草稿同步 ──────────────────────────────────────────
+step(1.5, "等待草稿同步到 Bitable（~3 分钟）");
+console.log("  等待 180 秒...");
+await new Promise(r => setTimeout(r, 180000));
+pass("草稿同步等待完成");
+
 // ── Step 2: 确认 ──────────────────────────────────────────────────
 step(2, "确认订单 — POST /api/admin/confirm");
 

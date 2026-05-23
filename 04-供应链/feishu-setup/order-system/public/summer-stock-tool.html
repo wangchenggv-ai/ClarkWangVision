@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>暑期备库模拟器 · 高视星</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --navy: #1A5276; --navy-dark: #0f3352; --navy-light: #2471a3;
+  --bg: #f0f4f8; --surface: #fff; --border: #dde6ef;
+  --text: #1a2332; --text-2: #4a5568; --text-3: #8a9ab0;
+  --green: #27ae60; --orange: #e67e22; --red: #e74c3c;
+  --shadow: 0 1px 3px rgba(26,82,118,.08), 0 4px 16px rgba(26,82,118,.05);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.topbar {
+  background: var(--navy); padding: 0 1.5rem; height: 52px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+}
+.topbar-brand { font-size: .82rem; font-weight: 700; color: #fff; letter-spacing: .08em; }
+.topbar-badge {
+  font-size: .65rem; font-weight: 700;
+  background: rgba(230,126,34,.25); color: #f0a050;
+  border: 1px solid rgba(230,126,34,.4); padding: .2rem .6rem;
+  border-radius: 4px;
+}
+
+.page { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; box-shadow: var(--shadow); margin-bottom: 1.25rem;
+}
+.card-header {
+  padding: 1rem 1.25rem .75rem; border-bottom: 1px solid var(--border);
+}
+.card-title { font-size: .85rem; font-weight: 700; color: var(--navy-dark); }
+.card-sub { font-size: .72rem; color: var(--text-3); }
+.card-body { padding: 1.25rem; }
+
+/* 参数区 */
+.param-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;
+  margin-bottom: 1rem;
+}
+.param-item { text-align: center; }
+.param-label { font-size: .72rem; font-weight: 600; color: var(--text-2); margin-bottom: .35rem; }
+.param-input {
+  width: 100%; padding: .6rem; border: 2px solid var(--border);
+  border-radius: 8px; text-align: center;
+  font-family: 'DM Mono','Menlo',monospace; font-size: 1.2rem; font-weight: 700;
+  outline: none; transition: border-color .2s;
+}
+.param-input:focus { border-color: var(--navy-light); }
+.param-input.total { border-color: var(--navy); color: var(--navy); font-size: 1.4rem; }
+.param-hint { font-size: .62rem; color: var(--text-3); margin-top: .25rem; }
+
+/* 校验提示 */
+.val-msg {
+  font-size: .72rem; padding: .4rem .75rem; border-radius: 6px;
+  margin-bottom: .75rem; display: none;
+}
+.val-msg.show { display: block; }
+.val-msg.error { background: #fdecea; color: #c0392b; border: 1px solid #f5c6cb; }
+.val-msg.ok { background: #d5f5e3; color: #1e8449; border: 1px solid #a3d9b1; }
+
+/* 结果表格 */
+.result-wrap { overflow-x: auto; }
+.result-table { border-collapse: collapse; font-size: .72rem; width: 100%; }
+.result-table th {
+  padding: .35rem .4rem; text-align: center;
+  font-size: .6rem; color: var(--text-3); font-weight: 500;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+  position: sticky; top: 0; background: var(--surface);
+}
+.result-table th.rh { text-align: left; }
+.result-table td {
+  padding: .3rem .4rem; text-align: center;
+  border: 1px solid #f0f2f5; font-family: 'DM Mono',monospace; font-size: .7rem;
+}
+.result-table td.sph { font-weight: 600; color: var(--navy); text-align: left; background: #f8fafc; }
+.td-A { background: #d5f5e3; color: #1e8449; font-weight: 600; }
+.td-B { background: #fdebd0; color: #b9770e; font-weight: 600; }
+.td-C { background: #f2f3f4; color: #666; }
+.td-0 { background: #fafafa; color: #ddd; }
+.td-sum { background: #d6eaf8; color: var(--navy); font-weight: 700; }
+.td-total { background: var(--navy); color: #fff; font-weight: 700; font-size: .8rem; }
+
+/* 汇总卡片 */
+.summary-row {
+  display: flex; gap: 1rem; margin-bottom: 1rem;
+}
+.summary-card {
+  flex: 1; padding: .75rem; border-radius: 8px; text-align: center;
+}
+.summary-card .big { font-family: 'DM Mono',monospace; font-size: 1.5rem; font-weight: 700; }
+.summary-card .label { font-size: .72rem; font-weight: 600; margin-bottom: .25rem; }
+.sc-a { background: #d5f5e3; color: #1e8449; }
+.sc-b { background: #fdebd0; color: #b9770e; }
+.sc-c { background: #f2f3f4; color: #555; }
+.sc-total { background: #d6eaf8; color: var(--navy); }
+
+/* 操作栏 */
+.action-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.btn-export {
+  padding: .75rem 2rem; background: var(--navy); color: #fff; border: none;
+  border-radius: 8px; cursor: pointer; font-size: .9rem; font-weight: 700;
+  transition: all .2s;
+}
+.btn-export:hover { background: var(--navy-dark); }
+.btn-export:disabled { opacity: .4; cursor: not-allowed; }
+
+.knowhow {
+  padding: .75rem 1rem; background: #fff7e6; border: 1px solid #ffd591;
+  border-radius: 8px; font-size: .78rem; color: #7c5807; line-height: 1.6;
+}
+.knowhow strong { color: #b7791f; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <div class="topbar-brand">高视星</div>
+    <div style="font-size:.72rem;color:rgba(255,255,255,.6)">暑期备库模拟器</div>
+  </div>
+  <div class="topbar-badge">2026 暑期</div>
+</div>
+
+<div class="page">
+
+  <div class="knowhow" style="margin-bottom:1.25rem">
+    <strong>备库逻辑：</strong>建议备库量 ≈ 3个月库存。
+    度数按历史销量分三级：<strong>A类(≥1%)</strong>核心度数、<strong>B类(0.3~1%)</strong>常见度数、<strong>C类(<0.3%)</strong>低频度数。
+    建议比例 A=75%, B=15~25%, C=0~15%（A+B一般≥85%）。C可以为0%。
+  </div>
+
+  <!-- 参数输入 -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">参数设置</div></div>
+    <div class="card-body">
+      <div class="param-grid">
+        <div class="param-item">
+          <div class="param-label">备库总数</div>
+          <input class="param-input total" id="inpTotal" type="number" value="500" min="1" oninput="calc()">
+          <div class="param-hint">建议≈3个月库存</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label" style="color:#1e8449">A 类比例</div>
+          <input class="param-input" id="inpA" type="number" value="75" min="0" max="100" oninput="calc()">
+          <div class="param-hint">≥1% 核心度数</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label" style="color:#b9770e">B 类比例</div>
+          <input class="param-input" id="inpB" type="number" value="20" min="0" max="100" oninput="calc()">
+          <div class="param-hint">0.3~1% 常见度数</div>
+        </div>
+        <div class="param-item">
+          <div class="param-label" style="color:#555">C 类比例</div>
+          <input class="param-input" id="inpC" type="number" value="5" min="0" max="100" oninput="calc()">
+          <div class="param-hint">&lt;0.3% 低频度数，可填0</div>
+        </div>
+      </div>
+      <div class="val-msg" id="valMsg"></div>
+    </div>
+  </div>
+
+  <!-- 汇总 -->
+  <div class="summary-row" id="summaryRow"></div>
+
+  <!-- 热力图结果 -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">度数分布建议</div>
+        <div class="card-sub">数字为建议备库数量，可下载Excel后手动调整</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="result-wrap" id="resultTable"></div>
+    </div>
+  </div>
+
+  <!-- 操作栏 -->
+  <div class="action-bar">
+    <div style="font-size:.82rem;color:var(--text-2)">
+      合计 <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:1.2rem;color:var(--navy)" id="grandTotal">0</span> 片
+    </div>
+    <button class="btn-export" id="exportBtn" onclick="exportExcel()">下载 Excel</button>
+  </div>
+
+</div>
+
+<script>
+const SPHS = [0,-0.25,-0.5,-0.75,-1,-1.25,-1.5,-1.75,-2,-2.25,-2.5,-2.75,-3,-3.25,-3.5,-3.75,-4,-4.25,-4.5,-4.75,-5,-5.25,-5.5,-5.75,-6];
+const CYLS = [0,-0.25,-0.5,-0.75,-1,-1.25,-1.5,-1.75,-2];
+const P = [
+  [.036383,.002128,.008936,.006383,.005532,.003191,.003191,.000851,.002553],
+  [.009787,.002340,.005957,.003617,.002766,.001489,.001064,.000000,.000638],
+  [.016383,.001915,.011489,.005319,.003191,.002128,.001489,.001064,.000638],
+  [.023617,.001277,.016809,.006809,.004681,.001489,.001489,.001064,.000851],
+  [.029787,.002979,.019362,.011064,.005957,.002766,.001702,.001277,.000638],
+  [.032766,.003404,.020426,.007872,.005319,.004043,.002128,.000638,.000638],
+  [.023404,.001915,.023191,.009362,.006170,.002979,.001915,.001277,.001702],
+  [.021702,.001277,.015532,.010000,.006809,.002766,.003404,.001915,.001277],
+  [.017660,.002340,.017872,.009362,.006809,.001702,.002766,.001915,.001489],
+  [.018936,.001915,.015957,.007447,.004894,.004255,.001915,.001064,.001277],
+  [.014043,.001064,.014894,.009149,.005319,.005745,.004681,.001915,.001702],
+  [.013617,.000213,.014894,.007234,.004681,.003191,.003617,.002340,.000638],
+  [.011915,.001489,.011064,.005106,.003404,.003404,.004468,.001489,.001915],
+  [.007660,.000426,.008936,.005532,.006170,.003404,.003404,.000426,.001277],
+  [.005319,.000638,.008511,.004468,.004681,.002979,.002553,.001702,.000426],
+  [.004681,.000213,.006170,.004468,.002340,.003191,.003617,.001064,.001064],
+  [.003830,.000213,.006170,.005319,.002340,.003191,.000851,.001277,.001915],
+  [.004681,.000000,.004681,.004043,.004255,.003191,.002128,.001489,.000638],
+  [.004468,.000213,.004043,.004681,.002340,.003404,.001277,.002128,.000426],
+  [.002553,.000213,.003404,.001915,.002340,.000851,.002340,.001064,.001064],
+  [.003617,.000000,.002340,.002340,.002979,.002340,.000851,.000851,.001064],
+  [.001915,.000213,.003404,.000638,.002553,.002979,.001915,.001277,.001489],
+  [.002128,.000426,.000851,.000851,.001064,.001277,.001915,.000638,.000213],
+  [.001064,.000000,.000638,.001064,.000426,.001277,.000638,.001277,.000213],
+  [.000851,.000000,.000426,.000426,.002128,.001277,.000638,.000000,.000638],
+];
+
+function tier(p) { const v = p * 100; return v >= 1 ? 'A' : v >= 0.3 ? 'B' : 'C'; }
+
+// 各tier的比例总和
+const tierSums = { A: 0, B: 0, C: 0 };
+for (let ri = 0; ri < SPHS.length; ri++)
+  for (let ci = 0; ci < CYLS.length; ci++) {
+    const p = P[ri][ci];
+    if (p > 0) tierSums[tier(p)] += p;
+  }
+
+let grid = []; // 25×9 结果
+
+function calc() {
+  const total = parseInt(document.getElementById('inpTotal').value) || 0;
+  const pA = parseInt(document.getElementById('inpA').value) || 0;
+  const pB = parseInt(document.getElementById('inpB').value) || 0;
+  const pC = parseInt(document.getElementById('inpC').value) || 0;
+  const sum = pA + pB + pC;
+  const msg = document.getElementById('valMsg');
+
+  if (sum !== 100) {
+    msg.className = 'val-msg show error';
+    msg.textContent = `A+B+C = ${sum}%，必须 = 100%`;
+    document.getElementById('summaryRow').innerHTML = '';
+    document.getElementById('resultTable').innerHTML = '';
+    document.getElementById('grandTotal').textContent = '0';
+    return;
+  }
+  if (pA + pB < 85) {
+    msg.className = 'val-msg show error';
+    msg.textContent = `A+B = ${pA+pB}%，建议 ≥ 85%（核心+常见度数应占绝大多数）`;
+  } else {
+    msg.className = 'val-msg show ok';
+    msg.textContent = `A+B = ${pA+pB}% ✓`;
+  }
+
+  if (total <= 0) return;
+
+  // 分配
+  const targets = { A: Math.round(total * pA / 100), B: Math.round(total * pB / 100) };
+  targets.C = total - targets.A - targets.B;
+
+  // 按比例分配到每个格子，最大余额法保证总和精确
+  grid = Array.from({ length: SPHS.length }, () => Array(CYLS.length).fill(0));
+  for (const t of ['A', 'B', 'C']) {
+    const bucket = [];
+    for (let ri = 0; ri < SPHS.length; ri++)
+      for (let ci = 0; ci < CYLS.length; ci++) {
+        const p = P[ri][ci];
+        if (p > 0 && tier(p) === t) bucket.push({ ri, ci, p });
+      }
+    if (!bucket.length || targets[t] <= 0) continue;
+    const s = bucket.reduce((a, c) => a + c.p, 0);
+    const raw = bucket.map(c => c.p / s * targets[t]);
+    const floored = raw.map(v => Math.floor(v));
+    let remain = targets[t] - floored.reduce((a, v) => a + v, 0);
+    const dec = raw.map((v, i) => ({ i, d: v - floored[i] })).sort((a, b) => b.d - a.d);
+    for (let k = 0; k < remain; k++) floored[dec[k].i]++;
+    for (let i = 0; i < bucket.length; i++) {
+      grid[bucket[i].ri][bucket[i].ci] = floored[i];
+    }
+  }
+
+  renderSummary(targets);
+  renderTable();
+  document.getElementById('grandTotal').textContent = total;
+}
+
+function renderSummary(t) {
+  document.getElementById('summaryRow').innerHTML = `
+    <div class="summary-card sc-a"><div class="label">A 类</div><div class="big">${t.A}</div></div>
+    <div class="summary-card sc-b"><div class="label">B 类</div><div class="big">${t.B}</div></div>
+    <div class="summary-card sc-c"><div class="label">C 类</div><div class="big">${t.C}</div></div>
+    <div class="summary-card sc-total"><div class="label">合计</div><div class="big">${t.A+t.B+t.C}</div></div>
+  `;
+}
+
+function renderTable() {
+  let html = '<table class="result-table"><thead><tr><th class="rh">SPH \\ CYL</th>';
+  for (const c of CYLS) html += `<th>${c === 0 ? '0' : c.toFixed(2)}</th>`;
+  html += '<th>行合计</th></tr></thead><tbody>';
+
+  for (let ri = 0; ri < SPHS.length; ri++) {
+    html += `<tr><td class="sph">${SPHS[ri] === 0 ? '0' : SPHS[ri].toFixed(2)}</td>`;
+    let rowSum = 0;
+    for (let ci = 0; ci < CYLS.length; ci++) {
+      const v = grid[ri][ci];
+      rowSum += v;
+      const p = P[ri][ci];
+      const cls = p <= 0 ? 'td-0' : v > 0 ? `td-${tier(p)}` : 'td-0';
+      html += `<td class="${cls}">${v || '·'}</td>`;
+    }
+    html += `<td class="td-sum">${rowSum}</td></tr>`;
+  }
+
+  // 列合计
+  html += '<tr><td class="sph" style="background:var(--navy);color:#fff">合计</td>';
+  let grand = 0;
+  for (let ci = 0; ci < CYLS.length; ci++) {
+    let col = 0;
+    for (let ri = 0; ri < SPHS.length; ri++) col += grid[ri][ci];
+    grand += col;
+    html += `<td class="td-total">${col}</td>`;
+  }
+  html += `<td class="td-total">${grand}</td></tr>`;
+  html += '</tbody></table>';
+  document.getElementById('resultTable').innerHTML = html;
+}
+
+function exportExcel() {
+  const total = parseInt(document.getElementById('inpTotal').value) || 0;
+  if (total <= 0) return alert('请先输入备库总数');
+
+  const wb = XLSX.utils.book_new();
+
+  // Sheet1: 备库订单（干净表，可编辑）
+  const data = [['2026暑期备库订单']];
+  data.push([]);
+  data.push(['SPH \\ CYL', ...CYLS, '行合计']);
+  for (let ri = 0; ri < SPHS.length; ri++) {
+    const row = [SPHS[ri]];
+    for (let ci = 0; ci < CYLS.length; ci++) row.push(grid[ri][ci] || '');
+    row.push(grid[ri].reduce((a, v) => a + v, 0));
+    data.push(row);
+  }
+  // 列合计
+  const sumRow = ['合计'];
+  for (let ci = 0; ci < CYLS.length; ci++) {
+    let col = 0;
+    for (let ri = 0; ri < SPHS.length; ri++) col += grid[ri][ci];
+    sumRow.push(col);
+  }
+  sumRow.push(grid.flat().reduce((a, v) => a + v, 0));
+  data.push(sumRow);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), '备库订单');
+
+  // Sheet2: ABC参考
+  const ref = [['ABC分级参考（3个月历史订单加权）']];
+  ref.push([]);
+  ref.push(['SPH \\ CYL', ...CYLS]);
+  for (let ri = 0; ri < SPHS.length; ri++) {
+    const row = [SPHS[ri]];
+    for (let ci = 0; ci < CYLS.length; ci++) {
+      const p = P[ri][ci];
+      row.push(p <= 0 ? '' : `${tier(p)} ${(p*100).toFixed(1)}%`);
+    }
+    ref.push(row);
+  }
+  ref.push([]);
+  ref.push(['分级标准']);
+  ref.push(['A类', '≥1%', '核心度数，高频出货']);
+  ref.push(['B类', '0.3~1%', '常见度数，适量备库']);
+  ref.push(['C类', '<0.3%', '低频度数，少量覆盖']);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ref), 'ABC参考');
+
+  XLSX.writeFile(wb, `暑期备库_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+calc();
+</script>
+</body>
+</html>
