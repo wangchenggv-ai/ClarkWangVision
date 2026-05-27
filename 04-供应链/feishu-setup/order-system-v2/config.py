@@ -10,13 +10,14 @@ APP_TOKEN  = os.environ["FEISHU_APP_TOKEN"]
 
 VERIFY_BASE_URL = os.getenv("VERIFY_BASE_URL", "https://lab.gaushclear.com/verify")
 
-# ── 飞书表 ID（单一真相源，与 shared/tables.js 保持一致）──
+# ── 飞书表 ID（单一真相源）──
+# 新 Bitable: https://gausheyetech.feishu.cn/base/HN84b5k0Ia3KKisZIeecZeWCnHg
 TABLES = {
-    "agent":         "tblHsgGbJWkB31qu",  # 代理商主表
-    "customer":      "tbltXNNhF65EBl17",  # 终端门店/客户主表
-    "sku_location":  "tblTbLuC3VI0ISKH",  # SKU序列号+货位映射（Layer 2）
-    "sku_code":      "",                  # SKU预赋码表（待创建，一SKU一码）
-    "stock_detail":  "tbl7U79QGG4JtQev",  # 度数级库存表
+    "agent":         "tbl2veixQEYp0RDI",  # 代理商+终端门店主表（新 Bitable）
+    "customer":      "",                  # 终端门店独立表（暂未建）
+    "sku_location":  "",                  # SKU序列号+货位（暂用本地数据）
+    "sku_code":      "",                  # SKU预赋码表（待建，一SKU一码）
+    "stock_detail":  "tbl7U79QGG4JtQev",  # 度数级库存表（旧系统）
     "batch_order":   "tbldOzNezl6xGDM2",  # 批次表（Phase 2）
 }
 

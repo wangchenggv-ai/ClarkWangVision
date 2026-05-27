@@ -141,6 +141,7 @@ for _serial, _sph, _cyl, _bin in _ULTRA_LOCAL:
 # ── In-memory indexes (populated by load_master_tables) ─────────────────────
 
 _agents: dict[str, dict] = {}          # agent_code → {id, name, address}
+_stores: dict[str, dict] = {}          # store_name → {agent_code, agent_name, address, contact, phone}
 _sku_location: dict[str, dict] = {}    # (product_sku, sph_str, cyl_str) → {serial_no, bin}
 _sku_code: dict[str, dict] = {}        # serial_no → {lens_code, verify_url}
 
@@ -148,11 +149,26 @@ _sku_code: dict[str, dict] = {}        # serial_no → {lens_code, verify_url}
 def load_local_tables() -> None:
     """Load only local (non-Feishu) data. Used in --dry-run mode."""
     _sku_location.update(_LOCAL_SKU_INDEX)
-    log.info("本地SKU映射: %d 条（dry-run）", len(_sku_location))
+    _load_local_agents()
+    log.info("本地主表加载完成（干跑）: SKU=%d, 代理商=%d, 门店=%d",
+             len(_sku_location), len(_agents), len(_stores))
+
+
+def _load_local_agents() -> None:
+    """Populate agent and store indexes from embedded local data."""
+    from modules.local_master import LOCAL_AGENTS, LOCAL_STORES
+    for code, name in LOCAL_AGENTS.items():
+        if code not in _agents:
+            _agents[code] = {"agent_id": code, "agent_name": name, "agent_address": ""}
+    for store_name, info in LOCAL_STORES.items():
+        if store_name not in _stores:
+            _stores[store_name] = info
+    log.info("本地代理商: %d 家, 终端门店: %d 家", len(_agents), len(_stores))
 
 
 def load_master_tables() -> None:
     """Fetch all master tables from Feishu and build lookup indexes."""
+    _load_local_agents()   # seed with local data first, Feishu overwrites if available
     _load_agents()
     _load_sku_location()
     _load_sku_code()
@@ -241,6 +257,24 @@ def enrich(record: dict) -> dict:
             rec["_match_errors"].append(f"代理商 {agent_code!r} 不在主表中")
         else:
             rec["_match_errors"].append("代理商编号缺失（文件名无 AG-xxx 格式）")
+
+    # 1b. Terminal store lookup — auto-fill address/contact if not in Excel
+    store_name = rec.get("store_name", "").strip()
+    if store_name and store_name in _stores:
+        store = _stores[store_name]
+        if not rec.get("address"):
+            rec["address"] = store["address"]
+        if not rec.get("contact"):
+            rec["contact"] = store["contact"]
+        if not rec.get("phone"):
+            rec["phone"] = store["phone"]
+        # If agent not identified from filename, derive from store
+        if not agent_code and store.get("agent_code"):
+            rec["agent_code"]    = store["agent_code"]
+            rec["agent_id"]      = store["agent_code"]
+            rec["agent_name"]    = store["agent_name"]
+            rec["agent_address"] = ""
+            rec["_match_errors"] = [e for e in rec["_match_errors"] if "代理商编号缺失" not in e]
 
     # 2. SKU serial + bin lookup
     sku = rec.get("product_sku", "").strip()
