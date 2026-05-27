@@ -43,9 +43,10 @@ def main():
     # ── 1. 加载主表 ────────────────────────────────────────────────────────
     from modules import matcher, inventory
     if args.dry_run:
-        _header("加载本地主表（dry-run）")
+        _header("加载本地主表（mock 模式）")
         matcher.load_local_tables()
-        print("  ✓ 本地SKU映射加载完成（代理商/库存跳过）")
+        inventory.load_mock_inventory()
+        print("  ✓ 本地主表加载完成（SKU/代理商/门店/码/库存均为本地数据）")
     else:
         _header("加载主表")
         print("  正在读取代理商主表、SKU映射、库存表…")
@@ -100,13 +101,8 @@ def main():
 
     # ── 4. 库存分流 ───────────────────────────────────────────────────────
     _header("库存分流")
-    if args.dry_run:
-        label_list = [{**r, "in_stock": True} for r in enriched]
-        factory_list = []
-        print("  (dry-run — 跳过库存查询，所有记录归入配货单)")
-    else:
-        from modules.inventory import split
-        label_list, factory_list = split(enriched)
+    from modules.inventory import split
+    label_list, factory_list = split(enriched)
 
     print(f"  ✓ 有库存 → 配货单：{len(label_list)} 片")
     print(f"  ✓ 排产   → 排产单：{len(factory_list)} 片")

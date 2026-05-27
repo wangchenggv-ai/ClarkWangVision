@@ -18,6 +18,14 @@ log = logging.getLogger(__name__)
 _stock_index: dict[tuple, dict] = {}
 
 
+def load_mock_inventory() -> None:
+    """Seed inventory with mock data: every SKU combination has 10 units."""
+    from modules.matcher import _LOCAL_SKU_INDEX
+    for (sku, sph_str, cyl_str) in _LOCAL_SKU_INDEX:
+        _stock_index[(sku, sph_str, cyl_str)] = {"qty": 10, "record_id": "mock"}
+    log.info("Mock库存: %d 个SKU组合，各10件", len(_stock_index))
+
+
 def load_inventory() -> None:
     rows = fc.list_records(TABLES["stock_detail"], field_names=[
         FIELDS["stock_sku"], FIELDS["stock_sph"], FIELDS["stock_cyl"], FIELDS["stock_qty"]

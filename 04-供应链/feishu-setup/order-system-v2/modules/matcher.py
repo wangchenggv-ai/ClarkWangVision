@@ -147,11 +147,12 @@ _sku_code: dict[str, dict] = {}        # serial_no → {lens_code, verify_url}
 
 
 def load_local_tables() -> None:
-    """Load only local (non-Feishu) data. Used in --dry-run mode."""
+    """Load all local data (no Feishu). Used in --dry-run / MVP mode."""
     _sku_location.update(_LOCAL_SKU_INDEX)
     _load_local_agents()
-    log.info("本地主表加载完成（干跑）: SKU=%d, 代理商=%d, 门店=%d",
-             len(_sku_location), len(_agents), len(_stores))
+    load_mock_codes()
+    log.info("本地主表加载完成: SKU=%d, 代理商=%d, 门店=%d, 码=%d",
+             len(_sku_location), len(_agents), len(_stores), len(_sku_code))
 
 
 def _load_local_agents() -> None:
@@ -214,6 +215,18 @@ def _load_sku_location() -> None:
         # Feishu table not configured or empty — fall back to hardcoded local data
         _sku_location.update(_LOCAL_SKU_INDEX)
         log.info("SKU序列号映射（本地）: %d 条", len(_sku_location))
+
+
+def load_mock_codes() -> None:
+    """Seed sku_code index with deterministic mock codes (one per serial 001-219)."""
+    import hashlib
+    from config import VERIFY_BASE_URL
+    for serial, sph, cyl, _ in _ULTRA_LOCAL:
+        raw = f"ultra-{serial}-{sph:.2f}-{cyl:.2f}"
+        code = hashlib.md5(raw.encode()).hexdigest()[:16].upper()
+        url = f"{VERIFY_BASE_URL}/{code}"
+        _sku_code[serial] = {"lens_code": code, "verify_url": url}
+    log.info("Mock镜片码: %d 个序列号", len(_sku_code))
 
 
 def _load_sku_code() -> None:

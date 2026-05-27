@@ -86,7 +86,7 @@ def write_labels(label_list: list[dict], out_dir: Path) -> Path:
             "代理商":    r.get("agent_name", ""),
             "终端门店":  r.get("store_name", ""),
             "联系人":    r.get("contact", ""),
-            "联系电话":  r.get("phone", ""),
+            "联系电话":  str(r.get("phone", "") or ""),
             "收货地址":  r.get("address", ""),
             "备注":      r.get("note", ""),
         })
@@ -98,6 +98,12 @@ def write_labels(label_list: list[dict], out_dir: Path) -> Path:
     ws = wb.active
     _apply_styles(ws)
     _set_col_widths(ws, _LABEL_WIDTHS)
+    # Force phone column to text format so leading zeros and long numbers display correctly
+    phone_col = next((i + 1 for i, h in enumerate(ws[1]) if h.value == "联系电话"), None)
+    if phone_col:
+        for row in ws.iter_rows(min_row=2, min_col=phone_col, max_col=phone_col):
+            for cell in row:
+                cell.number_format = "@"
     wb.save(path)
     log.info("labels.xlsx: %d 行 → %s", len(data), path)
     return path
