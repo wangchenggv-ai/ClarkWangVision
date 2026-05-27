@@ -40,14 +40,14 @@ def _header(text: str) -> None:
 def main():
     args = _parse_args()
 
-    # ── 1. 加载主表（飞书）──────────────────────────────────────────────────
+    # ── 1. 加载主表 ────────────────────────────────────────────────────────
+    from modules import matcher, inventory
     if args.dry_run:
-        print("[ DRY RUN — 跳过飞书连接 ]")
-        from modules import matcher, inventory
-        # Use empty indexes so pipeline still runs
+        _header("加载本地主表（dry-run）")
+        matcher.load_local_tables()
+        print("  ✓ 本地SKU映射加载完成（代理商/库存跳过）")
     else:
         _header("加载主表")
-        from modules import matcher, inventory
         print("  正在读取代理商主表、SKU映射、库存表…")
         matcher.load_master_tables()
         inventory.load_inventory()
@@ -82,14 +82,8 @@ def main():
 
     # ── 3. 富化（SKU匹配 + 代理商匹配）────────────────────────────────────
     _header("SKU 匹配")
-    if not args.dry_run:
-        from modules.matcher import enrich
-        enriched = [enrich(r) for r in records]
-    else:
-        enriched = [{**r, "_match_errors": [], "serial_no": "", "bin_location": "",
-                     "lens_code": "", "verify_url": "",
-                     "agent_id": r.get("agent_code", ""), "agent_name": r.get("agent_code", ""),
-                     "agent_address": ""} for r in records]
+    from modules.matcher import enrich
+    enriched = [enrich(r) for r in records]
 
     match_errors = [r for r in enriched if r["_match_errors"]]
     ok_count = len(enriched) - len(match_errors)
@@ -106,11 +100,13 @@ def main():
 
     # ── 4. 库存分流 ───────────────────────────────────────────────────────
     _header("库存分流")
-    if not args.dry_run:
+    if args.dry_run:
+        label_list = [{**r, "in_stock": True} for r in enriched]
+        factory_list = []
+        print("  (dry-run — 跳过库存查询，所有记录归入配货单)")
+    else:
         from modules.inventory import split
         label_list, factory_list = split(enriched)
-    else:
-        label_list, factory_list = enriched, []  # dry-run: treat all as in-stock
 
     print(f"  ✓ 有库存 → 配货单：{len(label_list)} 片")
     print(f"  ✓ 排产   → 排产单：{len(factory_list)} 片")
