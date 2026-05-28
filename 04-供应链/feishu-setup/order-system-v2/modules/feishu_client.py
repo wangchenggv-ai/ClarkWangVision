@@ -96,6 +96,27 @@ def search_records(table_id: str, filter_: dict, field_names: list[str] | None =
 
 # ── Write ─────────────────────────────────────────────────────────────────────
 
+def create_record(table_id: str, fields: dict) -> dict:
+    """Create a single record. Returns the created record dict (with record_id)."""
+    url = f"{BASE}/bitable/v1/apps/{APP_TOKEN}/tables/{table_id}/records"
+    r = SESSION.post(url, headers=_headers(), json={"fields": fields}, timeout=15)
+    r.raise_for_status()
+    body = r.json()
+    if body.get("code") != 0:
+        raise RuntimeError(f"create_record failed: {body}")
+    return body["data"]["record"]
+
+
+def update_record(table_id: str, record_id: str, fields: dict) -> None:
+    """PATCH a single record's fields."""
+    url = f"{BASE}/bitable/v1/apps/{APP_TOKEN}/tables/{table_id}/records/{record_id}"
+    r = SESSION.put(url, headers=_headers(), json={"fields": fields}, timeout=15)
+    r.raise_for_status()
+    body = r.json()
+    if body.get("code") != 0:
+        raise RuntimeError(f"update_record failed: {body}")
+
+
 def batch_create(table_id: str, records: list[dict]) -> int:
     """Batch create records (max 500/call). Returns total created count."""
     if not records:

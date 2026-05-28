@@ -19,6 +19,7 @@ TABLES = {
     "sku_code":      "",                  # SKU预赋码表（待建，一SKU一码）
     "stock_detail":  "tbl7U79QGG4JtQev",  # 度数级库存表（旧系统）
     "batch_order":   "tbldOzNezl6xGDM2",  # 批次表（Phase 2）
+    "order_detail":  "",                  # 订单明细表（Phase 2，建表后填入）
 }
 
 # ── 字段名（飞书多维表格字段，改表结构只改这里）──

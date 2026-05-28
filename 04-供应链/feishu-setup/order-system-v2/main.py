@@ -3,9 +3,10 @@
 批量订单 Pipeline — 一条命令处理所有代理商 Excel，输出配货单 + 排产单。
 
 用法:
-  python main.py ./inbox/              # 处理 inbox/ 目录下所有 .xlsx 文件
-  python main.py ./inbox/ --dry-run    # 只解析，不读飞书，不写文件（快速测试）
-  python main.py ./inbox/ --no-sync    # 处理并输出 Excel，但不写回飞书
+  python main.py ./inbox/               # 完整流程：处理 + 写回飞书
+  python main.py ./inbox/ --dry-run     # 只解析，不读飞书，不写文件（快速测试）
+  python main.py ./inbox/ --no-sync     # 处理并输出 Excel，但不写回飞书
+  python main.py ./inbox/ --skip-qc    # 跳过人工确认关口，直接写回
 
 输出:
   output/YYYY-MM-DD/labels.xlsx        配货单（仓库拣货）
@@ -30,11 +31,36 @@ def _parse_args():
     p.add_argument("inbox", help="包含代理商 Excel 文件的目录")
     p.add_argument("--dry-run", action="store_true", help="只解析 Excel，不连接飞书")
     p.add_argument("--no-sync", action="store_true", help="处理完整 pipeline，但不写回飞书")
+    p.add_argument("--skip-qc", action="store_true", help="跳过人工质检确认，直接写回飞书")
     return p.parse_args()
 
 
 def _header(text: str) -> None:
     print(f"\n{'─'*50}\n  {text}\n{'─'*50}")
+
+
+def _qc_gate(label_path, factory_path, error_path) -> bool:
+    """
+    Human QC checkpoint: show file paths, wait for confirmation.
+    Returns True to proceed, False to abort.
+    """
+    print()
+    print("  ┌─ 质检关口 ──────────────────────────────────────┐")
+    print(f"  │  配货单: {label_path}")
+    if factory_path:
+        print(f"  │  排产单: {factory_path}")
+    if error_path:
+        print(f"  │  异常记录: {error_path}")
+    print("  │")
+    print("  │  请打开以上文件核对数据后，按 Enter 继续写入飞书")
+    print("  │  按 Ctrl+C 或输入 n 中止")
+    print("  └────────────────────────────────────────────────┘")
+    try:
+        ans = input("  确认写入? [Enter=是 / n=否]: ").strip().lower()
+        return ans not in ("n", "no", "否", "q", "quit")
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return False
 
 
 def main():
@@ -91,7 +117,6 @@ def main():
     print(f"  ✓ 匹配成功：{ok_count} 片")
     if match_errors:
         print(f"  ⚠ 匹配问题：{len(match_errors)} 片")
-        # Show first few unique errors
         shown = set()
         for r in match_errors[:10]:
             for e in r["_match_errors"]:
@@ -122,10 +147,36 @@ def main():
     if error_path:
         print(f"  ⚠ 异常记录: {error_path}")
 
-    # ── 6. 写回飞书（Phase 2，--no-sync 跳过）─────────────────────────────
+    # ── 6. 质检关口 ───────────────────────────────────────────────────────
     if not args.dry_run and not args.no_sync:
+        if not args.skip_qc:
+            _header("人工质检关口")
+            proceed = _qc_gate(label_path, factory_path, error_path)
+            if not proceed:
+                print("\n  ✗ 已中止，飞书未写入。Excel 文件保留在 output/ 目录。")
+                sys.exit(0)
+
+        # ── 7. 写回飞书 ───────────────────────────────────────────────────
         _header("写回飞书")
-        print("  (Phase 2 — 尚未实现，跳过)")
+        from modules import feishu_sync
+        batch_id = feishu_sync.sync_to_feishu(enriched, label_list, factory_list)
+        if batch_id:
+            print(f"  ✓ 批次写入完成: {batch_id}")
+            print(f"  ✓ 订单明细已写入飞书订单明细表")
+            print()
+            print("  ─── 后续操作提示 ────────────────────────────────────")
+            print("  1. 仓库按 labels.xlsx 拣货，人工核对")
+            print("  2. 核对完成后运行以下命令扣减库存：")
+            print(f"     python deduct.py {batch_id}")
+            print("  3. 工厂生产完成后修改排产单状态为「已完成」")
+            print("  ─────────────────────────────────────────────────────")
+        else:
+            print("  ✗ 飞书写入失败，请检查网络连接和表 ID 配置")
+
+    elif args.dry_run:
+        print("\n  (dry-run 模式：飞书未写入)")
+    else:
+        print("\n  (--no-sync 模式：飞书未写入)")
 
     # ── 汇总 ─────────────────────────────────────────────────────────────
     _header("完成")
