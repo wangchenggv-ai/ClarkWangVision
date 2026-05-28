@@ -98,11 +98,15 @@ def write_labels(label_list: list[dict], out_dir: Path) -> Path:
     ws = wb.active
     _apply_styles(ws)
     _set_col_widths(ws, _LABEL_WIDTHS)
-    # Force phone column to text format so leading zeros and long numbers display correctly
+    # Force phone column: rewrite values as strings so Excel never treats as number
     phone_col = next((i + 1 for i, h in enumerate(ws[1]) if h.value == "联系电话"), None)
     if phone_col:
         for row in ws.iter_rows(min_row=2, min_col=phone_col, max_col=phone_col):
             for cell in row:
+                if cell.value is not None:
+                    # Convert any numeric representation to plain string
+                    raw = str(int(cell.value)) if isinstance(cell.value, float) else str(cell.value)
+                    cell.value = raw
                 cell.number_format = "@"
     wb.save(path)
     log.info("labels.xlsx: %d 行 → %s", len(data), path)
