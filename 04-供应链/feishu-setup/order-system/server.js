@@ -49,8 +49,8 @@ const PORT = process.env.PORT || 3210;
 const BASE = "https://open.feishu.cn/open-apis";
 const QR_DIR = resolve(__dirname, "public", "qrcodes");
 const DRAFTS_DIR = resolve(__dirname, "drafts");
-const DRAFT_SYNC_INTERVAL = 2 * 60 * 1000; // 后台轮询间隔 2 分钟
-const DRAFT_AGE_MIN = 3 * 60 * 1000;        // 草稿创建至少 3 分钟后才同步（代理商编辑窗口）
+const DRAFT_SYNC_INTERVAL = 30 * 1000; // 后台轮询间隔 30 秒
+const DRAFT_AGE_MIN = 0;               // 无编辑窗口，提交后立即同步
 
 // 常规备货度数范围（闭区间）
 const STD_SPH_RANGE = [-6, 0];
@@ -904,16 +904,43 @@ let _storesCacheTime = 0;
 async function loadStores() {
   if (Date.now() - _storesCacheTime < 300000 && _storesCache) return _storesCache;
   try {
-    const records = await listRecords(TABLES.customer);
-    _storesCache = records.map(r => ({
-      id: rawVal(r.fields["客户ID"]) || "",
-      name: rawVal(r.fields["门店名称"]) || "",
-      contact: rawVal(r.fields["联系人"]) || "",
-      phone: rawVal(r.fields["联系电话"]) || "",
-      address: rawVal(r.fields["收货地址"]) || "",
-      city: rawVal(r.fields["所在城市"]) || "",
-      binCode: rawVal(r.fields["仓位"]) || "",
-    })).filter(s => s.name);
+    const result = [];
+    // 优先读门店主数据表（含 record_id，供关联门店字段写入）
+    if (TABLES.store_master) {
+      const masterRecords = await listRecords(TABLES.store_master);
+      for (const r of masterRecords) {
+        const name = rawVal(r.fields["门店显示名"]) || rawVal(r.fields["门店简称"]) || "";
+        if (!name || rawVal(r.fields["是否激活"]) === "否") continue;
+        result.push({
+          id: r.record_id,
+          recordId: r.record_id,
+          name,
+          contact: rawVal(r.fields["收货联系人"]) || "",
+          phone: rawVal(r.fields["收货电话"]) || "",
+          address: rawVal(r.fields["收货地址"]) || "",
+          city: rawVal(r.fields["所在城市"]) || "",
+          binCode: rawVal(r.fields["仓位"]) || "",
+        });
+      }
+    }
+    // 回退：终端客户表（兼容无主数据表环境）
+    if (!result.length) {
+      const records = await listRecords(TABLES.customer);
+      for (const r of records) {
+        const name = rawVal(r.fields["门店名称"]) || rawVal(r.fields["客户名称"]) || "";
+        if (!name) continue;
+        result.push({
+          id: rawVal(r.fields["客户ID"]) || "",
+          name,
+          contact: rawVal(r.fields["联系人"]) || "",
+          phone: rawVal(r.fields["联系电话"]) || "",
+          address: rawVal(r.fields["收货地址"]) || "",
+          city: rawVal(r.fields["所在城市"]) || "",
+          binCode: rawVal(r.fields["仓位"]) || "",
+        });
+      }
+    }
+    _storesCache = result.sort((a, b) => a.name.localeCompare(b.name, "zh"));
     _storesCacheTime = Date.now();
   } catch (e) {
     console.error("loadStores error:", e.message);
@@ -2553,8 +2580,8 @@ const server = createServer(async (req, res) => {
         const want = filterStock === "yes" ? "有库存" : filterStock === "no" ? "无库存" : filterStock;
         conditions.push({ field_name: "库存状态", operator: "is", value: [want] });
       }
-      if (filterFrom) conditions.push({ field_name: "下单日期", operator: "isGreaterEqual", value: [filterFrom] });
-      if (filterTo) conditions.push({ field_name: "下单日期", operator: "isLessEqual", value: [filterTo + "T23:59:59"] });
+      // 日期筛选：飞书 POST search API 不支持 DateTime 字段任意日期范围（只支持 Today/Yesterday/Tomorrow 关键词）
+      // 因此日期条件不加入 Bitable filter，在 fetch 后服务端过滤
 
       // 关键词搜索：订单号走订单编号 contains，其他走顾客姓名 contains
       if (filterQ) {
@@ -2571,7 +2598,8 @@ const server = createServer(async (req, res) => {
         : undefined;
 
       // 无筛选时优先走缓存（复用 /api/admin/orders 的缓存）
-      if (conditions.length === 0 && !exportFilter &&
+      // 注意：日期筛选不在 Bitable filter 中，需要在缓存数据上额外过滤
+      if (conditions.length === 0 && !exportFilter && !filterFrom && !filterTo &&
           _ordersCache.data && Date.now() - _ordersCache.ts < ORDERS_CACHE_TTL) {
         let orders = _ordersCache.data;
         const stats = {
@@ -2625,8 +2653,18 @@ const server = createServer(async (req, res) => {
           };
         });
 
-        // 写入缓存（与 /api/admin/orders 共享，无筛选时为全量数据）
-        if (!filter && !filterQ) {
+        // 日期筛选（飞书 POST search API 不支持 DateTime 任意日期范围，这里服务端过滤）
+        if (filterFrom) {
+          const fromTs = new Date(filterFrom).getTime();
+          if (!isNaN(fromTs)) orders = orders.filter(o => o.date && o.date >= fromTs);
+        }
+        if (filterTo) {
+          const toTs = new Date(filterTo + "T23:59:59").getTime();
+          if (!isNaN(toTs)) orders = orders.filter(o => o.date && o.date <= toTs);
+        }
+
+        // 写入缓存（与 /api/admin/orders 共享，仅无任何筛选时为全量数据）
+        if (!filter && !filterQ && !filterFrom && !filterTo) {
           _ordersCache = { data: orders, ts: Date.now() };
         }
 
@@ -4218,6 +4256,7 @@ const server = createServer(async (req, res) => {
           if (nc !== 0) return nc;
           return a.eye.includes("右") ? -1 : 1;
         });
+        const slipAddr = rawVal(f0["收货地址（主数据）"]) || rawVal(f0["收货地址"]);
         const html = slipHTML({
           orderNo,
           customerName: rawVal(f0["顾客姓名"]),
@@ -4227,8 +4266,8 @@ const server = createServer(async (req, res) => {
           promiseDate: f0["预计交期"] ? new Date(f0["预计交期"]).toLocaleDateString("zh-CN") : "",
           courierName: rawVal(f0["物流公司"]),
           trackingNo: rawVal(f0["快递单号"]),
-          address: rawVal(f0["收货地址"]),
-          binCode: matchBin(rawVal(f0["收货地址"]) || ""),
+          address: slipAddr,
+          binCode: matchBin(slipAddr),
           rows,
         });
 
@@ -4278,8 +4317,8 @@ const server = createServer(async (req, res) => {
         const groupMap = {};
         for (const r of records) {
           const f = r.fields;
-          const storeName = rawVal(f["终端门店"]) || "";
-          const addr = rawVal(f["收货地址"]) || "";
+          const storeName = rawVal(f["关联门店"]) || rawVal(f["终端客户"]) || rawVal(f["终端门店"]) || "";
+          const addr = rawVal(f["收货地址（主数据）"]) || rawVal(f["收货地址"]) || "";
           const binCode = rawVal(f["仓位"]) || matchBin(addr);
           const groupKey = storeName || addr || binCode || "default";
           if (!groupMap[groupKey]) groupMap[groupKey] = {

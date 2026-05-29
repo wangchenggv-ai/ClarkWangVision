@@ -239,34 +239,7 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
 	.admin-table td:nth-child(15) { width: 36px; }
 	.admin-table th:last-child,
 	.admin-table td:last-child { width: 90px; }
-	.expand-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 14px;
-  color: #888;
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: all 0.2s;
-  line-height: 1;
-}
-.expand-btn:hover { background: #f0f0f0; color: #333; }
-.expand-btn.open { transform: rotate(90deg); }
-
-/* 展开详情行 */
-.detail-row td { padding: 0 !important; border-bottom: 1px solid #f0f0f0; }
-.detail-panel {
-  padding: 12px 20px 12px 52px;
-  background: #fafbfc;
-  font-size: 12px;
-  overflow-x: auto;
-}
-.detail-panel table { width: 100%; border-collapse: collapse; table-layout: auto; }
-.detail-panel th { text-align: left; padding: 4px 8px; color: #888; background: none; position: static; font-weight: 600; }
-.detail-panel td { padding: 4px 8px; border: none; }
-.detail-panel .lens-code { color: #1677ff; font-weight: 600; }
-.detail-panel .no-data { color: #bbb; padding: 8px 0; }
-
+	
 /* 天数标签 */
 .days-badge {
   display: inline-flex;
@@ -589,7 +562,6 @@ body { background: var(--bg); margin: 0; font-family: -apple-system, "Helvetica 
       <thead>
         <tr>
           <th style="width:36px"></th>
-          <th style="width:32px"></th>
           <th style="width:30px">序号</th>
           <th>订单号</th>
           <th>顾客</th>
@@ -628,7 +600,6 @@ let selectedOrders = new Set();
 let activeStatusFilter = "all";
 let activeQuickFilter = "all";
 let lastStats = {};
-let detailCache = {};
 let exportStatusMap = {}; // 导出状态缓存
 
 // ─── 时钟 ──────────────────────────────────────────────────────────
@@ -885,7 +856,6 @@ function renderOrders() {
     return `
     <tr class="data-row ${overdue ? 'overdue' : ''}" data-status="${o.status}" id="${rowId}">
       <td><input type="checkbox" data-order="${o.orderNo}" data-customer="${escapeHtml(o.customerName)}" data-pair-index="${o.pairIndex || 1}" ${selectedOrders.has(o.orderNo+'|'+o.customerName+'|'+(o.pairIndex||1))?'checked':''} onchange="toggleOrder('${o.orderNo}','${jsAttr(o.customerName)}',${o.pairIndex || 1})"></td>
-      <td><button class="expand-btn" onclick="toggleRowExpand('${i}', '${o.orderNo}', '${jsAttr(o.customerName)}', ${o.pairIndex || 1})" title="展开详情">&#9654;</button></td>
       <td style="color:#999;font-size:11px;text-align:center">${(currentPage - 1) * 50 + i + 1}</td>
       <td style="font-size:11px;white-space:normal;line-height:1.3"><span style="display:block">${o.orderNo.substring(0,13)}</span><span style="display:block;color:#999;font-size:10px">${o.orderNo.substring(13)}</span></td>
       <td><span class="cell-ellipsis" title="${escapeHtml(o.customerName)}">${escapeHtml(o.customerName)}</span>${o.pairIndex > 1 ? ` <span style="color:#888;font-size:11px">第${o.pairIndex}副</span>` : ''}</td>
@@ -894,6 +864,7 @@ function renderOrders() {
       <td>${o.quantity}</td>
       <td>${o.assembly === '是' ? '<span class="badge badge-instock">是</span>' : o.assembly === '否' ? '<span class="badge badge-done">否</span>' : '-'}</td>
       <td><select class="inline-select" data-field="供应商厂家" data-record="${o.orderNo}|${jsAttr(o.customerName)}|${o.pairIndex||1}" onchange="inlineFieldUpdate(this)">
+        <option value="" ${!o.supplier?'selected':''}>-</option>
         <option value="高清" ${o.supplier==='高清'?'selected':''}>高清</option>
         <option value="圣普" ${o.supplier==='圣普'?'selected':''}>圣普</option>
         <option value="九次方" ${o.supplier==='九次方'?'selected':''}>九次方</option>
@@ -907,7 +878,6 @@ function renderOrders() {
       <td class="remark-cell" style="white-space:nowrap" title="${escapeHtml(o.remark || '')}">${o.remark ? `<span style="display:inline-block;max-width:100px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle">${escapeHtml(o.remark)}</span>` : '-'}</td>
       <td>${quickAction}</td>
     </tr>
-    <tr class="detail-row" id="detail-${i}" style="display:none"><td colspan="16"><div class="detail-panel" id="detail-panel-${i}"></div></td></tr>
     `;
   }).join("");
   updateSelectedCount();
@@ -943,127 +913,6 @@ function getQuickAction(o) {
   if (o.status === "打标签") return `<span style="color:#531dab;font-size:12px;font-weight:600">&#127991; 打标签</span>${slipBtn}${excelBtn}${revertBtn}`;
   if (o.status === "已发货") return `<span style="color:#389e0d;font-size:12px">&#128666; 已发货</span>${slipBtn}${excelBtn}`;
   return '<span style="color:#ccc;font-size:12px">-</span>';
-}
-
-// ─── 展开行详情 ─────────────────────────────────────────────────────
-
-async function toggleRowExpand(idx, orderNo, customerName, pairIndex) {
-  const detailRow = document.getElementById(`detail-${idx}`);
-  const btn = document.querySelector(`#row-${idx} .expand-btn`);
-
-  if (detailRow.style.display !== "none") {
-    detailRow.style.display = "none";
-    btn.classList.remove("open");
-    return;
-  }
-
-  btn.classList.add("open");
-  detailRow.style.display = "table-row";
-
-  const panel = document.getElementById(`detail-panel-${idx}`);
-  panel.dataset.orderNo = orderNo;
-
-  const cacheKey = orderNo + '|' + customerName + '|' + (pairIndex || 1);
-  if (detailCache[cacheKey]) {
-    const orderInfo = allOrders.find(o => o.orderNo === orderNo && o.customerName === customerName && (o.pairIndex || 1) === (pairIndex || 1));
-    detailCache[cacheKey].order = orderInfo || { orderNo, customerName, pairIndex: pairIndex || 1 };
-    renderDetail(panel, detailCache[cacheKey]);
-    return;
-  }
-
-  panel.innerHTML = '<div class="no-data">加载中...</div>';
-  try {
-    const data = await api(`/api/admin/order/${encodeURIComponent(orderNo)}/lens-details`);
-    // DEBUG: 显示原始 API 返回
-    // 按客户名+序号过滤（注意：API返回的pairIndex是字符串，需转为数字比较）
-    if (customerName && data?.lenses) {
-      data.lenses = data.lenses.filter(l => l.customerName === customerName);
-    }
-    if (pairIndex && data?.lenses) {
-      data.lenses = data.lenses.filter(l => Number(l.pairIndex || 1) === Number(pairIndex));
-    }
-    // 按顾客名+眼别排序（右眼在上左眼在下）
-    if (data?.lenses) {
-      data.lenses.sort((a, b) => {
-        const nc = (a.customerName || '').localeCompare(b.customerName || '', 'zh-CN');
-        if (nc !== 0) return nc;
-        return (a.eye?.includes('右') ? 0 : 1) - (b.eye?.includes('右') ? 0 : 1);
-      });
-    }
-    // 附加订单状态信息（用于库存/供应商字段渲染）
-    const orderInfo = allOrders.find(o => o.orderNo === orderNo && o.customerName === customerName && (o.pairIndex || 1) === (pairIndex || 1));
-    data.order = orderInfo || { orderNo, customerName, pairIndex: pairIndex || 1 };
-    detailCache[cacheKey] = data;
-    renderDetail(panel, data);
-  } catch (e) {
-    panel.innerHTML = '<div class="no-data">加载失败</div>';
-  }
-}
-
-function renderDetail(panel, data) {
-  if (!data || !data.lenses || data.lenses.length === 0) {
-    panel.innerHTML = '<div class="no-data">暂无处方数据</div>';
-    return;
-  }
-  const o = data.order || {};
-  const isPending = o.status === "待处理";
-  const key = `${o.orderNo || ''}-${o.customerName || ''}-${o.pairIndex || 1}`;
-  const stockVal = o.stockStatus || "";
-  const supplierVal = o.supplier || "";
-
-  let html = '';
-  if (isPending || stockVal || supplierVal) {
-    html += '<div style="display:flex;gap:16px;padding:10px 12px;background:#fafafa;border-radius:6px;align-items:center;flex-wrap:wrap">';
-    html += '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#666">库存状态</span>';
-    html += `<select id="detail-stock-${key}" style="padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px" ${isPending ? '' : 'disabled'}>`;
-    html += '<option value="">未选择</option>';
-    html += `<option value="有库存" ${stockVal === '有库存' ? 'selected' : ''}>有库存</option>`;
-    html += `<option value="无库存" ${stockVal === '无库存' ? 'selected' : ''}>无库存</option>`;
-    html += '</select></div>';
-    html += '<div style="display:flex;align-items:center;gap:6px"><span style="font-size:12px;color:#666">供应商</span>';
-    html += `<select id="detail-supplier-${key}" style="padding:4px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px" ${isPending ? '' : 'disabled'}>`;
-    html += '<option value="">未选择</option>';
-    html += `<option value="高清" ${supplierVal === '高清' ? 'selected' : ''}>高清</option>`;
-    html += `<option value="圣普" ${supplierVal === '圣普' ? 'selected' : ''}>圣普</option>`;
-    html += `<option value="九次方" ${supplierVal === '九次方' ? 'selected' : ''}>九次方</option>`;
-    html += `<option value="五彩" ${supplierVal === '五彩' ? 'selected' : ''}>五彩</option>`;
-    html += `<option value="欧陆" ${supplierVal === '欧陆' ? 'selected' : ''}>欧陆</option>`;
-    html += '</select></div>';
-    html += `<div id="detail-stock-note-${key}" style="font-size:11px;color:#999"></div>`;
-    html += '</div>';
-  } else {
-    html = '<div style="padding:8px 0;font-size:12px;color:#bbb">无待处理操作</div>';
-  }
-
-  panel.innerHTML = html;
-
-  if (isPending && o.orderNo) {
-    autoCheckStock(key, o.orderNo, o.customerName, o.pairIndex || 1, data.lenses.length);
-  }
-}
-
-async function autoCheckStock(key, orderNo, customerName, pairIndex, lensCount) {
-  try {
-    const result = await api('/api/admin/order-stock-check?orderNo=' + encodeURIComponent(orderNo) + '&customerName=' + encodeURIComponent(customerName) + '&pairIndex=' + pairIndex);
-    if (!result || !result.lenses) return;
-    result.lenses.forEach(function(l, i) {
-      const el = document.getElementById('lens-stock-' + key + '-' + i);
-      if (!el) return;
-      if (l.status === '有库存') {
-        el.innerHTML = '<span style="color:#52c41a">' + (l.stock <= 5 ? '仅剩' + l.stock + '片' : '有货') + '</span>';
-      } else {
-        el.innerHTML = '<span style="color:#fa8c16">无库存</span>';
-      }
-    });
-    const stockEl = document.getElementById('detail-stock-' + key);
-    const supplierEl = document.getElementById('detail-supplier-' + key);
-    const noteEl = document.getElementById('detail-stock-note-' + key);
-    if (stockEl && !stockEl.value && result.suggestedStockStatus) stockEl.value = result.suggestedStockStatus;
-    if (supplierEl && !supplierEl.value && result.suggestedSupplier) supplierEl.value = result.suggestedSupplier;
-    if (noteEl && result.note) noteEl.textContent = result.note;
-  } catch (e) {
-    console.warn('stock check failed:', e.message);
-  }
 }
 
 

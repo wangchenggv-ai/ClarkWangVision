@@ -25,10 +25,10 @@ import { createServer } from "http";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const BASE      = "https://open.feishu.cn/open-apis";
-const APP_TOKEN = "B3xQbbqicaome1sKdZbcwdk8nWg";
-const ORDER_TBL = "tblk9Ch4gk2uQ1zG";
-const LENS_TBL  = "tblC7pve7ObFgIOl";
 const ENV       = loadEnv();
+const APP_TOKEN = process.env.FEISHU_APP_TOKEN || ENV.FEISHU_APP_TOKEN || "B3xQbbqicaome1sKdZbcwdk8nWg";
+const ORDER_TBL = process.env.ORDER_TBL || ENV.ORDER_TBL || "tblk9Ch4gk2uQ1zG";
+const LENS_TBL  = process.env.LENS_TBL  || ENV.LENS_TBL  || "tblC7pve7ObFgIOl";
 const SERVER_BASE = ENV.SERVER_BASE_URL || "http://localhost:3210";
 initTemplates({ getServerBaseUrl: () => SERVER_BASE });
 const ARGS      = process.argv.slice(2);
@@ -48,8 +48,9 @@ function loadEnv() {
       const [k, ...v] = t.split("=");
       env[k.trim()] = v.join("=").trim();
     }
-    return env;
-  } catch { return {}; }
+    // process.env (container env vars) takes priority over .env file
+    return { ...env, ...process.env };
+  } catch { return { ...process.env }; }
 }
 
 // ─── 快递公司配置 ──────────────────────────────────────────────────────────
@@ -495,7 +496,7 @@ async function shipBatch() {
 
 // ─── 合单随货同行单（一代理商多订单）────────────────────────────────────────
 
-function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, orders }) {
+function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, orders, address, contactName, contactPhone }) {
   const allRows = [];
   for (const o of orders) {
     for (const r of o.rows) {
@@ -612,6 +613,12 @@ function batchSlipHTML({ agentId, agentName, trackingNo, courierName, shipDate, 
   <div><div class="meta-label">镜片数量 Qty</div><div class="meta-value red">${allRows.length} 片</div></div>
   <div><div class="meta-label">快递单号 Tracking</div><div class="meta-value mono">${trackingNo || "—"}</div></div>
 </div>
+${address ? `
+<div style="background:#f0f7ff;border:0.5pt solid #b8d4e8;border-radius:2mm;padding:3mm 5mm;margin-bottom:4mm;display:flex;gap:8mm;align-items:center">
+  <div style="flex:3"><div class="meta-label">收货地址 Delivery Address</div><div style="font-size:9pt;font-weight:600">${address}</div></div>
+  ${contactName ? `<div><div class="meta-label">收件人 Recipient</div><div style="font-size:9.5pt;font-weight:700">${contactName}</div></div>` : ""}
+  ${contactPhone ? `<div><div class="meta-label">联系电话 Phone</div><div style="font-size:9pt;font-weight:700;font-family:monospace">${contactPhone}</div></div>` : ""}
+</div>` : ""}
 
 <div class="rx-title">处方明细 Prescription Details — 共 ${allRows.length} 片</div>
 <table>
@@ -680,16 +687,22 @@ async function slipBatch() {
   const records = await listRecords(filter);
   if (!records.length) { console.log("  无已发货记录，请先运行 ship-batch。"); return; }
 
-  // 按代理商 + 快递单号分组（一个代理商可能在不同批次有不同快递单）
+  // 按收货地址 + 快递单号分组（同地址同批次聚合为一张通行单）
   const agentMap = {};
   for (const r of records) {
-    const f         = r.fields;
-    const agentId   = rawVal(f["代理商ID"]) || "UNKNOWN";
-    const trackingNo= rawVal(f["快递单号"]);
-    const key       = `${agentId}__${trackingNo}`;
+    const f          = r.fields;
+    const agentId    = rawVal(f["代理商ID"]) || "UNKNOWN";
+    const trackingNo = rawVal(f["快递单号"]);
+    // 优先取飞书查找字段，回退到原自由文本字段
+    const address    = rawVal(f["收货地址（主数据）"]) || rawVal(f["收货地址"]) || "";
+    const contactName= rawVal(f["收货联系人（主数据）"]) || rawVal(f["收货联系人"]) || "";
+    const contactPhone=rawVal(f["收货电话（主数据）"]) || rawVal(f["收货电话"]) || "";
+    const addrKey    = address.trim() || agentId;
+    const key        = `${addrKey}__${trackingNo}`;
     if (!agentMap[key]) agentMap[key] = { agentId, agentName: rawVal(f["代理商名称"]) || agentId,
       trackingNo, courierName: rawVal(f["物流公司"]),
       shipDate: f["发货时间"] ? new Date(f["发货时间"]).toLocaleDateString("zh-CN") : new Date().toLocaleDateString("zh-CN"),
+      address, contactName, contactPhone,
       records: [] };
     agentMap[key].records.push(r);
   }
@@ -737,9 +750,10 @@ async function slipBatch() {
     const orders = Object.values(orderMap);
     const slipData = { agentId: group.agentId, agentName: group.agentName,
       trackingNo: group.trackingNo, courierName: group.courierName,
-      shipDate: group.shipDate, orders };
+      shipDate: group.shipDate, orders,
+      address: group.address, contactName: group.contactName, contactPhone: group.contactPhone };
 
-    const fname = `docs/slip-batch-${group.agentId}-${group.trackingNo}.html`;
+    const fname = `docs/slip-batch-${group.agentId}-${group.trackingNo}-${String(count + 1).padStart(2, "0")}.html`;
     writeFileSync(resolve(__dirname, fname), batchSlipHTML(slipData), "utf-8");
     console.log(`  ✅ ${group.agentName.padEnd(12)} ${group.trackingNo}  →  ${fname}`);
     count++;

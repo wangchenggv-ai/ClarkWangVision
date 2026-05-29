@@ -1,6 +1,6 @@
 ﻿# 系统当前状态
 
-> 更新：2026-05-23 v17 | 完整历史见 CHANGELOG.md
+> 更新：2026-05-29 v19 | 完整历史见 CHANGELOG.md
 
 ---
 
@@ -14,8 +14,12 @@
 | 生产容器 | order-app:3210（主服务）+ mock-shuang:3220 |
 | 测试容器 | order-app-test:3211 + mock-shuang-test:3221 |
 | 测试 Bitable | APP_TOKEN: `CtXObqwAHaCXYssBBfkcXmrlnUe` |
-| 本次待部署 | 删除财务模块代码（7天自动签收+对账单API） |
-| 涉及文件 | server.js, shared/tables.js |
+| 本次待部署 | （无） |
+| 涉及文件 | — |
+| 2026-05-29已部署 | 修复草稿同步失败（"提交失败"）：①删除`"终端客户"`字段写入（5.26误加，5.19已重命名为"终端门店"）②删除`"关联门店"`字段写入（订单主表尚未建该字段）。同步修正测试Bitable字段名（终端客户→终端门店，客户名称→门店名称）。✅ 生产+测试容器均已部署，测试验证通过（ORD-20260528-060B53F4同步成功）|
+| 2026-05-24已部署 | 删除展开行功能（▼按钮+detail-row+3个JS函数）+高清筛选修复（inline select加空白首选项）✅ 已部署生产 |
+| 2026-05-24已部署 | 日期筛选修复：飞书POST search API不支持DateTime字段任意日期范围，改为fetch后服务端过滤+缓存写入条件修正 ✅ 已部署生产 |
+| 2026-05-24已部署 | 删除财务模块代码+导出状态筛选器+故障排除手册+server.js/shared/tables.js/lib/*.js/public/*.html共26文件 ✅ 全部已部署生产 |
 | 2026-05-23已部署 | feishu.js（searchRecords分页bug修复）+ server.js（orders-fast无筛选改listRecords+OEM品牌暂不启用）+ orders.html（522 Plan三项）✅ 全部已部署生产 |
 
 部署命令：
@@ -78,7 +82,7 @@ ssh -i "$KEY" root@113.44.175.221 \
 - [x] **✅ 草稿同步修复（2026-05-23）**：Fix1 幂等检查 URL 编码缺失；Fix2 同步成功后 invalidateOrdersCache；Fix3 重试耗尽不再静默删除→syncFailed标记+飞书告警；Fix4 searchRecords total守卫改软截断；Fix5 追踪页同步失败红色警示+`/api/admin/retry-draft` 端点。**根因：FieldNameNotFound（飞书API code=1254045），订单主表缺 "单价"/"金额" 字段，已移除写入**。涉及文件：`server.js` + `lib/feishu.js` + `public/track.html` ✅ 已部署 ECS，E2E 9步全通过（2026-05-23）
 - [x] **✅ 订单管理UI显示5000条（2026-05-23）**：根因是飞书 POST /records/search 分页 bug（has_more 永不为 false，循环返回同一页），searchRecords 跑满 maxPages→假记录堆叠。Bitable 数据干净，真实 767 条。修复：lib/feishu.js searchRecords 加 total 守卫+record_id 去重；server.js orders-fast 无筛选时改用 listRecords(GET) 绕开 bug。✅ 已部署 ECS（2026-05-23）
 - [x] **✅ 522 Plan 三项改动（2026-05-23）**：①装配筛选选项改"是"/"否"；②"导出Excel给打标签"按钮始终显示；③高清直达打标签——quickConfirm+confirmOrders均支持，批量全高清时弹窗动态提示"打标签"，乐观更新对应。涉及文件：`public/orders.html` + `server.js` ✅ 已部署 ECS（2026-05-23）
-  - ⚠️ 导出状态筛选器（已导出工厂/未导出工厂/已导出打标签/未导出打标签）**未实现**，从 522 Plan 中拆出，下次单独做
+  - [x] 导出状态筛选器（已导出工厂/未导出工厂/已导出打标签/未导出打标签）✅ 已实现，`test_export_filter.mjs` 7/7 测试通过，待部署 ECS
 - [x] **✅ lens_detail 无重复（2026-05-23确认）**：同 feishu.js 修复已覆盖，listRecords 返回 2527 条正常
 - [x] **终端门店+仓位架构重构（2026-05-19）**：实体命名规范化（代理商/终端门店/顾客），Bitable字段`客户名称`→`门店名称`、`终端客户`→`终端门店`，customer表新增`仓位`单选字段（A1-D2），server.js新增`loadStores()`5分钟缓存+`/api/terminal-stores`端点，confirm Stage2按门店查`仓位`写入订单主表，orders API优先读存储`仓位`字段，slip-batch改为按门店名称分组（同门店一张单）。涉及文件：`server.js` + `check_schema.js` ✅ 已部署 ECS（2026-05-23）
 - [x] **订单诊断工具**：`/diagnose?admin=GaushOrderMock` 输入订单号自动诊断：订单/镜片明细是否存在、镜片码是否生成、状态是否一致、QR 图片是否缺失、草稿是否待同步/失败、update-field 直接改状态跳过赋码。涉及文件：`server.js` + `public/diagnose.html` ✅ 已部署 ECS（2026-05-14）
@@ -142,6 +146,9 @@ ssh -i "$KEY" root@113.44.175.221 \
 - [x] **暑期支持政策页面**：在 summer.html 添加「支持政策」Tab，展示《2026暑期上量支持政策》完整内容（标准支持/资格制支持/返利/备库超量货款分担），代理商可手动填写备注+确认知晓。新增 Bitable 字段 `policy_confirmed`（数字）+ `policy_remark`（文本），新增 `/api/summer-policy` 端点（POST 确认+PATCH 仅保存备注）。✅ 已部署 ECS（2026-05-10）
 - [ ] **异常处理三功能（已实现，未启用）**：改单 `POST /api/admin/modify-rx`（自动退回已下单+更新SPH/CYL/AXIS）、发错货 `POST /api/admin/wrong-shipment`（备注打标）、退货 `POST /api/admin/return-order`（状态→已退货）。API已在server.js，JS函数已在labels-clean.html，UI按钮已注释。启用时只需取消labels-clean.html中getQuickAction的注释。（2026-05-16）
 - [x] **序列号映射+标签货位+Excel同步（2026-05-16）**：`lib/sku-serial.js` 219条（xlsx权威，全量SPH/CYL+货位），多型号架构（ENTRIES_BY_SKU）。标签新增序列号+货位（深色badge+货架地址）。随货同行单简化为5列（眼别/SKU/SPH/CYL/AXIS），无镜片码/QR/快递信息。`lib/factory-export.js` 两个Excel导出均新增「序列号」「货位」列（SKU条码之后）。115/115测试全过。✅ 已部署 ECS（server.js/lib/sku-serial.js/lib/templates.js/lib/factory-export.js）
+- [x] **✅ 故障排除手册（2026-05-24）**：`docs/故障排除手册.md`，30+故障模式按10类整理（飞书API/状态流转/性能/前端UI/标签打印/验真/部署/数据/诊断工具/环境配置），每条格式：症状→根因→修复→涉及文件。用于 bot 或 Claude Code 自动诊断。
+- [ ] **随货通行单按地址分组（2026-05-25，待生产部署）**：logistics.js 5处改动：①loadEnv 合并 process.env（容器变量优先）②APP_TOKEN/ORDER_TBL/LENS_TBL 改读 env③slipBatch 分组键从「代理商+快递单号」改为「收货地址+快递单号」④batchSlipHTML 新增蓝色地址栏⑤文件名加两位序号后缀（-01/-02...）防覆盖。测试验证：5单3地址→3张通行单 ✅。等助理完成飞书配置后，Clark 执行 `docker cp logistics.js order-app` + `docker restart order-app`。部署手册：桌面/随货通行单-生产部署手册.md。
+- [ ] **飞书门店主数据表（2026-05-25，生产待配置）**：测试 Bitable 已配置完成：门店主数据表（202条）+ 关联门店字段 + 收货地址（主数据）查找引用。生产 Bitable 待助理按手册操作：新建门店主数据表→导入202条→建关联门店字段→建3个查找引用字段（收货地址/收货联系人/收货电话各一个）。查找引用易错点：查找条件必须选「门店显示名」（主字段），选「收货地址」会报类型不匹配错误。
 
 ---
 

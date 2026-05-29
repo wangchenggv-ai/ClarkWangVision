@@ -217,7 +217,8 @@ const editOrderNo = params.get("edit") || "";
 let agentInfo = null;
 let SKU_OPTIONS = []; // 从 API 动态加载
 let customerNames = [];
-let terminalCustomers = []; // 终端客户列表 [{id,name,contact,phone,address}]
+let terminalCustomers = []; // 终端客户列表 [{id,name,contact,phone,address,recordId?}]
+let _selectedStoreRecordId = null; // 选中门店的 Bitable record_id（用于关联门店字段）
 let patientCount = 0;
 let draftTimer = null;
 const DRAFT_KEY = `orderDraft_${token}`;
@@ -492,7 +493,8 @@ function renderAddressDatalist() {
 function onTerminalCustomerSelect() {
   const name = document.getElementById("terminalCustomer").value.trim();
   const tc = terminalCustomers.find(c => c.name === name);
-  if (!tc) return;
+  if (!tc) { _selectedStoreRecordId = null; return; }
+  _selectedStoreRecordId = tc.recordId || null;
   if (tc.contact) document.getElementById("contact").value = tc.contact;
   if (tc.phone) document.getElementById("phone").value = tc.phone;
   if (tc.address) document.getElementById("address").value = tc.address;
@@ -814,7 +816,7 @@ async function doSubmit() {
       ...(editOrderNo ? { orderNo: editOrderNo } : {}),
     };
     if (tcName || contact || phone) {
-      body.terminalCustomer = { name: tcName, contact, phone, address };
+      body.terminalCustomer = { name: tcName, contact, phone, address, ...((_selectedStoreRecordId) ? { recordId: _selectedStoreRecordId } : {}) };
     }
 
     const res = await fetch(`/api/submit?t=${token}`, {
