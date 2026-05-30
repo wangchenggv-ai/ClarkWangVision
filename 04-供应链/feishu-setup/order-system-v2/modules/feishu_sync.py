@@ -172,17 +172,18 @@ def confirm_and_deduct(label_list: list[dict]) -> int:
 
 
 def update_order_status(batch_id: str, status: str) -> None:
-    """Update all orders in a batch to a new status (e.g., '已发货')."""
-    detail_table = TABLES.get("order_detail", "")
-    if not detail_table:
-        return
-    try:
-        records = fc.search_records(detail_table, filter_={
-            "conjunction": "and",
-            "conditions": [{"field_name": "订单编号", "operator": "is", "value": [batch_id]}],
-        }, field_names=["订单编号", "订单状态"])
-        for rec in records:
-            fc.update_record(detail_table, rec["record_id"], {"订单状态": status})
-        log.info("批次 %s: %d 条订单状态 → %s", batch_id, len(records), status)
-    except Exception as e:
-        log.error("更新订单状态失败: %s", e)
+    """Update all orders in a batch to a new status in both 镜片明细 and 订单表."""
+    for table_key in ("order_detail", "order_main"):
+        table_id = TABLES.get(table_key, "")
+        if not table_id:
+            continue
+        try:
+            records = fc.search_records(table_id, filter_={
+                "conjunction": "and",
+                "conditions": [{"field_name": "订单编号", "operator": "is", "value": [batch_id]}],
+            }, field_names=["订单编号", "订单状态"])
+            for rec in records:
+                fc.update_record(table_id, rec["record_id"], {"订单状态": status})
+            log.info("批次 %s [%s]: %d 条状态 → %s", batch_id, table_key, len(records), status)
+        except Exception as e:
+            log.error("更新订单状态失败 [%s]: %s", table_key, e)
