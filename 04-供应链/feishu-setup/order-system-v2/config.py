@@ -21,6 +21,7 @@ TABLES = {
     "stock_detail":  "tblphzGMEp7ptXCf",  # 度数级成品库存
     "batch_order":   "",                  # 批次汇总（本 Bitable 暂无此表）
     "order_detail":  "tbl5EaRw6lskfHLr",  # 镜片明细
+    "order_main":    "tblCOgu81npwqGHT",  # 订单表（主视图）
 }
 
 # ── 字段名（飞书多维表格字段，改表结构只改这里）──

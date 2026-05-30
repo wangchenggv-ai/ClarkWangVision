@@ -92,6 +92,42 @@ def sync_to_feishu(
     except Exception as e:
         log.error("写入订单明细失败: %s", e)
 
+    # ── 3. 订单表（主视图）─────────────────────────────────────────────────────
+    main_table = TABLES.get("order_main", "")
+    if main_table:
+        main_rows = []
+        for rec in label_list + factory_list:
+            row: dict = {
+                "订单编号":   batch_id,
+                "终端门店":   rec.get("store_name", ""),
+                "顾客姓名":   rec.get("customer_name", ""),
+                "产品型号":   rec.get("product_sku", ""),
+                "数量":       1,
+                "代理商ID":   rec.get("agent_id", ""),
+                "备注":       rec.get("note", ""),
+                "收货地址":   rec.get("address", ""),
+                "联系人":     rec.get("contact", ""),
+                "联系电话":   str(rec.get("phone", "") or ""),
+                "柱镜CYL":    rec.get("cyl"),
+                "轴位AXIS":   rec.get("axis"),
+                "仓位":       rec.get("bin_location", ""),
+                "订单状态":   "已下单",
+                "订单来源":   "批处理脚本",
+                "库存状态":   "有库存" if rec.get("in_stock") else "需生产",
+            }
+            agent_name = rec.get("agent_name", "")
+            if agent_name:
+                row["代理商名称"] = agent_name
+            lens_code = rec.get("lens_code", "")
+            if lens_code:
+                row["镜片码"] = lens_code
+            main_rows.append(row)
+        try:
+            count = fc.batch_create(main_table, main_rows)
+            log.info("订单表 %d 行已写入飞书", count)
+        except Exception as e:
+            log.error("写入订单表失败: %s", e)
+
     return batch_id
 
 
