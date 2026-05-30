@@ -13,13 +13,13 @@ VERIFY_BASE_URL = os.getenv("VERIFY_BASE_URL", "https://lab.gaushclear.com/verif
 # ── 飞书表 ID（单一真相源）──
 # 新 Bitable: https://gausheyetech.feishu.cn/base/HN84b5k0Ia3KKisZIeecZeWCnHg
 TABLES = {
-    "agent":         "tbl2veixQEYp0RDI",  # 代理商+终端门店主表（新 Bitable）
-    "customer":      "",                  # 终端门店独立表（暂未建）
+    "agent":         "tblNobZtXkMJO2rj",  # 代理商表
+    "customer":      "",                  # 终端门店（暂用本地数据）
     "sku_location":  "",                  # SKU序列号+货位（暂用本地数据）
-    "sku_code":      "",                  # SKU预赋码表（待建，一SKU一码）
-    "stock_detail":  "tbl7U79QGG4JtQev",  # 度数级库存表（旧系统）
-    "batch_order":   "tbldOzNezl6xGDM2",  # 批次表（Phase 2）
-    "order_detail":  "",                  # 订单明细表（Phase 2，建表后填入）
+    "sku_code":      "tblb1ojrIsIOKbMx",  # Ultra库存赋码
+    "stock_detail":  "tblphzGMEp7ptXCf",  # 度数级成品库存
+    "batch_order":   "",                  # 批次汇总（本 Bitable 暂无此表）
+    "order_detail":  "tbl5EaRw6lskfHLr",  # 镜片明细
 }
 
 # ── 字段名（飞书多维表格字段，改表结构只改这里）──
@@ -43,9 +43,9 @@ FIELDS = {
     "bin":             "货位",
 
     # SKU预赋码表（sku_code，一SKU一码）
-    "sku_code_serial": "序列号",
+    "sku_code_serial": "SKU序列号",
     "sku_code_value":  "镜片码",
-    "sku_code_url":    "验真网址",
+    "sku_code_url":    "验证网址",
 
     # 度数级库存（stock_detail）
     "stock_sku":       "SKU编号",

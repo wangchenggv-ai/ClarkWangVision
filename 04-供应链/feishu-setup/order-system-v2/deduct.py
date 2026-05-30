@@ -46,10 +46,9 @@ def main():
         records = fc.search_records(detail_table, filter_={
             "conjunction": "and",
             "conditions": [
-                {"field_name": "批次编号", "operator": "is",  "value": [batch_id]},
-                {"field_name": "库存状态", "operator": "is",  "value": ["有货"]},
+                {"field_name": "订单编号", "operator": "is", "value": [batch_id]},
             ],
-        }, field_names=["批次编号", "产品型号", "球镜SPH", "柱镜CYL", "库存状态"])
+        }, field_names=["订单编号", "产品型号", "球镜SPH", "柱镜CYL"])
     except Exception as e:
         print(f"  ✗ 读取飞书失败: {e}")
         sys.exit(1)

@@ -41,22 +41,21 @@ def sync_to_feishu(
     # ── 1. 批次表 ─────────────────────────────────────────────────────────────
     batch_table = TABLES.get("batch_order", "")
     if not batch_table:
-        log.warning("batch_order 表 ID 未配置，跳过")
-        return batch_id
-
-    try:
-        fc.create_record(batch_table, {
-            "批次编号":  batch_id,
-            "处理日期":  date.today().isoformat(),
-            "总片数":    len(enriched),
-            "有货片数":  len(label_list),
-            "排产片数":  len(factory_list),
-            "状态":      "已入单",
-        })
-        log.info("批次记录已写入飞书: %s", batch_id)
-    except Exception as e:
-        log.error("写入批次表失败: %s", e)
-        return None
+        log.warning("batch_order 表 ID 未配置，跳过批次表写入")
+    else:
+        try:
+            fc.create_record(batch_table, {
+                "批次编号":  batch_id,
+                "处理日期":  date.today().isoformat(),
+                "总片数":    len(enriched),
+                "有货片数":  len(label_list),
+                "排产片数":  len(factory_list),
+                "状态":      "已入单",
+            })
+            log.info("批次记录已写入飞书: %s", batch_id)
+        except Exception as e:
+            log.error("写入批次表失败: %s", e)
+            return None
 
     # ── 2. 订单明细表 ─────────────────────────────────────────────────────────
     detail_table = TABLES.get("order_detail", "")
@@ -68,26 +67,24 @@ def sync_to_feishu(
     for rec in enriched:
         sph = rec.get("sph")
         cyl = rec.get("cyl")
-        rows.append({
-            "批次编号":   batch_id,
-            "代理商名称": rec.get("agent_name", ""),
-            "终端门店":   rec.get("store_name", ""),
-            "顾客姓名":   rec.get("customer_name", ""),
-            "眼别":       rec.get("eye", ""),
-            "产品型号":   rec.get("product_sku", ""),
-            "序列号":     rec.get("serial_no", ""),
-            "球镜SPH":    sph,
-            "柱镜CYL":    cyl,
-            "轴位AXIS":   rec.get("axis"),
-            "镜片码":     rec.get("lens_code", ""),
-            "验真网址":   rec.get("verify_url", ""),
-            "库存状态":   "有货" if rec.get("in_stock") else "排产",
-            "发货状态":   "待发货",
-            "联系人":     rec.get("contact", ""),
-            "联系电话":   str(rec.get("phone", "") or ""),
-            "收货地址":   rec.get("address", ""),
-            "备注":       rec.get("note", ""),
-        })
+        row: dict = {
+            "订单编号":      batch_id,
+            "顾客姓名":      rec.get("customer_name", ""),
+            "产品型号":      rec.get("product_sku", ""),
+            "眼别":          rec.get("eye", ""),
+            "球镜SPH":       sph,
+            "柱镜CYL":       cyl,
+            "轴位AXIS":      rec.get("axis"),
+            "代理商名称":    rec.get("agent_name", ""),
+            "代理商ID":      rec.get("agent_id", ""),
+            "SKU":           rec.get("serial_no", ""),
+            "订单状态":      "已入单",
+            "接单日期":      date.today().isoformat(),
+        }
+        lens_code = rec.get("lens_code", "")
+        if lens_code:
+            row["镜片码（唯一）"] = lens_code
+        rows.append(row)
 
     try:
         count = fc.batch_create(detail_table, rows)
@@ -146,10 +143,10 @@ def update_order_status(batch_id: str, status: str) -> None:
     try:
         records = fc.search_records(detail_table, filter_={
             "conjunction": "and",
-            "conditions": [{"field_name": "批次编号", "operator": "is", "value": [batch_id]}],
-        }, field_names=["批次编号", "发货状态"])
+            "conditions": [{"field_name": "订单编号", "operator": "is", "value": [batch_id]}],
+        }, field_names=["订单编号", "订单状态"])
         for rec in records:
-            fc.update_record(detail_table, rec["record_id"], {"发货状态": status})
+            fc.update_record(detail_table, rec["record_id"], {"订单状态": status})
         log.info("批次 %s: %d 条订单状态 → %s", batch_id, len(records), status)
     except Exception as e:
         log.error("更新订单状态失败: %s", e)

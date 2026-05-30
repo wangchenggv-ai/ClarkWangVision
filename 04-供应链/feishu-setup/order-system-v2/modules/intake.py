@@ -31,19 +31,19 @@ def _find_agent_code(filename: str, df: pd.DataFrame) -> str:
     """Extract AG-code from filename first, then fall back to sheet content."""
     m = _AG_RE.search(filename)
     if m:
-        return f"AG{m.group(1).zfill(3)}"
+        return f"AG-{m.group(1).zfill(3)}"
 
     # Try to find a cell in the first few rows that looks like an agent code
     for col in df.columns:
         col_str = str(col)
         m = _AG_RE.search(col_str)
         if m:
-            return f"AG{m.group(1).zfill(3)}"
+            return f"AG-{m.group(1).zfill(3)}"
     for _, row in df.head(5).iterrows():
         for val in row:
             m = _AG_RE.search(str(val))
             if m:
-                return f"AG{m.group(1).zfill(3)}"
+                return f"AG-{m.group(1).zfill(3)}"
     return ""
 
 
