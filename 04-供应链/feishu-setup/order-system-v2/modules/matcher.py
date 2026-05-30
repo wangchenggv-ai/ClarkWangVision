@@ -171,8 +171,41 @@ def load_master_tables() -> None:
     """Fetch all master tables from Feishu and build lookup indexes."""
     _load_local_agents()   # seed with local data first, Feishu overwrites if available
     _load_agents()
+    _load_stores_from_feishu()
     _load_sku_location()
     _load_sku_code()
+
+
+def _load_stores_from_feishu() -> None:
+    table_id = TABLES.get("store", "")
+    if not table_id:
+        return
+    rows = fc.list_records(table_id, field_names=[
+        FIELDS["store_short"], FIELDS["store_display"], FIELDS["store_agent"],
+        FIELDS["store_address"], FIELDS["store_contact"], FIELDS["store_phone"],
+        FIELDS["store_active"],
+    ])
+    added = 0
+    for row in rows:
+        active = fc.text(row.get(FIELDS["store_active"], "")).strip()
+        if active and active not in ("是", "yes", "true", "1"):
+            continue
+        short = fc.text(row.get(FIELDS["store_short"], "")).strip()
+        display = fc.text(row.get(FIELDS["store_display"], "")).strip()
+        if not short and not display:
+            continue
+        info = {
+            "agent_code":  "",
+            "agent_name":  fc.text(row.get(FIELDS["store_agent"], "")),
+            "address":     fc.text(row.get(FIELDS["store_address"], "")),
+            "contact":     fc.text(row.get(FIELDS["store_contact"], "")),
+            "phone":       fc.text(row.get(FIELDS["store_phone"], "")),
+        }
+        for key in (short, display):
+            if key:
+                _stores[key] = info
+                added += 1
+    log.info("门店主数据表（飞书）: %d 条门店", added)
 
 
 def _load_agents() -> None:

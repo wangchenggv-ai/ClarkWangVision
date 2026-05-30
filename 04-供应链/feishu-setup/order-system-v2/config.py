@@ -14,7 +14,8 @@ VERIFY_BASE_URL = os.getenv("VERIFY_BASE_URL", "https://lab.gaushclear.com/verif
 # 新 Bitable: https://gausheyetech.feishu.cn/base/HN84b5k0Ia3KKisZIeecZeWCnHg
 TABLES = {
     "agent":         "tblNobZtXkMJO2rj",  # 代理商表
-    "customer":      "",                  # 终端门店（暂用本地数据）
+    "store":         "tbllokLjXN47fQxg",  # 门店主数据表
+    "customer":      "",                  # 终端客户（暂未使用）
     "sku_location":  "",                  # SKU序列号+货位（暂用本地数据）
     "sku_code":      "tblb1ojrIsIOKbMx",  # Ultra库存赋码
     "stock_detail":  "tblphzGMEp7ptXCf",  # 度数级成品库存
@@ -30,10 +31,14 @@ FIELDS = {
     "agent_address":   "地址",
     "agent_status":    "状态",
 
-    # 终端门店主表
-    "store_name":      "门店名称",
-    "store_id":        "门店ID",
-    "store_agent_id":  "代理商ID",
+    # 门店主数据表
+    "store_display":   "门店显示名",
+    "store_short":     "门店简称",
+    "store_agent":     "所属代理商",
+    "store_address":   "收货地址",
+    "store_contact":   "收货联系人",
+    "store_phone":     "收货电话",
+    "store_active":    "是否激活",
 
     # SKU序列号+货位（sku_location）
     "serial_no":       "序列号",
