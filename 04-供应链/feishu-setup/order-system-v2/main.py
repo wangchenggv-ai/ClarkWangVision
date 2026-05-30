@@ -168,6 +168,10 @@ def main():
             moved, done_dir = archive_processed(args.inbox, {r["file_name"] for r in records})
             if moved:
                 print(f"  ✓ 已归档 {moved} 个输入文件 → {done_dir}/")
+            # 记下最近批次号，供 deduct.py / 扣库存启动器无参调用
+            from pathlib import Path
+            Path("output").mkdir(exist_ok=True)
+            (Path("output") / "last_batch.txt").write_text(batch_id, encoding="utf-8")
             print()
             print("  ─── 后续操作提示 ────────────────────────────────────")
             print("  1. 仓库按 labels.xlsx 拣货，人工核对")

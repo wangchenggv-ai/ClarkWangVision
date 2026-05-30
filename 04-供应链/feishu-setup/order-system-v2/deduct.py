@@ -24,12 +24,19 @@ log = logging.getLogger(__name__)
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("用法: python deduct.py <批次编号>")
-        print("例如: python deduct.py BATCH-20260528-143022")
-        sys.exit(1)
-
-    batch_id = sys.argv[1]
+    from pathlib import Path
+    if len(sys.argv) >= 2:
+        batch_id = sys.argv[1]
+    else:
+        # 无参时自动读取最近一批（main.py 处理后写入），方便启动器一键调用
+        last = Path("output/last_batch.txt")
+        batch_id = last.read_text(encoding="utf-8").strip() if last.exists() else ""
+        if batch_id:
+            print(f"（未指定批次号，自动使用最近一批：{batch_id}）")
+        else:
+            print("用法: python deduct.py <批次编号>")
+            print("例如: python deduct.py BATCH-20260528-143022")
+            sys.exit(1)
     print(f"\n  批次: {batch_id}")
     print("  正在从飞书读取该批次的有货订单…\n")
 
