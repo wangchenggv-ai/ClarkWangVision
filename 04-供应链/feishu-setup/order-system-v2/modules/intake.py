@@ -206,3 +206,27 @@ def load_inbox(inbox_path: str) -> tuple[list[dict], list[str]]:
         log.info("  %s → %d 条", fname, sum(1 for r in all_records if r["file_name"] == fname))
 
     return all_records, all_errors
+
+
+def archive_processed(inbox_path: str, file_names) -> tuple[int, str]:
+    """
+    把已处理的 Excel 移到 inbox/done/YYYY-MM-DD/，避免下次重复处理。
+    load_inbox 只 glob 当前层 *.xlsx，归档到子目录后不会再被扫到。
+    返回 (移动文件数, 归档目录路径)。
+    """
+    from datetime import datetime
+
+    inbox = Path(inbox_path)
+    done_dir = inbox / "done" / datetime.now().strftime("%Y-%m-%d")
+    moved = 0
+    for fname in sorted(set(file_names)):
+        src = inbox / fname
+        if not src.exists() or not src.is_file():
+            continue
+        done_dir.mkdir(parents=True, exist_ok=True)
+        dst = done_dir / fname
+        if dst.exists():  # 同名已归档过 → 加时间戳避免覆盖
+            dst = done_dir / f"{src.stem}_{datetime.now():%H%M%S}{src.suffix}"
+        src.rename(dst)
+        moved += 1
+    return moved, str(done_dir)

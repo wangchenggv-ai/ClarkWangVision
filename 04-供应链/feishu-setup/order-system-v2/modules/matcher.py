@@ -141,6 +141,7 @@ for _serial, _sph, _cyl, _bin in _ULTRA_LOCAL:
 # ── In-memory indexes (populated by load_master_tables) ─────────────────────
 
 _agents: dict[str, dict] = {}          # agent_code → {id, name, address}
+_agent_name_to_code: dict[str, str] = {}  # agent_name → agent_code（门店表"所属代理商"存名称，需反查ID）
 _stores: dict[str, dict] = {}          # store_name → {agent_code, agent_name, address, contact, phone}
 _sku_location: dict[str, dict] = {}    # (product_sku, sph_str, cyl_str) → {serial_no, bin}
 _sku_code: dict[str, dict] = {}        # serial_no → {lens_code, verify_url}
@@ -161,6 +162,8 @@ def _load_local_agents() -> None:
     for code, name in LOCAL_AGENTS.items():
         if code not in _agents:
             _agents[code] = {"agent_id": code, "agent_name": name, "agent_address": ""}
+        if name:
+            _agent_name_to_code.setdefault(name, code)
     for store_name, info in LOCAL_STORES.items():
         if store_name not in _stores:
             _stores[store_name] = info
@@ -194,9 +197,10 @@ def _load_stores_from_feishu() -> None:
         display = fc.text(row.get(FIELDS["store_display"], "")).strip()
         if not short and not display:
             continue
+        agent_name = fc.text(row.get(FIELDS["store_agent"], "")).strip()
         info = {
-            "agent_code":  "",
-            "agent_name":  fc.text(row.get(FIELDS["store_agent"], "")),
+            "agent_code":  _agent_name_to_code.get(agent_name, ""),
+            "agent_name":  agent_name,
             "address":     fc.text(row.get(FIELDS["store_address"], "")),
             "contact":     fc.text(row.get(FIELDS["store_contact"], "")),
             "phone":       fc.text(row.get(FIELDS["store_phone"], "")),
@@ -219,11 +223,14 @@ def _load_agents() -> None:
         aid = fc.text(row.get(FIELDS["agent_id"], "")).strip()
         if not aid:
             continue
+        name = fc.text(row.get(FIELDS["agent_name"], ""))
         _agents[aid] = {
             "agent_id":      aid,
-            "agent_name":    fc.text(row.get(FIELDS["agent_name"], "")),
+            "agent_name":    name,
             "agent_address": fc.text(row.get(FIELDS["agent_address"], "")),
         }
+        if name.strip():
+            _agent_name_to_code.setdefault(name.strip(), aid)
     log.info("代理商主表: %d 条", len(_agents))
 
 

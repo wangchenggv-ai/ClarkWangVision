@@ -16,10 +16,10 @@ TABLES = {
     "agent":         "tblNobZtXkMJO2rj",  # 代理商表
     "store":         "tbllokLjXN47fQxg",  # 门店主数据表
     "customer":      "",                  # 终端客户（暂未使用）
-    "sku_location":  "",                  # SKU序列号+货位（暂用本地数据）
+    "sku_location":  "tblzrbrPFYLIc9sG",  # SKU序列号+货位（已迁飞书，加行即扩展）
     "sku_code":      "tblb1ojrIsIOKbMx",  # Ultra库存赋码
     "stock_detail":  "tblphzGMEp7ptXCf",  # 度数级成品库存
-    "batch_order":   "",                  # 批次汇总（本 Bitable 暂无此表）
+    "batch_order":   "tbl9KCmgvEE4DOp9",  # 批次汇总（每跑一批写一条）
     "order_detail":  "tbl5EaRw6lskfHLr",  # 镜片明细
     "order_main":    "tblCOgu81npwqGHT",  # 订单表（主视图）
 }

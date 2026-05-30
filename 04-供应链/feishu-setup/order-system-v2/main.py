@@ -163,6 +163,11 @@ def main():
         if batch_id:
             print(f"  ✓ 批次写入完成: {batch_id}")
             print(f"  ✓ 订单明细已写入飞书订单明细表")
+            # 归档已处理的输入文件，避免下次重复处理
+            from modules.intake import archive_processed
+            moved, done_dir = archive_processed(args.inbox, {r["file_name"] for r in records})
+            if moved:
+                print(f"  ✓ 已归档 {moved} 个输入文件 → {done_dir}/")
             print()
             print("  ─── 后续操作提示 ────────────────────────────────────")
             print("  1. 仓库按 labels.xlsx 拣货，人工核对")

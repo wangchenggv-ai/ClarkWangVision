@@ -54,7 +54,7 @@ def list_records(table_id: str, field_names: list[str] | None = None) -> list[di
         if body.get("code") != 0:
             raise RuntimeError(f"list_records failed: {body}")
         data = body["data"]
-        for item in data.get("items", []):
+        for item in (data.get("items") or []):
             results.append({"record_id": item["record_id"], **item["fields"]})
         if not data.get("has_more"):
             break
@@ -82,7 +82,7 @@ def search_records(table_id: str, filter_: dict, field_names: list[str] | None =
         if body.get("code") != 0:
             raise RuntimeError(f"search_records failed: {body}")
         data = body["data"]
-        for item in data.get("items", []):
+        for item in (data.get("items") or []):
             rid = item["record_id"]
             if rid not in seen:
                 seen.add(rid)
@@ -117,6 +117,16 @@ def update_record(table_id: str, record_id: str, fields: dict) -> None:
         raise RuntimeError(f"update_record failed: {body}")
 
 
+def delete_record(table_id: str, record_id: str) -> None:
+    """Delete a single record."""
+    url = f"{BASE}/bitable/v1/apps/{APP_TOKEN}/tables/{table_id}/records/{record_id}"
+    r = SESSION.delete(url, headers=_headers(), timeout=15)
+    r.raise_for_status()
+    body = r.json()
+    if body.get("code") != 0:
+        raise RuntimeError(f"delete_record failed: {body}")
+
+
 def batch_create(table_id: str, records: list[dict]) -> int:
     """Batch create records (max 500/call). Returns total created count."""
     if not records:
@@ -137,6 +147,45 @@ def batch_create(table_id: str, records: list[dict]) -> int:
             raise RuntimeError(f"batch_create failed: {body}")
         total += len(body["data"].get("records", []))
     return total
+
+
+# ── Table management ───────────────────────────────────────────────────────────
+
+def list_tables() -> list[dict]:
+    """List all data tables in the app. Returns [{table_id, name, revision}, ...]."""
+    url = f"{BASE}/bitable/v1/apps/{APP_TOKEN}/tables"
+    params = {"page_size": 100}
+    items, page_token = [], None
+    while True:
+        if page_token:
+            params["page_token"] = page_token
+        r = SESSION.get(url, headers=_headers(), params=params, timeout=20)
+        r.raise_for_status()
+        body = r.json()
+        if body.get("code") != 0:
+            raise RuntimeError(f"list_tables failed: {body}")
+        data = body["data"]
+        items.extend(data.get("items") or [])
+        if not data.get("has_more"):
+            break
+        page_token = data.get("page_token")
+    return items
+
+
+def create_table(name: str, fields: list[dict]) -> str:
+    """
+    Create a new data table. fields=[{"field_name":.., "type":1}] —
+    type 1=文本, 2=数字, 3=单选, 5=日期. The first field becomes the
+    primary (index) field and must be a text-like type. Returns table_id.
+    """
+    url = f"{BASE}/bitable/v1/apps/{APP_TOKEN}/tables"
+    payload = {"table": {"name": name, "fields": fields}}
+    r = SESSION.post(url, headers=_headers(), json=payload, timeout=20)
+    r.raise_for_status()
+    body = r.json()
+    if body.get("code") != 0:
+        raise RuntimeError(f"create_table failed: {body}")
+    return body["data"]["table_id"]
 
 
 # ── Field value helpers ────────────────────────────────────────────────────────
