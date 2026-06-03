@@ -933,6 +933,16 @@ const _verifyCache = new Map();
 const VERIFY_TTL = 24 * 60 * 60 * 1000;
 let _verifyTemplate = null;
 
+// ─── 铂林眼科 D8 镜片码映射（启动时懒加载） ─────────────────────────────────
+let _bolinCodes = null;
+function loadBolinCodes() {
+  if (_bolinCodes) return _bolinCodes;
+  const p = resolve(__dirname, "bolin-codes.json");
+  try { _bolinCodes = JSON.parse(readFileSync(p, "utf-8")); }
+  catch { _bolinCodes = {}; }
+  return _bolinCodes;
+}
+
 // ─── 镜片明细内存缓存（启动时全量加载，验真零 API） ─────────────────────────
 const _lensCache = new Map(); // lensCode → { orderNo, customer, sku, pairIndex, side, sph, cyl, axis }
 let _lensCacheReady = false;
@@ -1541,7 +1551,6 @@ const server = createServer(async (req, res) => {
       serveStatic(res, resolve(__dirname, "public/diagnose.html"));
       return logReq(req, 200, start);
     }
-
     // ── 静态资源 ──
     if (pathname.startsWith("/css/") || pathname.startsWith("/js/") || pathname.startsWith("/qrcodes/")) {
       serveStatic(res, resolve(__dirname, "public", pathname.slice(1)));
@@ -2444,6 +2453,24 @@ const server = createServer(async (req, res) => {
       res.writeHead(found ? 200 : 404, { "Content-Type": "text/html; charset=utf-8" });
       res.end(html);
       return logReq(req, found ? 200 : 404, start);
+    }
+
+    // ── 铂林眼科 D8 验真 ──────────────────────────────────────────────────────
+    const bolinMatch = pathname.match(/^\/bolin\/([A-Fa-f0-9]{16})$/);
+    if (bolinMatch) {
+      const code = bolinMatch[1].toUpperCase();
+      const entry = loadBolinCodes()[code] ?? null;
+      let html = readFileSync(resolve(__dirname, "public/bolin.html"), "utf-8");
+      if (entry) {
+        const sphStr = entry.sph === 0 ? "0.00" : Number(entry.sph).toFixed(2);
+        const cylStr = entry.cyl === 0 ? "0.00" : Number(entry.cyl).toFixed(2);
+        html = html.replace("{{FOUND}}", "true").replace("{{SPH}}", sphStr).replace("{{CYL}}", cylStr);
+      } else {
+        html = html.replace("{{FOUND}}", "false").replace("{{SPH}}", "").replace("{{CYL}}", "");
+      }
+      res.writeHead(entry ? 200 : 404, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(html);
+      return logReq(req, entry ? 200 : 404, start);
     }
 
     // ── 管理端 API（简单密码鉴权） ──────────────────────────────────────

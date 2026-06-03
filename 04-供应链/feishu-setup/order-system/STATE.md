@@ -1,6 +1,6 @@
 ﻿# 系统当前状态
 
-> 更新：2026-05-23 v17 | 完整历史见 CHANGELOG.md
+> 更新：2026-06-03 v18 | 完整历史见 CHANGELOG.md
 
 ---
 
@@ -14,8 +14,9 @@
 | 生产容器 | order-app:3210（主服务）+ mock-shuang:3220 |
 | 测试容器 | order-app-test:3211 + mock-shuang-test:3221 |
 | 测试 Bitable | APP_TOKEN: `CtXObqwAHaCXYssBBfkcXmrlnUe` |
-| 本次待部署 | 删除财务模块代码（7天自动签收+对账单API） |
-| 涉及文件 | server.js, shared/tables.js |
+| 本次待部署 | 铂林眼科D8验真系统（bolin.html + server.js + bolin-codes.json） |
+| 涉及文件 | server.js, public/bolin.html, bolin-codes.json |
+| 2026-06-03已完成 | 铂林眼科D8独立验真：225镜片码预生成，/bolin/:code路由，bolin-codes.json本地查询，bolin-qr/ 225张PNG，bolin-manifest.xlsx，待部署ECS |
 | 2026-05-23已部署 | feishu.js（searchRecords分页bug修复）+ server.js（orders-fast无筛选改listRecords+OEM品牌暂不启用）+ orders.html（522 Plan三项）✅ 全部已部署生产 |
 
 部署命令：
@@ -140,6 +141,7 @@ ssh -i "$KEY" root@113.44.175.221 \
 - [x] **草稿同步时间缩短**：DRAFT_AGE_MIN 从 15 分钟改为 3 分钟 ✅
 - [x] **端到端验真测试**：生产+测试环境全流程通过（下单→同步→确认→赋码→验真）✅
 - [x] **暑期支持政策页面**：在 summer.html 添加「支持政策」Tab，展示《2026暑期上量支持政策》完整内容（标准支持/资格制支持/返利/备库超量货款分担），代理商可手动填写备注+确认知晓。新增 Bitable 字段 `policy_confirmed`（数字）+ `policy_remark`（文本），新增 `/api/summer-policy` 端点（POST 确认+PATCH 仅保存备注）。✅ 已部署 ECS（2026-05-10）
+- [ ] **铂林眼科D8验真-待部署（2026-06-03）**：3个文件部署到ECS：`public/bolin.html` + `server.js`（新增/bolin/:code路由+loadBolinCodes懒加载）+ `bolin-codes.json`。交付物：`bolin-qr/`（225张PNG）+ `bolin-manifest.xlsx`（镜片码清单）交铂林眼科。文档见 `docs/铂林眼科D8验真系统-2026-06-03.md`
 - [ ] **异常处理三功能（已实现，未启用）**：改单 `POST /api/admin/modify-rx`（自动退回已下单+更新SPH/CYL/AXIS）、发错货 `POST /api/admin/wrong-shipment`（备注打标）、退货 `POST /api/admin/return-order`（状态→已退货）。API已在server.js，JS函数已在labels-clean.html，UI按钮已注释。启用时只需取消labels-clean.html中getQuickAction的注释。（2026-05-16）
 - [x] **序列号映射+标签货位+Excel同步（2026-05-16）**：`lib/sku-serial.js` 219条（xlsx权威，全量SPH/CYL+货位），多型号架构（ENTRIES_BY_SKU）。标签新增序列号+货位（深色badge+货架地址）。随货同行单简化为5列（眼别/SKU/SPH/CYL/AXIS），无镜片码/QR/快递信息。`lib/factory-export.js` 两个Excel导出均新增「序列号」「货位」列（SKU条码之后）。115/115测试全过。✅ 已部署 ECS（server.js/lib/sku-serial.js/lib/templates.js/lib/factory-export.js）
 

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>铂林眼科 · 产品验证</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --brand: #0E7C65;
+  --brand-dark: #0A4F41;
+  --error: #E74C3C;
+  --gold: #E6B422;
+  --text: #2C3E50;
+  --text-muted: #7F8C8D;
+  --bg: #F5F7FA;
+  --font: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-num: 'Montserrat', 'SF Pro Display', var(--font);
+  --font-mono: 'SF Mono', 'Menlo', monospace;
+}
+
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.hero {
+  padding: 56px 20px 40px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.06'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  pointer-events: none;
+}
+.hero-ok   { background: linear-gradient(135deg, #0E7C65, #16A085); }
+.hero-fail { background: linear-gradient(135deg, #E74C3C, #C0392B); }
+
+.brand {
+  font-family: var(--font-num);
+  font-size: 15px;
+  letter-spacing: 4px;
+  margin-bottom: 28px;
+  color: rgba(255,255,255,0.95);
+  font-weight: 700;
+}
+
+.shield {
+  width: 72px; height: 72px;
+  margin: 0 auto 20px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.shield svg { width: 36px; height: 36px; }
+.hero-ok .shield svg, .hero-fail .shield svg { stroke: #fff; }
+
+.status {
+  font-size: 24px; font-weight: 700;
+  margin-bottom: 10px; color: #fff;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+.status-sub { font-size: 14px; color: rgba(255,255,255,0.85); line-height: 1.6; }
+
+.card {
+  background: #fff; border-radius: 16px;
+  margin: 16px 20px; padding: 22px;
+  box-shadow: 0 4px 24px rgba(14,124,101,0.08);
+  border: 1px solid rgba(14,124,101,0.06);
+}
+.card-title {
+  font-size: 15px; font-weight: 600;
+  color: var(--brand-dark);
+  margin-bottom: 14px;
+  padding: 0 0 10px 10px;
+  border-bottom: 1px solid #E0E6ED;
+  border-left: 3px solid var(--brand);
+}
+
+.row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 11px 0; font-size: 14px;
+  border-bottom: 1px solid #f5f5f5;
+}
+.row:last-child { border-bottom: none; }
+.row .label { color: var(--text-muted); }
+.row .value { font-weight: 600; color: var(--text); font-family: var(--font-num); font-size: 16px; }
+
+.footer {
+  text-align: center;
+  padding: 28px 20px 44px;
+  font-size: 12px; color: var(--text-muted); line-height: 2.2;
+}
+.footer .brand-name {
+  font-family: var(--font-num);
+  letter-spacing: 3px; color: var(--brand);
+  font-weight: 700; font-size: 14px;
+}
+.footer .mono { font-family: var(--font-mono); font-size: 11px; letter-spacing: 1px; }
+.footer .divider {
+  width: 40px; height: 2px;
+  background: linear-gradient(90deg, var(--brand), var(--gold));
+  margin: 12px auto; border-radius: 1px;
+}
+</style>
+</head>
+<body>
+
+<div class="hero" id="hero">
+  <div class="brand">铂林眼科</div>
+  <div class="shield">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <polyline id="check" points="9 12 11 14 15 10"/>
+      <line id="cross1" x1="15" y1="9" x2="9" y2="15"/>
+      <line id="cross2" x1="9" y1="9" x2="15" y2="15"/>
+    </svg>
+  </div>
+  <h1 class="status" id="statusText"></h1>
+  <p class="status-sub" id="statusSub"></p>
+</div>
+
+<div id="foundContent" style="display:none">
+  <div class="card">
+    <div class="row"><span class="label">产品型号</span><span class="value">D8</span></div>
+    <div class="row"><span class="label">产品品牌</span><span class="value">铂林眼科</span></div>
+  </div>
+  <div class="card">
+    <div class="card-title">处方参数</div>
+    <div class="row"><span class="label">球镜 SPH</span><span class="value" id="valSph"></span></div>
+    <div class="row"><span class="label">柱镜 CYL</span><span class="value" id="valCyl"></span></div>
+  </div>
+</div>
+
+<div class="footer">
+  <p class="mono" id="lensCode"></p>
+  <p id="verifyTime"></p>
+  <div class="divider"></div>
+  <p class="brand-name">铂林眼科</p>
+</div>
+
+<script>
+var found = {{FOUND}};
+var sphVal = "{{SPH}}";
+var cylVal = "{{CYL}}";
+
+var hero  = document.getElementById("hero");
+var check = document.getElementById("check");
+var cross1 = document.getElementById("cross1");
+var cross2 = document.getElementById("cross2");
+
+if (found) {
+  hero.classList.add("hero-ok");
+  cross1.style.display = "none";
+  cross2.style.display = "none";
+  document.getElementById("statusText").textContent = "正品验证通过";
+  document.getElementById("statusSub").textContent = "该镜片已通过铂林眼科溯源系统认证";
+  document.getElementById("foundContent").style.display = "";
+  document.getElementById("valSph").textContent = sphVal;
+  document.getElementById("valCyl").textContent = cylVal;
+} else {
+  hero.classList.add("hero-fail");
+  check.style.display = "none";
+  document.getElementById("statusText").textContent = "未找到记录";
+  document.getElementById("statusSub").innerHTML = "此镜片码未在系统中登记<br>请联系授权销售商确认产品真伪";
+}
+
+var code = location.pathname.split("/").pop();
+if (code && code.length === 16) document.getElementById("lensCode").textContent = code;
+
+var now = new Date();
+document.getElementById("verifyTime").textContent =
+  "验证时间 " + now.getFullYear() + "-" +
+  String(now.getMonth()+1).padStart(2,"0") + "-" +
+  String(now.getDate()).padStart(2,"0") + " " +
+  String(now.getHours()).padStart(2,"0") + ":" +
+  String(now.getMinutes()).padStart(2,"0");
+</script>
+</body>
+</html>
